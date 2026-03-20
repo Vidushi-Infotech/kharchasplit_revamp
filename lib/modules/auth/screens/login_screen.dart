@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../core/responsive/responsive_utils.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -129,8 +130,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         Align(
           alignment: Alignment.centerRight,
           child: TextButton(
-            onPressed: () {},
-            child: const Text('Forgot Password?'),
+            onPressed: () => context.go('/forgot-password'),
+            child: Text(
+              'Forgot Password?',
+              style: AppTextStyles.body2(isDark).copyWith(
+                color: AppColors.tealDark,
+              ),
+            ),
           ),
         ),
         const SizedBox(height: 24),
@@ -145,8 +151,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           children: [
             Text("Don't have an account? ", style: AppTextStyles.body2(isDark)),
             TextButton(
-              onPressed: () {},
-              child: const Text('Register'),
+              onPressed: () => context.go('/register'),
+              child: Text(
+                'Register',
+                style: AppTextStyles.body2(isDark).copyWith(
+                  color: AppColors.tealDark,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
           ],
         ),

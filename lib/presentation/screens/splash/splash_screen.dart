@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../onboarding/onboarding_screen.dart';
+import 'package:go_router/go_router.dart';
 import 'splash_provider.dart';
 
 class SplashScreen extends ConsumerWidget {
@@ -13,9 +13,7 @@ class SplashScreen extends ConsumerWidget {
     // Navigate to onboarding when splash is done
     ref.listen(splashProviderProvider, (previous, next) {
       if (next != SplashState.initializing) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const OnboardingScreen()),
-        );
+        context.go('/onboarding');
       }
     });
 

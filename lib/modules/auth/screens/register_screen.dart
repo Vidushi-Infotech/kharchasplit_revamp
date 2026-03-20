@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'dart:io';
 import '../../../core/responsive/responsive_utils.dart';
 import '../../../core/theme/app_colors.dart';
@@ -288,7 +289,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 style: AppTextStyles.body2(isDark),
               ),
               TextButton(
-                onPressed: () {},
+                onPressed: () => context.go('/login'),
                 child: Text(
                   'Login',
                   style: AppTextStyles.body2(isDark).copyWith(

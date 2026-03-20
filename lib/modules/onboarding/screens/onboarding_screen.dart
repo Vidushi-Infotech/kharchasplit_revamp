@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../core/responsive/responsive_utils.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_text_styles.dart';
+import '../../../components/buttons/primary_button.dart';
 import '../state/onboarding_provider.dart';
 import '../widgets/onboarding_slide_widget.dart';
 import '../widgets/onboarding_dots_widget.dart';
@@ -85,10 +88,16 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                         .read(onboardingPageProvider.notifier)
                         .completeOnboarding();
                     if (mounted) {
-                      // Navigate to next screen
+                      context.go('/login');
                     }
                   },
-                  child: const Text('Skip Tour'),
+                  child: Text(
+                    'Skip Tour',
+                    style: AppTextStyles.body2(isDark).copyWith(
+                      color: AppColors.tealDark,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -116,6 +125,32 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                       );
                     },
                   ),
+                  const SizedBox(height: 32),
+                  // Navigation buttons
+                  currentPage == onboardingSlides.length - 1
+                      ? PrimaryButton(
+                          label: 'Get Started',
+                          onPressed: () async {
+                            await ref
+                                .read(onboardingPageProvider.notifier)
+                                .completeOnboarding();
+                            if (mounted) {
+                              context.go('/login');
+                            }
+                          },
+                        )
+                      : SizedBox(
+                          width: double.infinity,
+                          child: PrimaryButton(
+                            label: 'Next',
+                            onPressed: () {
+                              _pageController.nextPage(
+                                duration: const Duration(milliseconds: 300),
+                                curve: Curves.easeInOut,
+                              );
+                            },
+                          ),
+                        ),
                 ],
               ),
             ),
