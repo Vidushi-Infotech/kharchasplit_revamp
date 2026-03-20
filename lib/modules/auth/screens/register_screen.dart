@@ -182,7 +182,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             onFacebookPressed: () {},
             isLoading: authState.state == AuthState.loading,
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 32),
 
           // Full Name
           AppTextField(
@@ -290,7 +290,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               isLoading: authState.state == AuthState.loading,
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
 
           // Login link
           Center(

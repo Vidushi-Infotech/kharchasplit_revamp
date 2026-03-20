@@ -114,7 +114,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           onFacebookPressed: () {},
           isLoading: authState.state == AuthState.loading,
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 32),
         AppTextField(
           label: 'Email',
           controller: _emailController,
@@ -132,7 +132,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             setState(() => _obscurePassword = !_obscurePassword);
           },
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 16),
         Align(
           alignment: Alignment.centerRight,
           child: TextButton(
@@ -145,7 +145,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
           ),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 28),
         SizedBox(
           width: double.infinity,
           child: PrimaryButton(
@@ -154,7 +154,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             isLoading: authState.state == AuthState.loading,
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
         Center(
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
