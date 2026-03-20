@@ -18,6 +18,7 @@ class HomeScreen extends ConsumerWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final isMobile = context.isMobile;
     final isTablet = context.isTablet;
+    final isWeb = context.isWeb;
     final dashboardData = ref.watch(dashboardProvider);
     final selectedIndex = ref.watch(selectedNavIndexProvider);
 
@@ -25,10 +26,10 @@ class HomeScreen extends ConsumerWidget {
       backgroundColor: AppColors.background(isDark),
       body: isMobile
           ? _buildMobileLayout(isDark, dashboardData, ref)
-          : isTablet
+          : isTablet || isWeb
               ? _buildTabletLayout(isDark, dashboardData, ref)
               : _buildWebLayout(isDark, dashboardData, ref),
-      bottomNavigationBar: isMobile || isTablet
+      bottomNavigationBar: isMobile
           ? CustomBottomNavigationBar(
               selectedIndex: selectedIndex,
               onItemSelected: (index) {
@@ -66,29 +67,9 @@ class HomeScreen extends ConsumerWidget {
     WidgetRef ref,
   ) {
     return SafeArea(
-      child: ListView(
-        padding: const EdgeInsets.all(24),
-        physics: const BouncingScrollPhysics(),
-        children: [
-          _buildHeader(isDark),
-          const SizedBox(height: 32),
-          BalanceCard(balance: data.totalBalance),
-          const SizedBox(height: 40),
-          _buildGroupsSection(isDark, data),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildWebLayout(
-    bool isDark,
-    DashboardData data,
-    WidgetRef ref,
-  ) {
-    return SafeArea(
       child: Row(
         children: [
-          // Sidebar
+          // Sidebar (for tablet and web)
           Container(
             width: 280,
             decoration: BoxDecoration(
@@ -100,12 +81,15 @@ class HomeScreen extends ConsumerWidget {
                 ),
               ),
             ),
-            child: _buildWebSidebar(isDark, ref),
+            child: _buildSidebar(isDark, ref),
           ),
           // Main content
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.all(32),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 32,
+                vertical: 24,
+              ),
               physics: const BouncingScrollPhysics(),
               children: [
                 _buildHeader(isDark),
@@ -177,7 +161,7 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildWebSidebar(bool isDark, WidgetRef ref) {
+  Widget _buildSidebar(bool isDark, WidgetRef ref) {
     final selectedIndex = ref.watch(selectedNavIndexProvider);
 
     return Column(
