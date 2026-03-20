@@ -10,6 +10,7 @@ import '../../modules/groups/screens/groups_screen.dart';
 import '../../modules/friends/screens/friends_screen.dart';
 import '../../modules/activity/screens/activity_screen.dart';
 import '../../modules/profile/screens/profile_screen.dart';
+import '../../modules/expenses/screens/add_expense_screen.dart';
 import '../../layouts/shell/mobile_shell.dart';
 import '../../layouts/shell/tablet_shell.dart';
 import '../../layouts/shell/web_shell.dart';
@@ -103,10 +104,15 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/add-expense',
       name: 'add-expense',
-      builder: (context, state) => Scaffold(
-        appBar: AppBar(title: const Text('Add Expense')),
-        body: const Center(child: Text('Add Expense')),
-      ),
+      builder: (context, state) => const AddExpenseScreen(),
+    ),
+    GoRoute(
+      path: '/add-expense/:groupId',
+      name: 'add-expense-to-group',
+      builder: (context, state) {
+        final groupId = state.pathParameters['groupId'];
+        return AddExpenseScreen(groupId: groupId);
+      },
     ),
     GoRoute(
       path: '/reports',
