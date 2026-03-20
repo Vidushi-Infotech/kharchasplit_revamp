@@ -114,30 +114,35 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               padding: const EdgeInsets.all(24),
               child: Column(
                 children: [
-                  OnboardingDotsWidget(
-                    currentPage: currentPage,
-                    totalPages: onboardingSlides.length,
-                    onPageTapped: (index) {
-                      _pageController.animateToPage(
-                        index,
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.easeInOut,
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 32),
+                  // Dots only on mobile/tablet
+                  if (!isWeb)
+                    OnboardingDotsWidget(
+                      currentPage: currentPage,
+                      totalPages: onboardingSlides.length,
+                      onPageTapped: (index) {
+                        _pageController.animateToPage(
+                          index,
+                          duration: const Duration(milliseconds: 300),
+                          curve: Curves.easeInOut,
+                        );
+                      },
+                    ),
+                  if (!isWeb) const SizedBox(height: 32),
                   // Navigation buttons
-                  currentPage == onboardingSlides.length - 1
-                      ? PrimaryButton(
-                          label: 'Get Started',
-                          onPressed: () async {
-                            await ref
-                                .read(onboardingPageProvider.notifier)
-                                .completeOnboarding();
-                            if (mounted) {
-                              context.go('/login');
-                            }
-                          },
+                  isWeb || currentPage == onboardingSlides.length - 1
+                      ? SizedBox(
+                          width: double.infinity,
+                          child: PrimaryButton(
+                            label: 'Get Started',
+                            onPressed: () async {
+                              await ref
+                                  .read(onboardingPageProvider.notifier)
+                                  .completeOnboarding();
+                              if (mounted) {
+                                context.go('/login');
+                              }
+                            },
+                          ),
                         )
                       : SizedBox(
                           width: double.infinity,
