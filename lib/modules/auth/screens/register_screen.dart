@@ -55,6 +55,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             confirmPassword: _confirmPasswordController.text,
             referralCode: _referralController.text.isEmpty ? null : _referralController.text,
           );
+      // Navigate to home after successful registration
+      if (mounted && ref.read(authProvider).state == AuthState.success) {
+        context.go('/home');
+      }
     }
   }
 

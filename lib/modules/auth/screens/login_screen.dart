@@ -150,7 +150,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           width: double.infinity,
           child: PrimaryButton(
             label: 'Login',
-            onPressed: () {},
+            onPressed: () => context.go('/home'),
             isLoading: authState.state == AuthState.loading,
           ),
         ),
