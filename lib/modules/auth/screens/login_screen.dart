@@ -97,18 +97,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final authState = ref.watch(authProvider);
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('Welcome Back', style: AppTextStyles.headline2(isDark)),
-        const SizedBox(height: 8),
-        Text('Sign in to continue', style: AppTextStyles.caption(isDark)),
+        Center(
+          child: Column(
+            children: [
+              Text('Welcome Back', style: AppTextStyles.headline2(isDark)),
+              const SizedBox(height: 8),
+              Text('Sign in to continue', style: AppTextStyles.caption(isDark)),
+            ],
+          ),
+        ),
         const SizedBox(height: 32),
         SocialAuthButtons(
           onGooglePressed: () {},
           onFacebookPressed: () {},
           isLoading: authState.state == AuthState.loading,
         ),
-        const SizedBox(height: 32),
+        const SizedBox(height: 24),
         AppTextField(
           label: 'Email',
           controller: _emailController,
@@ -140,27 +146,32 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           ),
         ),
         const SizedBox(height: 24),
-        PrimaryButton(
-          label: 'Login',
-          onPressed: () {},
-          isLoading: authState.state == AuthState.loading,
+        SizedBox(
+          width: double.infinity,
+          child: PrimaryButton(
+            label: 'Login',
+            onPressed: () {},
+            isLoading: authState.state == AuthState.loading,
+          ),
         ),
         const SizedBox(height: 16),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text("Don't have an account? ", style: AppTextStyles.body2(isDark)),
-            TextButton(
-              onPressed: () => context.go('/register'),
-              child: Text(
-                'Register',
-                style: AppTextStyles.body2(isDark).copyWith(
-                  color: AppColors.tealDark,
-                  fontWeight: FontWeight.w600,
+        Center(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text("Don't have an account? ", style: AppTextStyles.body2(isDark)),
+              TextButton(
+                onPressed: () => context.go('/register'),
+                child: Text(
+                  'Register',
+                  style: AppTextStyles.body2(isDark).copyWith(
+                    color: AppColors.tealDark,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ],
     );

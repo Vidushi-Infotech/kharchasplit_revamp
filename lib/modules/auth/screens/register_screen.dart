@@ -144,27 +144,35 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     return Form(
       key: _formKey,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Avatar picker
-          AvatarPickerWidget(
-            onImageSelected: (image) {
-              setState(() => _selectedImage = image);
-            },
-            selectedImage: _selectedImage,
-            size: 100,
+          // Avatar picker - centered
+          Center(
+            child: AvatarPickerWidget(
+              onImageSelected: (image) {
+                setState(() => _selectedImage = image);
+              },
+              selectedImage: _selectedImage,
+              size: 100,
+            ),
           ),
           const SizedBox(height: 32),
 
-          // Heading
-          Text(
-            'Create Account',
-            style: AppTextStyles.headline2(isDark),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Join thousands splitting smart',
-            style: AppTextStyles.caption(isDark),
+          // Heading - centered
+          Center(
+            child: Column(
+              children: [
+                Text(
+                  'Create Account',
+                  style: AppTextStyles.headline2(isDark),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Join thousands splitting smart',
+                  style: AppTextStyles.caption(isDark),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 32),
 
@@ -174,6 +182,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             onFacebookPressed: () {},
             isLoading: authState.state == AuthState.loading,
           ),
+          const SizedBox(height: 24),
 
           // Full Name
           AppTextField(
@@ -273,32 +282,37 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             ),
 
           // Register button
-          PrimaryButton(
-            label: 'Create Account',
-            onPressed: _handleRegister,
-            isLoading: authState.state == AuthState.loading,
+          SizedBox(
+            width: double.infinity,
+            child: PrimaryButton(
+              label: 'Create Account',
+              onPressed: _handleRegister,
+              isLoading: authState.state == AuthState.loading,
+            ),
           ),
           const SizedBox(height: 16),
 
           // Login link
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                'Already have an account? ',
-                style: AppTextStyles.body2(isDark),
-              ),
-              TextButton(
-                onPressed: () => context.go('/login'),
-                child: Text(
-                  'Login',
-                  style: AppTextStyles.body2(isDark).copyWith(
-                    color: AppColors.tealDark,
-                    fontWeight: FontWeight.w600,
+          Center(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  'Already have an account? ',
+                  style: AppTextStyles.body2(isDark),
+                ),
+                TextButton(
+                  onPressed: () => context.go('/login'),
+                  child: Text(
+                    'Login',
+                    style: AppTextStyles.body2(isDark).copyWith(
+                      color: AppColors.tealDark,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
