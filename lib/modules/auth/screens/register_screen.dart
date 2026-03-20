@@ -65,15 +65,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final isMobile = context.isMobile;
-    final isTablet = context.isTablet;
+    final screenWidth = MediaQuery.of(context).size.width;
     final authState = ref.watch(authProvider);
 
     return Scaffold(
       backgroundColor: AppColors.background(isDark),
-      body: isMobile
+      body: screenWidth < 600
           ? _buildMobileLayout(isDark, authState)
-          : isTablet
+          : screenWidth < 1100
               ? _buildTabletLayout(isDark, authState)
               : _buildWebLayout(isDark, authState),
     );

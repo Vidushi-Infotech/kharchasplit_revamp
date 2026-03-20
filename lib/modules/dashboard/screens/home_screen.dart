@@ -16,20 +16,17 @@ class HomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final isMobile = context.isMobile;
-    final isTablet = context.isTablet;
-    final isWeb = context.isWeb;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final hasCompactWidth = screenWidth < 600; // Mobile, Folded Foldables
     final dashboardData = ref.watch(dashboardProvider);
     final selectedIndex = ref.watch(selectedNavIndexProvider);
 
     return Scaffold(
       backgroundColor: AppColors.background(isDark),
-      body: isMobile
+      body: hasCompactWidth
           ? _buildMobileLayout(isDark, dashboardData, ref)
-          : isTablet || isWeb
-              ? _buildTabletLayout(isDark, dashboardData, ref)
-              : _buildWebLayout(isDark, dashboardData, ref),
-      bottomNavigationBar: isMobile
+          : _buildSidebarLayout(isDark, dashboardData, ref),
+      bottomNavigationBar: hasCompactWidth
           ? CustomBottomNavigationBar(
               selectedIndex: selectedIndex,
               onItemSelected: (index) {
@@ -61,7 +58,7 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildTabletLayout(
+  Widget _buildSidebarLayout(
     bool isDark,
     DashboardData data,
     WidgetRef ref,

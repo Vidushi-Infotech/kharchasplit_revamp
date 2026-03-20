@@ -116,25 +116,49 @@ Benefits: Deep linking, web URL support, route guards.
 
 ## 5. Responsive Layout — Always Handle 3 Breakpoints
 
-| Device      | Width       | Layout              |
-|-------------|-------------|---------------------|
-| Mobile      | < 600px     | Bottom navigation   |
-| Tablet      | 600–1100px  | Side navigation     |
-| Desktop/Web | > 1100px    | Sidebar + content   |
+### Critical Rule: Use ACTUAL SCREEN WIDTH, NOT DEVICE TYPE
+Breakpoints are based on **available screen width**, not device classification. Some mobile devices (Samsung Z Fold, large phones) have 600px+ widths. Use width-based decisions, not `isMobile`/`isTablet`/`isWeb`.
 
+| Layout          | Width       | Use Case                                    |
+|-----------------|-------------|---------------------------------------------|
+| **Compact**     | < 600px     | Mobile phones, folded foldables, small tablets |
+| **Standard**    | 600–1100px  | Tablets, unfolded foldables, large phones   |
+| **Large**       | > 1100px    | Desktop, web, large desktop displays        |
+
+### Navigation Pattern (applies to ALL screens)
+- **< 600px**: Bottom navigation bar (mobile-style compact footer)
+- **600–1100px**: Sidebar navigation (tablet/expanded mode)
+- **> 1100px**: Sidebar navigation + expanded content (desktop mode)
+
+### Implementation (APPLIES TO ALL SCREENS & COMPONENTS)
 ```dart
-if (width < 600) {
-  return MobileLayout();
-} else if (width < 1100) {
-  return TabletLayout();
-} else {
-  return WebLayout();
+@override
+Widget build(BuildContext context, WidgetRef ref) {
+  final isDark = Theme.of(context).brightness == Brightness.dark;
+  final screenWidth = MediaQuery.of(context).size.width;
+
+  // Use width-based decision, NOT device type
+  if (screenWidth < 600) {
+    return _buildCompactLayout(isDark);     // Bottom nav, full-width content
+  } else if (screenWidth < 1100) {
+    return _buildStandardLayout(isDark);    // Sidebar, centered content
+  } else {
+    return _buildLargeLayout(isDark);       // Sidebar, max-width container
+  }
 }
 ```
 
-**Never use fixed widths.** Always use:
-- `MediaQuery.of(context).size.width * 0.x`
-- `Expanded` / `Flexible` / `FractionallySizedBox`
+### Rules for ALL Screens & Components
+1. **Every screen** must implement all 3 layouts
+2. **Every component** must adapt to available width (no hardcoded `width: 300`)
+3. **Never hardcode widths** — always use:
+   - `MediaQuery.of(context).size.width`
+   - `Expanded` / `Flexible` / `FractionallySizedBox`
+   - `ConstrainedBox(constraints: BoxConstraints(maxWidth: ...))`
+4. **Padding/spacing scales** with layout:
+   - Compact: 16-20px
+   - Standard: 24-32px
+   - Large: 32-48px
 
 ---
 

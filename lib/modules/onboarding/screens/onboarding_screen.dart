@@ -67,9 +67,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     final currentPage = ref.watch(onboardingPageProvider);
-    final isMobile = context.isMobile;
-    final isTablet = context.isTablet;
-    final isWeb = context.isWeb;
+    final screenWidth = MediaQuery.of(context).size.width;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
@@ -103,9 +101,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             ),
             // Content
             Expanded(
-              child: isMobile
+              child: screenWidth < 600
                   ? _buildMobileLayout(currentPage)
-                  : isTablet
+                  : screenWidth < 1100
                       ? _buildTabletLayout(currentPage)
                       : _buildWebLayout(),
             ),
@@ -115,7 +113,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               child: Column(
                 children: [
                   // Dots only on mobile/tablet
-                  if (!isWeb)
+                  if (screenWidth < 1100)
                     OnboardingDotsWidget(
                       currentPage: currentPage,
                       totalPages: onboardingSlides.length,
@@ -127,9 +125,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                         );
                       },
                     ),
-                  if (!isWeb) const SizedBox(height: 32),
+                  if (screenWidth < 1100) const SizedBox(height: 32),
                   // Navigation buttons
-                  isWeb || currentPage == onboardingSlides.length - 1
+                  screenWidth >= 1100 || currentPage == onboardingSlides.length - 1
                       ? SizedBox(
                           width: double.infinity,
                           child: PrimaryButton(

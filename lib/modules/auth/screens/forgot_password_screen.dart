@@ -45,12 +45,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final isMobile = context.isMobile;
-    final isWeb = context.isWeb;
+    final screenWidth = MediaQuery.of(context).size.width;
 
     return Scaffold(
       backgroundColor: AppColors.background(isDark),
-      body: isMobile || !isWeb
+      body: screenWidth < 1100
           ? _buildMobileLayout(isDark)
           : _buildWebLayout(isDark),
     );
