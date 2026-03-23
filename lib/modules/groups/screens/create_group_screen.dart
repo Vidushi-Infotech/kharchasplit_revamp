@@ -23,7 +23,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
   GroupCategory _selectedCategory = GroupCategory.other;
   String _selectedEmoji = '👥';
   XFile? _selectedImageFile;
-  bool _useEmoji = false;
+  bool _useEmoji = true;
 
   final ImagePicker _imagePicker = ImagePicker();
 
@@ -382,7 +382,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
+          crossAxisCount: 5,
           mainAxisSpacing: 8,
           crossAxisSpacing: 8,
         ),
