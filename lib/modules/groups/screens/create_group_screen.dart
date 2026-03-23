@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'dart:io';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -26,11 +27,6 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
   bool _useEmoji = false;
 
   final ImagePicker _imagePicker = ImagePicker();
-
-  final List<String> _emojiList = [
-    '👥', '🏠', '🏝️', '✈️', '🎉', '🍽️', '🏋️', '🎮', '📚', '🚗',
-    '⚽', '🎬', '🎵', '🏖️', '🧳', '💼', '🎓', '🏥', '🌍', '💰',
-  ];
 
   @override
   void initState() {
@@ -377,48 +373,23 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
           width: 1,
         ),
       ),
-      padding: const EdgeInsets.all(12),
-      child: GridView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 5,
-          mainAxisSpacing: 8,
-          crossAxisSpacing: 8,
-        ),
-        itemCount: _emojiList.length,
-        itemBuilder: (context, index) {
-          final emoji = _emojiList[index];
-          final isSelected = emoji == _selectedEmoji;
-
-          return Semantics(
-            button: true,
-            label: 'Select emoji $emoji',
-            child: GestureDetector(
-              onTap: () => setState(() => _selectedEmoji = emoji),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? AppColors.brand.withOpacity(0.2)
-                      : AppColors.surface(isDark),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: isSelected
-                        ? AppColors.brand
-                        : AppColors.divider(isDark),
-                    width: isSelected ? 2 : 1,
-                  ),
-                ),
-                child: Center(
-                  child: Text(
-                    emoji,
-                    style: const TextStyle(fontSize: 24),
-                  ),
-                ),
-              ),
+      padding: const EdgeInsets.all(8),
+      child: Semantics(
+        label: 'Emoji picker with full emoji set',
+        child: SizedBox(
+          height: 300,
+          child: EmojiPicker(
+            onEmojiSelected: (category, emoji) {
+              setState(() => _selectedEmoji = emoji.emoji);
+            },
+            onBackspacePressed: () {},
+            textEditingController: TextEditingController(),
+            config: const Config(
+              height: 300,
+              checkPlatformCompatibility: true,
             ),
-          );
-        },
+          ),
+        ),
       ),
     );
   }
