@@ -56,7 +56,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           );
       // Navigate to home after successful registration
       if (mounted && ref.read(authProvider).state == AuthState.success) {
-        context.go('/home');
+        context.go('/home/dashboard');
       }
     }
   }
@@ -149,13 +149,17 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // Avatar picker - centered
-          Center(
-            child: AvatarPickerWidget(
-              onImageSelected: (image) {
-                setState(() => _selectedImage = image);
-              },
-              selectedImage: _selectedImage,
-              size: 100,
+          Semantics(
+            label: 'Profile picture selector button - tap to choose or take photo',
+            button: true,
+            child: Center(
+              child: AvatarPickerWidget(
+                onImageSelected: (image) {
+                  setState(() => _selectedImage = image);
+                },
+                selectedImage: _selectedImage,
+                size: 100,
+              ),
             ),
           ),
           const SizedBox(height: 32),
@@ -179,117 +183,154 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           const SizedBox(height: 32),
 
           // Social auth buttons
-          SocialAuthButtons(
-            onGooglePressed: () {},
-            onFacebookPressed: () {},
-            isLoading: authState.state == AuthState.loading,
+          Semantics(
+            label: 'Social login options - Google and Facebook buttons',
+            child: SocialAuthButtons(
+              onGooglePressed: () {},
+              onFacebookPressed: () {},
+              isLoading: authState.state == AuthState.loading,
+            ),
           ),
           const SizedBox(height: 32),
 
           // Full Name
-          AppTextField(
-            label: 'Full Name',
-            hint: 'John Doe',
-            controller: _nameController,
-            prefixIcon: Icons.person_rounded,
-            validator: (value) {
-              if (value?.isEmpty ?? true) return 'Name is required';
-              return null;
-            },
+          Semantics(
+            textField: true,
+            label: 'Full name input field - required',
+            child: AppTextField(
+              label: 'Full Name',
+              hint: 'John Doe',
+              controller: _nameController,
+              prefixIcon: Icons.person_rounded,
+              validator: (value) {
+                if (value?.isEmpty ?? true) return 'Name is required';
+                return null;
+              },
+            ),
           ),
           const SizedBox(height: 16),
 
           // Email
-          AppTextField(
-            label: 'Email',
-            hint: 'john@example.com',
-            controller: _emailController,
-            keyboardType: TextInputType.emailAddress,
-            prefixIcon: Icons.email_rounded,
-            validator: (value) {
-              if (value?.isEmpty ?? true) return 'Email is required';
-              if (!value!.contains('@')) return 'Invalid email';
-              return null;
-            },
+          Semantics(
+            textField: true,
+            label: 'Email address input field - required',
+            child: AppTextField(
+              label: 'Email',
+              hint: 'john@example.com',
+              controller: _emailController,
+              keyboardType: TextInputType.emailAddress,
+              prefixIcon: Icons.email_rounded,
+              validator: (value) {
+                if (value?.isEmpty ?? true) return 'Email is required';
+                if (!value!.contains('@')) return 'Invalid email';
+                return null;
+              },
+            ),
           ),
           const SizedBox(height: 16),
 
           // Phone Number
-          AppTextField(
-            label: 'Phone Number',
-            hint: '9876543210',
-            controller: _phoneController,
-            keyboardType: TextInputType.phone,
-            prefixIcon: Icons.phone_rounded,
-            validator: (value) {
-              if (value?.isEmpty ?? true) return 'Phone is required';
-              if (value!.length != 10) return 'Enter valid 10-digit number';
-              return null;
-            },
+          Semantics(
+            textField: true,
+            label: 'Phone number input field - 10 digit Indian number - required',
+            child: AppTextField(
+              label: 'Phone Number',
+              hint: '9876543210',
+              controller: _phoneController,
+              keyboardType: TextInputType.phone,
+              prefixIcon: Icons.phone_rounded,
+              validator: (value) {
+                if (value?.isEmpty ?? true) return 'Phone is required';
+                if (value!.length != 10) return 'Enter valid 10-digit number';
+                return null;
+              },
+            ),
           ),
           const SizedBox(height: 16),
 
           // Password
-          AppTextField(
-            label: 'Password',
-            hint: 'Min. 8 characters',
-            controller: _passwordController,
-            obscureText: _obscurePassword,
-            prefixIcon: Icons.lock_rounded,
-            suffixIcon: _obscurePassword ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-            onSuffixIconPressed: () {
-              setState(() => _obscurePassword = !_obscurePassword);
-            },
-            validator: (value) {
-              if (value?.isEmpty ?? true) return 'Password is required';
-              if (value!.length < 8) return 'Min. 8 characters';
-              return null;
-            },
+          Semantics(
+            textField: true,
+            label: 'Password input field with visibility toggle - minimum 8 characters - required',
+            child: AppTextField(
+              label: 'Password',
+              hint: 'Min. 8 characters',
+              controller: _passwordController,
+              obscureText: _obscurePassword,
+              prefixIcon: Icons.lock_rounded,
+              suffixIcon: _obscurePassword ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+              onSuffixIconPressed: () {
+                setState(() => _obscurePassword = !_obscurePassword);
+              },
+              validator: (value) {
+                if (value?.isEmpty ?? true) return 'Password is required';
+                if (value!.length < 8) return 'Min. 8 characters';
+                return null;
+              },
+            ),
           ),
-          PasswordStrengthWidget(password: _passwordController.text),
+          Semantics(
+            label: 'Password strength indicator',
+            child: PasswordStrengthWidget(password: _passwordController.text),
+          ),
           const SizedBox(height: 16),
 
           // Confirm Password
-          AppTextField(
-            label: 'Confirm Password',
-            hint: 'Re-enter password',
-            controller: _confirmPasswordController,
-            obscureText: _obscureConfirmPassword,
-            prefixIcon: Icons.lock_rounded,
-            suffixIcon: _obscureConfirmPassword ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-            onSuffixIconPressed: () {
-              setState(() => _obscureConfirmPassword = !_obscureConfirmPassword);
-            },
-            validator: (value) {
-              if (value?.isEmpty ?? true) return 'Confirm password';
-              if (value != _passwordController.text) return 'Passwords must match';
-              return null;
-            },
+          Semantics(
+            textField: true,
+            label: 'Confirm password input field - must match password above - required',
+            child: AppTextField(
+              label: 'Confirm Password',
+              hint: 'Re-enter password',
+              controller: _confirmPasswordController,
+              obscureText: _obscureConfirmPassword,
+              prefixIcon: Icons.lock_rounded,
+              suffixIcon: _obscureConfirmPassword ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+              onSuffixIconPressed: () {
+                setState(() => _obscureConfirmPassword = !_obscureConfirmPassword);
+              },
+              validator: (value) {
+                if (value?.isEmpty ?? true) return 'Confirm password';
+                if (value != _passwordController.text) return 'Passwords must match';
+                return null;
+              },
+            ),
           ),
           const SizedBox(height: 24),
 
           // Referral code (collapsible)
-          ReferralCodeField(controller: _referralController),
+          Semantics(
+            label: 'Optional referral code input field - expandable',
+            child: ReferralCodeField(controller: _referralController),
+          ),
           const SizedBox(height: 24),
 
           // Error message
           if (authState.state == AuthState.error)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: Text(
-                authState.errorMessage ?? 'An error occurred',
-                style: AppTextStyles.error(isDark),
-                textAlign: TextAlign.center,
+            Semantics(
+              label: 'Error message - registration failed',
+              enabled: true,
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Text(
+                  authState.errorMessage ?? 'An error occurred',
+                  style: AppTextStyles.error(isDark),
+                  textAlign: TextAlign.center,
+                ),
               ),
             ),
 
           // Register button
-          SizedBox(
-            width: double.infinity,
-            child: PrimaryButton(
-              label: 'Create Account',
-              onPressed: _handleRegister,
-              isLoading: authState.state == AuthState.loading,
+          Semantics(
+            button: true,
+            label: 'Create account button - submit registration form',
+            child: SizedBox(
+              width: double.infinity,
+              child: PrimaryButton(
+                label: 'Create Account',
+                onPressed: _handleRegister,
+                isLoading: authState.state == AuthState.loading,
+              ),
             ),
           ),
           const SizedBox(height: 20),

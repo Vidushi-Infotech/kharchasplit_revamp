@@ -4,9 +4,12 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../components/bottom_navigation_bar.dart';
+import '../../../components/cards/balance_card.dart';
+import '../../../models/models.dart';
 import '../state/dashboard_provider.dart';
-import '../widgets/balance_card.dart';
-import '../widgets/group_list_item.dart';
+
+/// Navigation index provider for sidebar/bottom nav
+final selectedNavIndexProvider = StateProvider<int>((ref) => 0);
 
 /// Home screen with dashboard
 class HomeScreen extends ConsumerWidget {
@@ -49,7 +52,7 @@ class HomeScreen extends ConsumerWidget {
         children: [
           _buildHeader(isDark),
           const SizedBox(height: 24),
-          BalanceCard(balance: data.totalBalance),
+          BalanceCard(totalBalance: data.totalBalance),
           const SizedBox(height: 32),
           _buildGroupsSection(isDark, data),
         ],
@@ -65,21 +68,23 @@ class HomeScreen extends ConsumerWidget {
     return SafeArea(
       child: Row(
         children: [
-          // Sidebar (for tablet and web)
-          Container(
-            width: 280,
-            decoration: BoxDecoration(
-              color: AppColors.surface(isDark),
-              border: Border(
-                right: BorderSide(
-                  color: AppColors.divider(isDark),
-                  width: 1,
+          // Sidebar (for tablet and web) - responsive width
+          SizedBox(
+            width: 240,
+            child: Container(
+              decoration: BoxDecoration(
+                color: AppColors.surface(isDark),
+                border: Border(
+                  right: BorderSide(
+                    color: AppColors.divider(isDark),
+                    width: 1,
+                  ),
                 ),
               ),
+              child: _buildSidebar(isDark, ref),
             ),
-            child: _buildSidebar(isDark, ref),
           ),
-          // Main content
+          // Main content - responsive
           Expanded(
             child: ListView(
               padding: const EdgeInsets.symmetric(
@@ -90,12 +95,19 @@ class HomeScreen extends ConsumerWidget {
               children: [
                 _buildHeader(isDark),
                 const SizedBox(height: 40),
-                SizedBox(
-                  width: 500,
-                  child: BalanceCard(balance: data.totalBalance),
+                Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 600),
+                    child: BalanceCard(totalBalance: data.totalBalance),
+                  ),
                 ),
                 const SizedBox(height: 48),
-                _buildGroupsSection(isDark, data, maxWidth: 800),
+                Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1000),
+                    child: _buildGroupsSection(isDark, data),
+                  ),
+                ),
               ],
             ),
           ),
@@ -125,33 +137,91 @@ class HomeScreen extends ConsumerWidget {
 
   Widget _buildGroupsSection(
     bool isDark,
-    DashboardData data, {
-    double? maxWidth,
-  }) {
+    DashboardData data,
+  ) {
     return RepaintBoundary(
-      child: SizedBox(
-        width: maxWidth,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Your Groups',
-              style: AppTextStyles.headline3(isDark) ?? AppTextStyles.body1(isDark),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Your Groups',
+            style: AppTextStyles.headline3(isDark),
+          ),
+          const SizedBox(height: 16),
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: data.recentGroups.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 12),
+            itemBuilder: (context, index) {
+              final group = data.recentGroups[index];
+              return _buildGroupCard(isDark, group);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGroupCard(bool isDark, GroupModel group) {
+    final isPositive = group.myBalance >= 0;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          // Navigate to group details
+        },
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.cardBg(isDark),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: AppColors.divider(isDark),
+              width: 1,
             ),
-            const SizedBox(height: 16),
-            ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: data.groups.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
-              itemBuilder: (context, index) => GroupListItem(
-                group: data.groups[index],
-                onTap: () {
-                  // Navigate to group details
-                },
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Text(
+                          group.coverEmoji,
+                          style: const TextStyle(fontSize: 24),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            group.name,
+                            style: AppTextStyles.body1(isDark),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Text(
+                    '${isPositive ? '+' : ''}₹${group.myBalance.toStringAsFixed(0)}',
+                    style: AppTextStyles.body1(isDark).copyWith(
+                      color: isPositive ? AppColors.success : AppColors.warning,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ],
+              const SizedBox(height: 8),
+              Text(
+                '${group.members.length} members',
+                style: AppTextStyles.caption(isDark),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -248,15 +318,15 @@ class HomeScreen extends ConsumerWidget {
         break;
       case 1:
         // Groups page
-        context.go('/groups');
+        context.go('/home/groups');
         break;
       case 2:
-        // Expenses page
-        context.go('/expenses');
+        // Add expense page
+        context.go('/add-expense');
         break;
       case 3:
         // Profile page
-        context.go('/profile');
+        context.go('/home/profile');
         break;
     }
   }

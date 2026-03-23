@@ -68,7 +68,7 @@ class ExpenseCard extends StatelessWidget {
           alignment: Alignment.centerRight,
           padding: const EdgeInsets.only(right: 20),
           decoration: BoxDecoration(
-            color: Colors.red[400],
+            color: AppColors.errorText(isDark),
             borderRadius: BorderRadius.circular(12),
           ),
           child: const Icon(Icons.delete_outline_rounded, color: Colors.white),

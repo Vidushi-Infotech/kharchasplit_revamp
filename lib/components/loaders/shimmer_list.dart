@@ -55,7 +55,7 @@ class ShimmerList extends StatelessWidget {
               width: 48,
               height: 48,
               decoration: BoxDecoration(
-                color: Colors.grey[400],
+                color: AppColors.divider(isDark),
                 shape: BoxShape.circle,
               ),
             ),
@@ -68,13 +68,13 @@ class ShimmerList extends StatelessWidget {
                   Container(
                     height: 16,
                     width: 150,
-                    color: Colors.grey[400],
+                    color: AppColors.divider(isDark),
                   ),
                   const SizedBox(height: 8),
                   Container(
                     height: 12,
                     width: 100,
-                    color: Colors.grey[400],
+                    color: AppColors.divider(isDark),
                   ),
                 ],
               ),
@@ -83,7 +83,7 @@ class ShimmerList extends StatelessWidget {
             Container(
               height: 20,
               width: 80,
-              color: Colors.grey[400],
+              color: AppColors.divider(isDark),
             ),
           ],
         ),
@@ -108,7 +108,7 @@ class ShimmerList extends StatelessWidget {
               width: 56,
               height: 56,
               decoration: BoxDecoration(
-                color: Colors.grey[400],
+                color: AppColors.divider(isDark),
                 borderRadius: BorderRadius.circular(12),
               ),
             ),
@@ -121,7 +121,7 @@ class ShimmerList extends StatelessWidget {
                   Container(
                     height: 16,
                     width: 120,
-                    color: Colors.grey[400],
+                    color: AppColors.divider(isDark),
                   ),
                   const SizedBox(height: 8),
                   Row(
@@ -161,7 +161,7 @@ class ShimmerList extends StatelessWidget {
             Container(
               height: 20,
               width: 70,
-              color: Colors.grey[400],
+              color: AppColors.divider(isDark),
             ),
           ],
         ),
@@ -199,13 +199,13 @@ class ShimmerList extends StatelessWidget {
                   Container(
                     height: 16,
                     width: 120,
-                    color: Colors.grey[400],
+                    color: AppColors.divider(isDark),
                   ),
                   const SizedBox(height: 8),
                   Container(
                     height: 12,
                     width: 80,
-                    color: Colors.grey[400],
+                    color: AppColors.divider(isDark),
                   ),
                 ],
               ),
@@ -215,7 +215,7 @@ class ShimmerList extends StatelessWidget {
               height: 36,
               width: 100,
               decoration: BoxDecoration(
-                color: Colors.grey[400],
+                color: AppColors.divider(isDark),
                 borderRadius: BorderRadius.circular(8),
               ),
             ),
@@ -250,13 +250,13 @@ class ShimmerList extends StatelessWidget {
                 children: [
                   Container(
                     height: 14,
-                    color: Colors.grey[400],
+                    color: AppColors.divider(isDark),
                   ),
                   const SizedBox(height: 6),
                   Container(
                     height: 12,
                     width: 100,
-                    color: Colors.grey[400],
+                    color: AppColors.divider(isDark),
                   ),
                 ],
               ),
@@ -265,7 +265,7 @@ class ShimmerList extends StatelessWidget {
             Container(
               height: 12,
               width: 50,
-              color: Colors.grey[400],
+              color: AppColors.divider(isDark),
             ),
           ],
         ),

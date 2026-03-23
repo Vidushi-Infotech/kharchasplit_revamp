@@ -67,7 +67,7 @@ class BalanceCard extends StatelessWidget {
                     child: CurrencyText(
                       totalBalance,
                       currency: currency,
-                      textStyle: TextStyle(
+                      textStyle: const TextStyle(
                         fontSize: 32,
                         fontWeight: FontWeight.w700,
                         color: Colors.white,
@@ -81,23 +81,27 @@ class BalanceCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 24),
-              // Breakdown chips
+              // Breakdown chips with proper gap
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _buildStatChip(
-                    icon: '✨',
-                    label: 'You are owed',
-                    amount: youAreOwed,
-                    color: AppColors.greenLight,
-                    currency: currency,
+                  Expanded(
+                    child: _buildStatChip(
+                      icon: '✨',
+                      label: 'You are owed',
+                      amount: youAreOwed,
+                      color: AppColors.greenLight,
+                      currency: currency,
+                    ),
                   ),
-                  _buildStatChip(
-                    icon: '💸',
-                    label: 'You owe',
-                    amount: youOwe,
-                    color: AppColors.warningOrange,
-                    currency: currency,
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: _buildStatChip(
+                      icon: '💸',
+                      label: 'You owe',
+                      amount: youOwe,
+                      color: AppColors.warningOrange,
+                      currency: currency,
+                    ),
                   ),
                 ],
               ),
@@ -137,37 +141,36 @@ class BalanceCard extends StatelessWidget {
     required Color color,
     required String currency,
   }) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.15),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '$icon $label',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-              ),
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '$icon $label',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
             ),
-            const SizedBox(height: 4),
-            CurrencyText(
-              amount,
-              currency: currency,
-              textStyle: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-              ),
-              overrideColor: Colors.white,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 4),
+          CurrencyText(
+            amount,
+            currency: currency,
+            textStyle: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
             ),
-          ],
-        ),
+            overrideColor: Colors.white,
+          ),
+        ],
       ),
     );
   }

@@ -20,24 +20,24 @@ class DashboardScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppColors.background(isDark),
       body: screenWidth < 600
-          ? _buildCompactLayout(isDark, dashboardData)
+          ? _buildCompactLayout(context, isDark, dashboardData)
           : screenWidth < 1100
-              ? _buildStandardLayout(isDark, dashboardData)
-              : _buildLargeLayout(isDark, dashboardData),
+              ? _buildStandardLayout(context, isDark, dashboardData)
+              : _buildLargeLayout(context, isDark, dashboardData),
     );
   }
 
-  Widget _buildCompactLayout(bool isDark, DashboardData data) {
+  Widget _buildCompactLayout(BuildContext context, bool isDark, DashboardData data) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildTopBar(isDark),
+          _buildTopBar(context, isDark),
           const SizedBox(height: 24),
           _buildBalanceCard(isDark, data),
           const SizedBox(height: 32),
-          _buildRecentGroupsSection(isDark, data),
+          _buildRecentGroupsSection(context, isDark, data),
           const SizedBox(height: 32),
           _buildRecentExpensesSection(isDark, data),
           const SizedBox(height: 32),
@@ -47,7 +47,7 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildStandardLayout(bool isDark, DashboardData data) {
+  Widget _buildStandardLayout(BuildContext context, bool isDark, DashboardData data) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Center(
@@ -56,7 +56,7 @@ class DashboardScreen extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildTopBar(isDark),
+              _buildTopBar(context, isDark),
               const SizedBox(height: 32),
               _buildBalanceCard(isDark, data),
               const SizedBox(height: 40),
@@ -64,7 +64,7 @@ class DashboardScreen extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
-                    child: _buildRecentGroupsSection(isDark, data),
+                    child: _buildRecentGroupsSection(context, isDark, data),
                   ),
                   const SizedBox(width: 24),
                   Expanded(
@@ -81,7 +81,7 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildLargeLayout(bool isDark, DashboardData data) {
+  Widget _buildLargeLayout(BuildContext context, bool isDark, DashboardData data) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(32),
       child: Center(
@@ -90,7 +90,7 @@ class DashboardScreen extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildTopBar(isDark),
+              _buildTopBar(context, isDark),
               const SizedBox(height: 40),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -102,7 +102,7 @@ class DashboardScreen extends ConsumerWidget {
                   const SizedBox(width: 32),
                   Expanded(
                     flex: 1,
-                    child: _buildRecentGroupsSection(isDark, data),
+                    child: _buildRecentGroupsSection(context, isDark, data),
                   ),
                   const SizedBox(width: 32),
                   Expanded(
@@ -120,42 +120,68 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildTopBar(bool isDark) {
+  Widget _buildTopBar(BuildContext context, bool isDark) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isCompact = screenWidth < 600;
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '${DateFormatter.getGreeting()}, You 👋',
-              style: AppTextStyles.headline2(isDark),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Manage your expenses',
-              style: AppTextStyles.body2(isDark).copyWith(
-                color: AppColors.textSecondary(isDark),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${DateFormatter.getGreeting()}, You 👋',
+                style: isCompact
+                    ? AppTextStyles.body1(isDark).copyWith(fontWeight: FontWeight.w700)
+                    : AppTextStyles.headline2(isDark),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
-            ),
-          ],
+              const SizedBox(height: 4),
+              Text(
+                'Manage your expenses',
+                style: AppTextStyles.body2(isDark).copyWith(
+                  color: AppColors.textSecondary(isDark),
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
         ),
+        const SizedBox(width: 12),
         Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            IconButton(
-              icon: const Icon(Icons.notifications_outlined_rounded),
-              onPressed: () {},
-              splashRadius: 24,
-            ),
-            const SizedBox(width: 8),
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: AppColors.tealDark.withOpacity(0.2),
+            Semantics(
+              button: true,
+              label: 'Notifications button',
+              child: SizedBox(
+                width: 36,
+                height: 36,
+                child: IconButton(
+                  icon: const Icon(Icons.notifications_none_rounded, size: 20),
+                  onPressed: () {},
+                  padding: const EdgeInsets.all(4),
+                ),
               ),
-              child: const Icon(Icons.person_rounded, color: Colors.teal),
+            ),
+            const SizedBox(width: 4),
+            Semantics(
+              button: true,
+              label: 'Profile button',
+              child: Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.tealDark.withOpacity(0.2),
+                ),
+                child: const Icon(Icons.person_rounded, color: Colors.teal, size: 16),
+              ),
             ),
           ],
         ),
@@ -172,7 +198,7 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildRecentGroupsSection(bool isDark, DashboardData data) {
+  Widget _buildRecentGroupsSection(BuildContext context, bool isDark, DashboardData data) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -183,19 +209,27 @@ class DashboardScreen extends ConsumerWidget {
               'Your Groups',
               style: AppTextStyles.headline3(isDark),
             ),
-            TextButton(
-              onPressed: () => GoRouter.of(null!).go('/home/groups'),
-              child: const Text('See all'),
+            Semantics(
+              button: true,
+              label: 'See all groups button',
+              child: TextButton(
+                onPressed: () => context.go('/home/groups'),
+                child: const Text('See all'),
+              ),
             ),
           ],
         ),
         const SizedBox(height: 12),
         ...data.recentGroups.map(
-          (group) => Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: GroupCard(
-              group: group,
-              onTap: () => GoRouter.of(null!).go('/home/groups/${group.id}'),
+          (group) => Semantics(
+            button: true,
+            label: 'Group card - ${group.name} with balance ₹${group.myBalance}',
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: GroupCard(
+                group: group,
+                onTap: () => context.go('/home/groups/${group.id}'),
+              ),
             ),
           ),
         ),
@@ -222,9 +256,13 @@ class DashboardScreen extends ConsumerWidget {
               'Recent Expenses',
               style: AppTextStyles.headline3(isDark),
             ),
-            TextButton(
-              onPressed: () {},
-              child: const Text('See all'),
+            Semantics(
+              button: true,
+              label: 'See all expenses button',
+              child: TextButton(
+                onPressed: () {},
+                child: const Text('See all'),
+              ),
             ),
           ],
         ),
@@ -243,11 +281,15 @@ class DashboardScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 8),
             ...expenses.map((expense) {
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: ExpenseCard(
-                  expense: expense,
-                  onTap: () {},
+              return Semantics(
+                button: true,
+                label: 'Expense card - ${expense.title} for ₹${expense.amount}',
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: ExpenseCard(
+                    expense: expense,
+                    onTap: () {},
+                  ),
                 ),
               );
             }),
@@ -287,22 +329,26 @@ class DashboardScreen extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            height: 48,
-            child: ElevatedButton(
-              onPressed: () {},
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.brand,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+          Semantics(
+            button: true,
+            label: 'Settle up button - pay your outstanding debts',
+            child: SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton(
+                onPressed: () {},
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.brand,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
-              ),
-              child: const Text(
-                'Settle Up',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
+                child: const Text(
+                  'Settle Up',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ),

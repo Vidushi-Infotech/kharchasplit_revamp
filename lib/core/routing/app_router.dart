@@ -7,10 +7,14 @@ import '../../modules/auth/screens/register_screen.dart';
 import '../../modules/auth/screens/forgot_password_screen.dart';
 import '../../modules/dashboard/screens/dashboard_screen.dart';
 import '../../modules/groups/screens/groups_screen.dart';
+import '../../modules/groups/screens/group_detail_screen.dart';
 import '../../modules/friends/screens/friends_screen.dart';
+import '../../modules/friends/screens/friend_detail_screen.dart';
 import '../../modules/activity/screens/activity_screen.dart';
 import '../../modules/profile/screens/profile_screen.dart';
 import '../../modules/expenses/screens/add_expense_screen.dart';
+import '../../modules/expenses/screens/expense_detail_screen.dart';
+import '../../modules/reports/screens/reports_screen.dart';
 import '../../layouts/shell/mobile_shell.dart';
 import '../../layouts/shell/tablet_shell.dart';
 import '../../layouts/shell/web_shell.dart';
@@ -69,17 +73,22 @@ final appRouter = GoRouter(
           path: '/home/groups/:groupId',
           name: 'group-detail',
           builder: (context, state) {
-            final groupId = state.pathParameters['groupId'];
-            return Scaffold(
-              appBar: AppBar(title: Text('Group: $groupId')),
-              body: Center(child: Text('Group Detail: $groupId')),
-            );
+            final groupId = state.pathParameters['groupId']!;
+            return GroupDetailScreen(groupId: groupId);
           },
         ),
         GoRoute(
           path: '/home/friends',
           name: 'friends',
           builder: (context, state) => const FriendsScreen(),
+        ),
+        GoRoute(
+          path: '/home/friends/:friendId',
+          name: 'friend-detail',
+          builder: (context, state) {
+            final friendId = state.pathParameters['friendId']!;
+            return FriendDetailScreen(friendId: friendId);
+          },
         ),
         GoRoute(
           path: '/home/activity',
@@ -99,28 +108,44 @@ final appRouter = GoRouter(
             body: const Center(child: Text('Settings')),
           ),
         ),
+        GoRoute(
+          path: '/add-expense',
+          name: 'add-expense',
+          builder: (context, state) => const AddExpenseScreen(),
+        ),
+        GoRoute(
+          path: '/add-expense/:groupId',
+          name: 'add-expense-to-group',
+          builder: (context, state) {
+            final groupId = state.pathParameters['groupId'];
+            return AddExpenseScreen(groupId: groupId);
+          },
+        ),
+        GoRoute(
+          path: '/expense/:expenseId',
+          name: 'expense-detail',
+          builder: (context, state) {
+            final expenseId = state.pathParameters['expenseId']!;
+            return ExpenseDetailScreen(expenseId: expenseId);
+          },
+        ),
+        GoRoute(
+          path: '/settle/:userId',
+          name: 'settle',
+          builder: (context, state) {
+            final userId = state.pathParameters['userId']!;
+            return Scaffold(
+              appBar: AppBar(title: const Text('Settle Up')),
+              body: Center(child: Text('Settle with user: $userId')),
+            );
+          },
+        ),
+        GoRoute(
+          path: '/reports',
+          name: 'reports',
+          builder: (context, state) => const ReportsScreen(),
+        ),
       ],
-    ),
-    GoRoute(
-      path: '/add-expense',
-      name: 'add-expense',
-      builder: (context, state) => const AddExpenseScreen(),
-    ),
-    GoRoute(
-      path: '/add-expense/:groupId',
-      name: 'add-expense-to-group',
-      builder: (context, state) {
-        final groupId = state.pathParameters['groupId'];
-        return AddExpenseScreen(groupId: groupId);
-      },
-    ),
-    GoRoute(
-      path: '/reports',
-      name: 'reports',
-      builder: (context, state) => Scaffold(
-        appBar: AppBar(title: const Text('Reports')),
-        body: const Center(child: Text('Reports')),
-      ),
     ),
   ],
 );

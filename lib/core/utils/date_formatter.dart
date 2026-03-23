@@ -3,6 +3,11 @@ import 'package:intl/intl.dart';
 /// Date formatting utility
 /// Handles relative dates, grouping headers, and display formats
 class DateFormatter {
+  /// Format as relative time (e.g., "2 hours ago", "3 days ago")
+  static String relativeTime(DateTime dateTime) {
+    return _relativeTime(dateTime);
+  }
+
   /// Format as relative date (e.g., "Today", "2 hours ago")
   static String relative(DateTime dateTime) {
     final now = DateTime.now();
@@ -39,6 +44,10 @@ class DateFormatter {
       return DateFormat('MMM dd').format(dateTime);
     }
   }
+
+  /// Format as group header for activity/transaction lists
+  /// e.g., "Today", "Yesterday", "January 2025"
+  static String groupHeaderDate(DateTime dateTime) => groupHeader(dateTime);
 
   /// Format as group header for activity/transaction lists
   /// e.g., "Today", "Yesterday", "January 2025"

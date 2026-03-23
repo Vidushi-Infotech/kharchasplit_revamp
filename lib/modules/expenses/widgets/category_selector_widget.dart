@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../models/models.dart';
 
 class CategorySelectorWidget extends StatelessWidget {
@@ -13,11 +14,15 @@ class CategorySelectorWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
         children: CategoryModel.all.map((category) {
           final isSelected = selectedCategory?.id == category.id;
+          final categoryColor = _hexToColor(category.colorHex);
+
           return Padding(
             padding: const EdgeInsets.only(right: 12),
             child: GestureDetector(
@@ -26,18 +31,24 @@ class CategorySelectorWidget extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
                   color: isSelected
-                      ? category.icon.hashCode.abs() % 2 == 0 ?  Colors.blue : Colors.red
-                      : Colors.grey[200],
+                      ? categoryColor.withOpacity(0.2)
+                      : AppColors.divider(isDark),
                   borderRadius: BorderRadius.circular(8),
                   border: isSelected
-                      ? Border.all(color: Colors.blue, width: 2)
+                      ? Border.all(color: categoryColor, width: 2)
                       : null,
                 ),
                 child: Row(
                   children: [
-                    Icon(category.icon, size: 20),
+                    Icon(category.icon, size: 20, color: categoryColor),
                     const SizedBox(width: 8),
-                    Text(category.name),
+                    Text(
+                      category.name,
+                      style: TextStyle(
+                        color: AppColors.textPrimary(isDark),
+                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -46,5 +57,15 @@ class CategorySelectorWidget extends StatelessWidget {
         }).toList(),
       ),
     );
+  }
+
+  /// Parse hex color string to Color object
+  Color _hexToColor(String hexString) {
+    final buffer = StringBuffer();
+    if (hexString.length == 6 || hexString.length == 7) {
+      buffer.write('ff');
+    }
+    buffer.write(hexString.replaceFirst('#', ''));
+    return Color(int.parse(buffer.toString(), radix: 16));
   }
 }

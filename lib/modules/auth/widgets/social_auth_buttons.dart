@@ -111,14 +111,14 @@ class _SocialButton extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 12),
         side: BorderSide(
           color: isFacebook
-              ? const Color(0xFF1877F2)
+              ? AppColors.facebookBrand
               : (isDark ? AppColors.darkInputBorder : AppColors.lightInputBorder),
         ),
         foregroundColor: isFacebook
-            ? const Color(0xFF1877F2)
+            ? AppColors.facebookBrand
             : (isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary),
         backgroundColor: isFacebook
-            ? const Color(0xFF1877F2).withOpacity(0.1)
+            ? AppColors.facebookBrand.withOpacity(0.1)
             : AppColors.surface(isDark),
       ),
     );

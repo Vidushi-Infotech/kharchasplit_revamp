@@ -8,7 +8,9 @@ class AppColors {
   static const Color tealLight = Color(0xFF00897B);
   static const Color greenLight = Color(0xFF8DC98A);
   static const Color orange = Color(0xFFF4872A);
+  static const Color warningOrange = Color(0xFFF4872A);
   static const Color gray = Color(0xFFB0B0B0);
+  static const Color greyLight = Color(0xFFE0E0E0);
 
   // ── Dark Theme Color Tokens ───────────────────────────────────────────────
   static const Color darkBackground = Color(0xFF0D1F1D);
@@ -79,4 +81,46 @@ class AppColors {
 
   /// Warning (pending, attention needed)
   static const Color warning = orange;
+
+  /// Success light background (for success badges/alerts)
+  static Color successLight(bool isDark) =>
+      isDark ? const Color(0xFF1B5E20).withOpacity(0.2) : const Color(0xFFE8F5E9);
+
+  /// Warning light background (for warning badges/alerts)
+  static Color warningLight(bool isDark) =>
+      isDark ? const Color(0xFFFFF3E0).withOpacity(0.2) : const Color(0xFFFFF3E0);
+
+  // ── Avatar Color Palette (for consistent user avatar backgrounds) ──────────────
+  /// List of avatar background colors for consistent coloring by user name hash
+  static const List<Color> avatarColors = [
+    Color(0xFFEF5350), // Red
+    Color(0xFFEC407A), // Pink
+    Color(0xFFAB47BC), // Purple
+    Color(0xFF7E57C2), // Deep Purple
+    Color(0xFF5C6BC0), // Indigo
+    Color(0xFF42A5F5), // Blue
+    Color(0xFF29B6F6), // Cyan
+    Color(0xFF26C6DA), // Teal
+    Color(0xFF66BB6A), // Green
+    Color(0xFF9CCC65), // Lime
+    Color(0xFFFFCA28), // Amber
+    Color(0xFFFF7043), // Orange
+  ];
+
+  /// Online status indicator color
+  static const Color online = Color(0xFF4CAF50);
+
+  /// Offline status indicator color
+  static Color offline(bool isDark) =>
+      isDark ? const Color(0xFF616161) : const Color(0xFFBDBDBD);
+
+  /// Unread indicator color (for activity, notifications, etc.)
+  static const Color unread = Color(0xFF2196F3);
+
+  // ── Social Platform Colors (for authentication buttons) ──────────────────────
+  /// Google brand color
+  static const Color googleBrand = Color(0xFF4285F4);
+
+  /// Facebook brand color
+  static const Color facebookBrand = Color(0xFF1877F2);
 }

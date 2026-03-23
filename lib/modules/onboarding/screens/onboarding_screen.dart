@@ -136,7 +136,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                                   .read(onboardingPageProvider.notifier)
                                   .completeOnboarding();
                               if (mounted) {
-                                context.go('/home');
+                                context.go('/login');
                               }
                             },
                           ),

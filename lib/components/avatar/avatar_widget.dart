@@ -35,22 +35,8 @@ class AvatarWidget extends StatelessWidget {
 
   /// Get background color based on name (consistent for same name)
   Color _getBackgroundColor(String name) {
-    final colors = [
-      Colors.red[400],
-      Colors.pink[400],
-      Colors.purple[400],
-      Colors.deepPurple[400],
-      Colors.indigo[400],
-      Colors.blue[400],
-      Colors.cyan[400],
-      Colors.teal[400],
-      Colors.green[400],
-      Colors.lime[400],
-      Colors.amber[400],
-      Colors.orange[400],
-    ];
-    final index = name.hashCode % colors.length;
-    return colors[index] ?? Colors.blue;
+    final index = name.hashCode.abs() % AppColors.avatarColors.length;
+    return AppColors.avatarColors[index];
   }
 
   @override
@@ -83,7 +69,7 @@ class AvatarWidget extends StatelessWidget {
                 height: radius * 0.6,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: isOnline ? Colors.green : Colors.grey[400],
+                  color: isOnline ? AppColors.online : AppColors.offline(isDark),
                   border: Border.all(
                     color: AppColors.background(isDark),
                     width: 2,
@@ -170,29 +156,39 @@ class StackedAvatarsWidget extends StatelessWidget {
             for (int i = 0; i < displayCount; i++)
               Positioned(
                 left: i * (radius * 1.2),
-                child: AvatarWidget(
-                  name: names[i],
-                  imageUrl: i < imageUrls.length ? imageUrls[i] : null,
-                  radius: radius,
-                  borderWidth: 2,
-                  borderColor: Colors.white,
+                child: Builder(
+                  builder: (context) {
+                    final isDark = Theme.of(context).brightness == Brightness.dark;
+                    return AvatarWidget(
+                      name: names[i],
+                      imageUrl: i < imageUrls.length ? imageUrls[i] : null,
+                      radius: radius,
+                      borderWidth: 2,
+                      borderColor: AppColors.surface(isDark),
+                    );
+                  },
                 ),
               ),
             // Remaining count badge
             if (remainingCount > 0)
               Positioned(
                 left: displayCount * (radius * 1.2),
-                child: CircleAvatar(
-                  radius: radius,
-                  backgroundColor: Colors.grey[300],
-                  child: Text(
-                    '+${remainingCount}',
-                    style: TextStyle(
-                      fontSize: radius * 0.8,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey[700],
-                    ),
-                  ),
+                child: Builder(
+                  builder: (context) {
+                    final isDark = Theme.of(context).brightness == Brightness.dark;
+                    return CircleAvatar(
+                      radius: radius,
+                      backgroundColor: AppColors.divider(isDark),
+                      child: Text(
+                        '+${remainingCount}',
+                        style: TextStyle(
+                          fontSize: radius * 0.8,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textSecondary(isDark),
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ),
           ],

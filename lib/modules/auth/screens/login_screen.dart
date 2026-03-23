@@ -35,13 +35,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background(isDark),
-      body: screenWidth < 1100
-          ? _buildMobileLayout(isDark)
-          : _buildWebLayout(isDark),
+      body: screenWidth < 600
+          ? _buildCompactLayout(isDark)
+          : screenWidth < 1100
+              ? _buildTabletLayout(isDark)
+              : _buildWebLayout(isDark),
     );
   }
 
-  Widget _buildMobileLayout(bool isDark) {
+  /// Compact layout for mobile devices (< 600px)
+  Widget _buildCompactLayout(bool isDark) {
     return SafeArea(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
@@ -55,6 +58,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 
+  /// Tablet layout (600-1100px)
+  Widget _buildTabletLayout(bool isDark) {
+    return SafeArea(
+      child: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 560),
+            child: _buildFormContent(isDark),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Web layout (> 1100px) with split panel
   Widget _buildWebLayout(bool isDark) {
     return Row(
       children: [
@@ -107,49 +126,68 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           ),
         ),
         const SizedBox(height: 32),
-        SocialAuthButtons(
-          onGooglePressed: () {},
-          onFacebookPressed: () {},
-          isLoading: authState.state == AuthState.loading,
+        Semantics(
+          label: 'Social login options - Google and Facebook buttons',
+          child: SocialAuthButtons(
+            onGooglePressed: () {},
+            onFacebookPressed: () {},
+            isLoading: authState.state == AuthState.loading,
+          ),
         ),
         const SizedBox(height: 32),
-        AppTextField(
-          label: 'Email',
-          controller: _emailController,
-          keyboardType: TextInputType.emailAddress,
-          prefixIcon: Icons.email_rounded,
+        Semantics(
+          textField: true,
+          label: 'Email address input field',
+          child: AppTextField(
+            label: 'Email',
+            controller: _emailController,
+            keyboardType: TextInputType.emailAddress,
+            prefixIcon: Icons.email_rounded,
+          ),
         ),
         const SizedBox(height: 16),
-        AppTextField(
-          label: 'Password',
-          controller: _passwordController,
-          obscureText: _obscurePassword,
-          prefixIcon: Icons.lock_rounded,
-          suffixIcon: _obscurePassword ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-          onSuffixIconPressed: () {
-            setState(() => _obscurePassword = !_obscurePassword);
-          },
+        Semantics(
+          textField: true,
+          label: 'Password input field with visibility toggle',
+          child: AppTextField(
+            label: 'Password',
+            controller: _passwordController,
+            obscureText: _obscurePassword,
+            prefixIcon: Icons.lock_rounded,
+            suffixIcon: _obscurePassword ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+            onSuffixIconPressed: () {
+              setState(() => _obscurePassword = !_obscurePassword);
+            },
+          ),
         ),
         const SizedBox(height: 16),
         Align(
           alignment: Alignment.centerRight,
-          child: TextButton(
-            onPressed: () => context.go('/forgot-password'),
-            child: Text(
-              'Forgot Password?',
-              style: AppTextStyles.body2(isDark).copyWith(
-                color: AppColors.tealDark,
+          child: Semantics(
+            button: true,
+            label: 'Forgot password button - navigate to password recovery',
+            child: TextButton(
+              onPressed: () => context.go('/forgot-password'),
+              child: Text(
+                'Forgot Password?',
+                style: AppTextStyles.body2(isDark).copyWith(
+                  color: AppColors.tealDark,
+                ),
               ),
             ),
           ),
         ),
         const SizedBox(height: 28),
-        SizedBox(
-          width: double.infinity,
-          child: PrimaryButton(
-            label: 'Login',
-            onPressed: () => context.go('/home'),
-            isLoading: authState.state == AuthState.loading,
+        Semantics(
+          button: true,
+          label: 'Login button - sign in with email and password',
+          child: SizedBox(
+            width: double.infinity,
+            child: PrimaryButton(
+              label: 'Login',
+              onPressed: () => context.go('/home/dashboard'),
+              isLoading: authState.state == AuthState.loading,
+            ),
           ),
         ),
         const SizedBox(height: 20),
@@ -158,13 +196,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text("Don't have an account? ", style: AppTextStyles.body2(isDark)),
-              TextButton(
-                onPressed: () => context.go('/register'),
-                child: Text(
-                  'Register',
-                  style: AppTextStyles.body2(isDark).copyWith(
-                    color: AppColors.tealDark,
-                    fontWeight: FontWeight.w600,
+              Semantics(
+                button: true,
+                label: 'Register button - navigate to registration screen',
+                child: TextButton(
+                  onPressed: () => context.go('/register'),
+                  child: Text(
+                    'Register',
+                    style: AppTextStyles.body2(isDark).copyWith(
+                      color: AppColors.tealDark,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ),
