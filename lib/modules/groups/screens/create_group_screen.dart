@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../components/components.dart';
@@ -19,6 +21,10 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
   late TextEditingController _descriptionController;
   GroupCategory _selectedCategory = GroupCategory.other;
   String _selectedEmoji = '👥';
+  File? _selectedImage;
+  bool _useEmoji = true;
+
+  final ImagePicker _imagePicker = ImagePicker();
 
   final List<String> _emojiList = [
     '👥', '🏠', '🏝️', '✈️', '🎉', '🍽️', '🏋️', '🎮', '📚', '🚗',
@@ -37,6 +43,26 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
     _groupNameController.dispose();
     _descriptionController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickImage() async {
+    try {
+      final XFile? pickedFile = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 80,
+      );
+
+      if (pickedFile != null) {
+        setState(() {
+          _selectedImage = File(pickedFile.path);
+          _useEmoji = false;
+        });
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to pick image')),
+      );
+    }
   }
 
   void _createGroup() {
@@ -121,13 +147,13 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Emoji Selector
+        // Group Cover Section
         Text(
-          'Choose an emoji',
+          'Group Cover',
           style: AppTextStyles.body1(isDark),
         ),
         const SizedBox(height: 12),
-        _buildEmojiSelector(isDark),
+        _buildCoverSelector(isDark),
         const SizedBox(height: 32),
 
         // Group Name
@@ -185,6 +211,151 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildCoverSelector(bool isDark) {
+    return Column(
+      children: [
+        // Tab selector
+        Row(
+          children: [
+            Expanded(
+              child: Semantics(
+                button: true,
+                label: 'Use emoji cover',
+                child: GestureDetector(
+                  onTap: () => setState(() => _useEmoji = true),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(
+                          color: _useEmoji ? AppColors.brand : Colors.transparent,
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                    child: Center(
+                      child: Text(
+                        'Emoji',
+                        style: AppTextStyles.body1(isDark).copyWith(
+                          color: _useEmoji
+                              ? AppColors.brand
+                              : AppColors.textSecondary(isDark),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Semantics(
+                button: true,
+                label: 'Use image cover',
+                child: GestureDetector(
+                  onTap: () => setState(() => _useEmoji = false),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(
+                          color: !_useEmoji ? AppColors.brand : Colors.transparent,
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                    child: Center(
+                      child: Text(
+                        'Image',
+                        style: AppTextStyles.body1(isDark).copyWith(
+                          color: !_useEmoji
+                              ? AppColors.brand
+                              : AppColors.textSecondary(isDark),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+
+        // Content based on selection
+        if (_useEmoji)
+          _buildEmojiSelector(isDark)
+        else
+          _buildImagePicker(isDark),
+      ],
+    );
+  }
+
+  Widget _buildImagePicker(bool isDark) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.cardBg(isDark),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppColors.divider(isDark),
+          width: 1,
+        ),
+      ),
+      padding: const EdgeInsets.all(24),
+      child: _selectedImage != null
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.file(
+                    _selectedImage!,
+                    height: 200,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Semantics(
+                  button: true,
+                  label: 'Change image',
+                  child: TextButton.icon(
+                    onPressed: _pickImage,
+                    icon: const Icon(Icons.edit_rounded),
+                    label: const Text('Change Image'),
+                  ),
+                ),
+              ],
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.image_rounded,
+                  size: 48,
+                  color: AppColors.textSecondary(isDark),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'No image selected',
+                  style: AppTextStyles.body2(isDark).copyWith(
+                    color: AppColors.textSecondary(isDark),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Semantics(
+                  button: true,
+                  label: 'Pick image from gallery',
+                  child: PrimaryButton(
+                    label: 'Pick Image',
+                    onPressed: _pickImage,
+                  ),
+                ),
+              ],
+            ),
     );
   }
 
