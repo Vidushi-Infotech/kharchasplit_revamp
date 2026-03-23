@@ -61,7 +61,7 @@ dependencies:
   pdf: ^3.11.1
 
   # Emoji Support
-  emoji_picker_flutter: ^2.0.0
+  emoji_picker_flutter: ^4.4.0
 
   # Image Processing & Compression
   flutter_image_compress: ^2.1.0
