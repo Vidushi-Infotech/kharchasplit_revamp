@@ -87,8 +87,8 @@ class GroupCard extends StatelessWidget {
                       ),
                       decoration: BoxDecoration(
                         color: isPositiveBalance
-                            ? AppColors.greenLight.withOpacity(0.2)
-                            : AppColors.warningOrange.withOpacity(0.2),
+                            ? AppColors.greenLight.withValues(alpha: 0.2)
+                            : AppColors.warningOrange.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: CurrencyText(
@@ -217,8 +217,8 @@ class GroupCardHorizontal extends StatelessWidget {
               ),
               decoration: BoxDecoration(
                 color: isPositiveBalance
-                    ? AppColors.greenLight.withOpacity(0.2)
-                    : AppColors.warningOrange.withOpacity(0.2),
+                    ? AppColors.greenLight.withValues(alpha: 0.2)
+                    : AppColors.warningOrange.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(4),
               ),
               child: CurrencyText(

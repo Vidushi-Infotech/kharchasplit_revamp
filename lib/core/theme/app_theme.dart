@@ -85,7 +85,9 @@ class AppTheme {
       ),
 
       // Dialog
-      dialogBackgroundColor: AppColors.lightSurface,
+      dialogTheme: const DialogThemeData(
+        backgroundColor: AppColors.lightSurface,
+      ),
 
       // SnackBar
       snackBarTheme: SnackBarThemeData(
@@ -177,7 +179,9 @@ class AppTheme {
       ),
 
       // Dialog
-      dialogBackgroundColor: AppColors.darkSurface,
+      dialogTheme: const DialogThemeData(
+        backgroundColor: AppColors.darkSurface,
+      ),
 
       // SnackBar
       snackBarTheme: SnackBarThemeData(

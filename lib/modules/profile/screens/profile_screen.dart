@@ -98,7 +98,7 @@ class ProfileScreen extends ConsumerWidget {
           height: 80,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: AppColors.tealDark.withOpacity(0.2),
+            color: AppColors.tealDark.withValues(alpha: 0.2),
           ),
           child: const Icon(Icons.person_rounded, size: 40),
         ),
@@ -198,7 +198,7 @@ class ProfileScreen extends ConsumerWidget {
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: isSelected
-              ? AppColors.brand.withOpacity(0.1)
+              ? AppColors.brand.withValues(alpha: 0.1)
               : AppColors.cardBg(isDark),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
@@ -214,7 +214,7 @@ class ProfileScreen extends ConsumerWidget {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: isSelected
-                    ? AppColors.brand.withOpacity(0.2)
+                    ? AppColors.brand.withValues(alpha: 0.2)
                     : AppColors.surface(isDark),
               ),
               child: Icon(

@@ -92,7 +92,7 @@ class ExpenseCard extends StatelessWidget {
                   height: 48,
                   decoration: BoxDecoration(
                     color: _parseColor(expense.category.colorHex)
-                        .withOpacity(0.2),
+                        .withValues(alpha: 0.2),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
@@ -161,7 +161,7 @@ class ExpenseCard extends StatelessWidget {
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: _getBadgeColor().withOpacity(0.2),
+                        color: _getBadgeColor().withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(

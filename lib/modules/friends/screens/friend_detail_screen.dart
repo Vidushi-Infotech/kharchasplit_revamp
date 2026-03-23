@@ -164,7 +164,7 @@ class FriendDetailScreen extends ConsumerWidget {
         color: bgColor,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: textColor.withOpacity(0.3),
+          color: textColor.withValues(alpha: 0.3),
           width: 1,
         ),
       ),

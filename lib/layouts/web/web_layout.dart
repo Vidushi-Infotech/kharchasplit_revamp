@@ -40,7 +40,7 @@ class WebLayout extends StatelessWidget {
           // Main content
           Expanded(
             child: Container(
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.02),
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.02),
               child: SingleChildScrollView(
                 child: Padding(
                   padding: const EdgeInsets.all(24.0),

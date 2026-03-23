@@ -41,7 +41,7 @@ class BalanceCard extends StatelessWidget {
             ),
             boxShadow: [
               BoxShadow(
-                color: AppColors.divider(isDark).withOpacity(0.1),
+                color: AppColors.divider(isDark).withValues(alpha: 0.1),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -131,8 +131,8 @@ class BalanceCard extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: isPositive
-            ? AppColors.greenLight.withOpacity(0.15)
-            : AppColors.warningOrange.withOpacity(0.15),
+            ? AppColors.greenLight.withValues(alpha: 0.15)
+            : AppColors.warningOrange.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(6),
         border: Border.all(
           color: isPositive ? AppColors.greenLight : AppColors.warningOrange,

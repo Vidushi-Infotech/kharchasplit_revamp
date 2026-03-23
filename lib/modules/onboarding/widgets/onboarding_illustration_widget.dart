@@ -33,7 +33,7 @@ class OnboardingIllustrationWidget extends StatelessWidget {
           ),
           boxShadow: [
             BoxShadow(
-              color: AppColors.tealDark.withOpacity(isDark ? 0.4 : 0.2),
+              color: AppColors.tealDark.withValues(alpha: isDark ? 0.4 : 0.2),
               blurRadius: 16,
               offset: const Offset(0, 8),
             ),

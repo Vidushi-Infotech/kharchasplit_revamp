@@ -40,8 +40,8 @@ class ShimmerList extends StatelessWidget {
 
   Widget _buildExpenseShimmer(bool isDark) {
     return Shimmer.fromColors(
-      baseColor: AppColors.surface(isDark).withOpacity(0.8),
-      highlightColor: AppColors.surface(isDark).withOpacity(0.2),
+      baseColor: AppColors.surface(isDark).withValues(alpha: 0.8),
+      highlightColor: AppColors.surface(isDark).withValues(alpha: 0.2),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -93,8 +93,8 @@ class ShimmerList extends StatelessWidget {
 
   Widget _buildGroupShimmer(bool isDark) {
     return Shimmer.fromColors(
-      baseColor: AppColors.surface(isDark).withOpacity(0.8),
-      highlightColor: AppColors.surface(isDark).withOpacity(0.2),
+      baseColor: AppColors.surface(isDark).withValues(alpha: 0.8),
+      highlightColor: AppColors.surface(isDark).withValues(alpha: 0.2),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -171,8 +171,8 @@ class ShimmerList extends StatelessWidget {
 
   Widget _buildFriendShimmer(bool isDark) {
     return Shimmer.fromColors(
-      baseColor: AppColors.surface(isDark).withOpacity(0.8),
-      highlightColor: AppColors.surface(isDark).withOpacity(0.2),
+      baseColor: AppColors.surface(isDark).withValues(alpha: 0.8),
+      highlightColor: AppColors.surface(isDark).withValues(alpha: 0.2),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -227,8 +227,8 @@ class ShimmerList extends StatelessWidget {
 
   Widget _buildActivityShimmer(bool isDark) {
     return Shimmer.fromColors(
-      baseColor: AppColors.surface(isDark).withOpacity(0.8),
-      highlightColor: AppColors.surface(isDark).withOpacity(0.2),
+      baseColor: AppColors.surface(isDark).withValues(alpha: 0.8),
+      highlightColor: AppColors.surface(isDark).withValues(alpha: 0.2),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(

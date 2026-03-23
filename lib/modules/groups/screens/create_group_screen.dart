@@ -285,7 +285,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: AppColors.brand.withOpacity(0.1),
+                      color: AppColors.brand.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
@@ -616,7 +616,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
                         vertical: 8,
                       ),
                       decoration: BoxDecoration(
-                        color: AppColors.greenLight.withOpacity(0.15),
+                        color: AppColors.greenLight.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Row(

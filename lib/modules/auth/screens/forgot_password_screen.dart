@@ -149,7 +149,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
             height: 100,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: AppColors.tealDark.withOpacity(0.1),
+              color: AppColors.tealDark.withValues(alpha: 0.1),
             ),
             child: Icon(
               Icons.lock_open_rounded,
@@ -216,7 +216,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
             height: 100,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: AppColors.greenLight.withOpacity(0.1),
+              color: AppColors.greenLight.withValues(alpha: 0.1),
             ),
             child: Icon(
               Icons.check_circle_rounded,

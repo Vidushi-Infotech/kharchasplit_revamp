@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
-import '../../core/theme/app_text_styles.dart';
 import 'shell_state.dart';
 
 /// Tablet shell with NavigationRail
@@ -31,7 +30,7 @@ class TabletShell extends ConsumerWidget {
               _navigateToTab(context, index);
             },
             backgroundColor: AppColors.surface(isDark),
-            indicatorColor: AppColors.brand.withOpacity(0.2),
+            indicatorColor: AppColors.brand.withValues(alpha: 0.2),
             leading: Padding(
               padding: const EdgeInsets.only(top: 16, bottom: 16),
               child: Container(

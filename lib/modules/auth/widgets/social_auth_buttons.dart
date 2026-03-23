@@ -118,7 +118,7 @@ class _SocialButton extends StatelessWidget {
             ? AppColors.facebookBrand
             : (isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary),
         backgroundColor: isFacebook
-            ? AppColors.facebookBrand.withOpacity(0.1)
+            ? AppColors.facebookBrand.withValues(alpha: 0.1)
             : AppColors.surface(isDark),
       ),
     );

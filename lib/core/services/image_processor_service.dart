@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:image/image.dart' as img;
 import 'package:http/http.dart' as http;
-import 'dart:convert';
 
 /// Service for processing and scanning images
 class ImageProcessorService {

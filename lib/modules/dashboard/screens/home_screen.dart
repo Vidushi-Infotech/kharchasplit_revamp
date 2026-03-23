@@ -306,7 +306,7 @@ class HomeScreen extends ConsumerWidget {
         ),
       ),
       onTap: onTap,
-      selectedTileColor: AppColors.tealDark.withOpacity(0.1),
+      selectedTileColor: AppColors.tealDark.withValues(alpha: 0.1),
       selected: isSelected,
     );
   }

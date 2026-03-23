@@ -181,7 +181,7 @@ class WebShell extends ConsumerWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
             color: isSelected
-                ? AppColors.brand.withOpacity(0.15)
+                ? AppColors.brand.withValues(alpha: 0.15)
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(8),
           ),

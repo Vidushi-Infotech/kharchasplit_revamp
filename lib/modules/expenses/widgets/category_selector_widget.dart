@@ -31,7 +31,7 @@ class CategorySelectorWidget extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
                   color: isSelected
-                      ? categoryColor.withOpacity(0.2)
+                      ? categoryColor.withValues(alpha: 0.2)
                       : AppColors.divider(isDark),
                   borderRadius: BorderRadius.circular(8),
                   border: isSelected

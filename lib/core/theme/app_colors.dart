@@ -84,11 +84,11 @@ class AppColors {
 
   /// Success light background (for success badges/alerts)
   static Color successLight(bool isDark) =>
-      isDark ? const Color(0xFF1B5E20).withOpacity(0.2) : const Color(0xFFE8F5E9);
+      isDark ? const Color(0xFF1B5E20).withValues(alpha: 0.2) : const Color(0xFFE8F5E9);
 
   /// Warning light background (for warning badges/alerts)
   static Color warningLight(bool isDark) =>
-      isDark ? const Color(0xFFFFF3E0).withOpacity(0.2) : const Color(0xFFFFF3E0);
+      isDark ? const Color(0xFFFFF3E0).withValues(alpha: 0.2) : const Color(0xFFFFF3E0);
 
   // ── Avatar Color Palette (for consistent user avatar backgrounds) ──────────────
   /// List of avatar background colors for consistent coloring by user name hash

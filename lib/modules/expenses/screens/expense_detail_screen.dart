@@ -138,7 +138,7 @@ class ExpenseDetailScreen extends ConsumerWidget {
                 width: 56,
                 height: 56,
                 decoration: BoxDecoration(
-                  color: AppColors.tealDark.withOpacity(0.2),
+                  color: AppColors.tealDark.withValues(alpha: 0.2),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(

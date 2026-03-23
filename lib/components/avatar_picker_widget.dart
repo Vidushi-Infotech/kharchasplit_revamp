@@ -106,7 +106,7 @@ class _AvatarPickerWidgetState extends State<AvatarPickerWidget> {
           ),
           boxShadow: [
             BoxShadow(
-              color: AppColors.tealDark.withOpacity(0.3),
+              color: AppColors.tealDark.withValues(alpha: 0.3),
               blurRadius: 12,
               offset: const Offset(0, 4),
             ),

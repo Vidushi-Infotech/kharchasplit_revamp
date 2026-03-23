@@ -50,7 +50,7 @@ class ActivityCard extends StatelessWidget {
                   height: 40,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: AppColors.brand.withOpacity(0.2),
+                    color: AppColors.brand.withValues(alpha: 0.2),
                   ),
                   child: Center(
                     child: Text(

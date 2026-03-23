@@ -172,7 +172,7 @@ class DashboardScreen extends ConsumerWidget {
                 height: 36,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: AppColors.tealDark.withOpacity(0.2),
+                  color: AppColors.tealDark.withValues(alpha: 0.2),
                 ),
                 child: const Icon(Icons.person_rounded, color: Colors.teal, size: 16),
               ),

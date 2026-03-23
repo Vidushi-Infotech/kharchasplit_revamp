@@ -82,7 +82,7 @@ class _LoadingIndicator extends StatelessWidget {
         Text(
           'Initializing...',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
               ),
         ),
       ],
