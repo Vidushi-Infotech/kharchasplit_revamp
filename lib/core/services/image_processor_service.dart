@@ -300,8 +300,18 @@ class ImageProcessorService {
 
   /// Get compressed file size percentage
   static String getCompressionPercentage(int originalSize, int compressedSize) {
-    final percentage = ((originalSize - compressedSize) / originalSize * 100);
-    return percentage.toStringAsFixed(1);
+    try {
+      // Handle web where compressedSize might be 0
+      if (originalSize == 0 || compressedSize == 0) {
+        return '0';
+      }
+      final percentage =
+          ((originalSize - compressedSize) / originalSize * 100);
+      return percentage.toStringAsFixed(1);
+    } catch (e) {
+      print('Error calculating compression: $e');
+      return '0';
+    }
   }
 }
 

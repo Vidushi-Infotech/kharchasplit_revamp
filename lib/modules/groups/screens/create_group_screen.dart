@@ -58,80 +58,103 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
       // Start processing
       setState(() {
         _isProcessing = true;
-        _processingStatus = 'Validating image...';
+        _processingStatus = 'Processing image...';
       });
 
-      // Step 1: Validate image
-      final validation =
-          await ImageProcessorService.validateImage(pickedFile.path);
-      if (!validation.isValid) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Validation failed: ${validation.error}')),
-        );
-        setState(() => _isProcessing = false);
-        return;
-      }
+      try {
+        // Step 1: Validate image
+        final validation =
+            await ImageProcessorService.validateImage(pickedFile.path);
+        if (!validation.isValid) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Validation failed: ${validation.error}')),
+          );
+          setState(() => _isProcessing = false);
+          return;
+        }
 
-      if (!mounted) return;
-      setState(() => _processingStatus = 'Scanning for threats...');
-
-      // Step 2: Scan for malware
-      final scanResult =
-          await ImageProcessorService.scanImageForMalware(pickedFile.path);
-      if (!scanResult.isSafe) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Security warning: ${scanResult.details} (${scanResult.threatCount} threats detected)',
+        setState(() => _processingStatus = 'Scanning for threats...');
+
+        // Step 2: Scan for malware
+        final scanResult =
+            await ImageProcessorService.scanImageForMalware(pickedFile.path);
+        if (!scanResult.isSafe) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Security warning: ${scanResult.details} (${scanResult.threatCount} threats detected)',
+              ),
+              backgroundColor: Colors.red,
             ),
-            backgroundColor: Colors.red,
-          ),
-        );
-        setState(() => _isProcessing = false);
-        return;
-      }
+          );
+          setState(() => _isProcessing = false);
+          return;
+        }
 
-      if (!mounted) return;
-      setState(() => _processingStatus = 'Compressing image...');
-
-      // Step 3: Compress image to WebP
-      final compressedBytes =
-          await ImageProcessorService.compressImageToWebP(pickedFile.path);
-      if (compressedBytes == null) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to compress image')),
+        setState(() => _processingStatus = 'Compressing image...');
+
+        // Step 3: Compress image to WebP
+        final compressedBytes =
+            await ImageProcessorService.compressImageToWebP(pickedFile.path);
+
+        // Calculate compression percentage (handle null/empty bytes on web)
+        String compressionPercent = '0';
+        if (compressedBytes != null && compressedBytes.isNotEmpty) {
+          try {
+            final originalSize = await File(pickedFile.path).length();
+            compressionPercent =
+                ImageProcessorService.getCompressionPercentage(
+              originalSize,
+              compressedBytes.length,
+            );
+          } catch (e) {
+            // Skip compression calculation if it fails
+            print('Warning: Could not calculate compression - $e');
+          }
+        }
+
+        if (!mounted) return;
+        setState(() {
+          _selectedImageFile = pickedFile;
+          _useEmoji = false;
+          _isProcessing = false;
+          _processingStatus = null;
+          _uploadProgress = 0.0;
+        });
+
+        // Show upload progress dialog
+        if (!mounted) return;
+        _showUploadProgressDialog(
+          context,
+          pickedFile,
+          validation.dimensionsDisplay,
+          compressionPercent,
         );
-        setState(() => _isProcessing = false);
-        return;
+      } catch (processingError) {
+        print('Processing error: $processingError');
+        // On web or any error, still allow image to be used
+        if (!mounted) return;
+        setState(() {
+          _selectedImageFile = pickedFile;
+          _useEmoji = false;
+          _isProcessing = false;
+          _processingStatus = null;
+          _uploadProgress = 0.0;
+        });
+
+        // Show upload dialog anyway
+        if (!mounted) return;
+        _showUploadProgressDialog(
+          context,
+          pickedFile,
+          'Unknown',
+          '0',
+        );
       }
-
-      // Calculate compression
-      final originalSize = await File(pickedFile.path).length();
-      final compressionPercent = ImageProcessorService.getCompressionPercentage(
-        originalSize,
-        compressedBytes.length,
-      );
-
-      if (!mounted) return;
-      setState(() {
-        _selectedImageFile = pickedFile;
-        _useEmoji = false;
-        _isProcessing = false;
-        _processingStatus = null;
-        _uploadProgress = 0.0;
-      });
-
-      // Show upload progress dialog
-      if (!mounted) return;
-      _showUploadProgressDialog(
-        context,
-        pickedFile,
-        validation.dimensionsDisplay,
-        compressionPercent,
-      );
     } catch (e) {
       setState(() => _isProcessing = false);
       if (!mounted) return;
