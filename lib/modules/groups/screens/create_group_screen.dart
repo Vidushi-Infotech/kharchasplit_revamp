@@ -9,6 +9,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../components/components.dart';
 import '../../../models/models.dart';
+import '../../../core/services/image_processor_service.dart';
 
 /// Screen for creating a new group
 class CreateGroupScreen extends ConsumerStatefulWidget {
@@ -25,6 +26,8 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
   String _selectedEmoji = '👥';
   XFile? _selectedImageFile;
   bool _useEmoji = false;
+  bool _isProcessing = false;
+  String? _processingStatus;
 
   final ImagePicker _imagePicker = ImagePicker();
 
@@ -46,18 +49,94 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
     try {
       final XFile? pickedFile = await _imagePicker.pickImage(
         source: ImageSource.gallery,
-        imageQuality: 80,
+        imageQuality: 90,
       );
 
-      if (pickedFile != null) {
-        setState(() {
-          _selectedImageFile = pickedFile;
-          _useEmoji = false;
-        });
+      if (pickedFile == null) return;
+
+      // Start processing
+      setState(() {
+        _isProcessing = true;
+        _processingStatus = 'Validating image...';
+      });
+
+      // Step 1: Validate image
+      final validation =
+          await ImageProcessorService.validateImage(pickedFile.path);
+      if (!validation.isValid) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Validation failed: ${validation.error}')),
+        );
+        setState(() => _isProcessing = false);
+        return;
       }
-    } catch (e) {
+
+      if (!mounted) return;
+      setState(() => _processingStatus = 'Scanning for threats...');
+
+      // Step 2: Scan for malware
+      final scanResult =
+          await ImageProcessorService.scanImageForMalware(pickedFile.path);
+      if (!scanResult.isSafe) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Security warning: ${scanResult.details} (${scanResult.threatCount} threats detected)',
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+        setState(() => _isProcessing = false);
+        return;
+      }
+
+      if (!mounted) return;
+      setState(() => _processingStatus = 'Compressing image...');
+
+      // Step 3: Compress image to WebP
+      final compressedBytes =
+          await ImageProcessorService.compressImageToWebP(pickedFile.path);
+      if (compressedBytes == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to compress image')),
+        );
+        setState(() => _isProcessing = false);
+        return;
+      }
+
+      // Calculate compression
+      final originalSize = await File(pickedFile.path).length();
+      final compressionPercent = ImageProcessorService.getCompressionPercentage(
+        originalSize,
+        compressedBytes.length,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _selectedImageFile = pickedFile;
+        _useEmoji = false;
+        _isProcessing = false;
+        _processingStatus = null;
+      });
+
+      // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to pick image')),
+        SnackBar(
+          content: Text(
+            'Image ready! Compressed ${validation.dimensionsDisplay} by $compressionPercent%',
+          ),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } catch (e) {
+      setState(() => _isProcessing = false);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error processing image: $e')),
       );
     }
   }
@@ -302,64 +381,112 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
         ),
       ),
       padding: const EdgeInsets.all(24),
-      child: _selectedImageFile != null
+      child: _isProcessing
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.center,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: kIsWeb
-                      ? Image.network(
-                          _selectedImageFile!.path,
-                          height: 200,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                        )
-                      : Image.file(
-                          File(_selectedImageFile!.path),
-                          height: 200,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                        ),
-                ),
+                const CircularProgressIndicator(),
                 const SizedBox(height: 16),
-                Semantics(
-                  button: true,
-                  label: 'Change image',
-                  child: TextButton.icon(
-                    onPressed: _pickImage,
-                    icon: const Icon(Icons.edit_rounded),
-                    label: const Text('Change Image'),
-                  ),
+                Text(
+                  _processingStatus ?? 'Processing image...',
+                  style: AppTextStyles.body2(isDark),
+                  textAlign: TextAlign.center,
                 ),
               ],
             )
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.image_rounded,
-                  size: 48,
-                  color: AppColors.textSecondary(isDark),
+          : _selectedImageFile != null
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: kIsWeb
+                          ? Image.network(
+                              _selectedImageFile!.path,
+                              height: 200,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                            )
+                          : Image.file(
+                              File(_selectedImageFile!.path),
+                              height: 200,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                            ),
+                    ),
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.greenLight.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.check_circle_rounded,
+                            color: AppColors.greenLight,
+                            size: 16,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Image scanned & compressed',
+                            style: AppTextStyles.caption(isDark).copyWith(
+                              color: AppColors.greenLight,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Semantics(
+                      button: true,
+                      label: 'Change image',
+                      child: TextButton.icon(
+                        onPressed: _pickImage,
+                        icon: const Icon(Icons.edit_rounded),
+                        label: const Text('Change Image'),
+                      ),
+                    ),
+                  ],
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.image_rounded,
+                      size: 48,
+                      color: AppColors.textSecondary(isDark),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'No image selected',
+                      style: AppTextStyles.body2(isDark).copyWith(
+                        color: AppColors.textSecondary(isDark),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Image will be scanned & compressed to WebP',
+                      style: AppTextStyles.caption(isDark),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    Semantics(
+                      button: true,
+                      label: 'Pick image from gallery',
+                      child: PrimaryButton(
+                        label: 'Pick Image',
+                        onPressed: _pickImage,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 16),
-                Text(
-                  'No image selected',
-                  style: AppTextStyles.body2(isDark).copyWith(
-                    color: AppColors.textSecondary(isDark),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Semantics(
-                  button: true,
-                  label: 'Pick image from gallery',
-                  child: PrimaryButton(
-                    label: 'Pick Image',
-                    onPressed: _pickImage,
-                  ),
-                ),
-              ],
-            ),
     );
   }
 
