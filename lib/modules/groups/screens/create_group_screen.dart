@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
@@ -21,7 +22,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
   late TextEditingController _descriptionController;
   GroupCategory _selectedCategory = GroupCategory.other;
   String _selectedEmoji = '👥';
-  File? _selectedImage;
+  XFile? _selectedImageFile;
   bool _useEmoji = true;
 
   final ImagePicker _imagePicker = ImagePicker();
@@ -54,7 +55,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
 
       if (pickedFile != null) {
         setState(() {
-          _selectedImage = File(pickedFile.path);
+          _selectedImageFile = pickedFile;
           _useEmoji = false;
         });
       }
@@ -305,18 +306,25 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
         ),
       ),
       padding: const EdgeInsets.all(24),
-      child: _selectedImage != null
+      child: _selectedImageFile != null
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
-                  child: Image.file(
-                    _selectedImage!,
-                    height: 200,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                  ),
+                  child: kIsWeb
+                      ? Image.network(
+                          _selectedImageFile!.path,
+                          height: 200,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                        )
+                      : Image.file(
+                          File(_selectedImageFile!.path),
+                          height: 200,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                        ),
                 ),
                 const SizedBox(height: 16),
                 Semantics(
