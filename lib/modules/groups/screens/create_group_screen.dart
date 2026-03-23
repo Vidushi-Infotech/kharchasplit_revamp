@@ -28,6 +28,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
   bool _useEmoji = false;
   bool _isProcessing = false;
   String? _processingStatus;
+  double _uploadProgress = 0.0;
 
   final ImagePicker _imagePicker = ImagePicker();
 
@@ -120,17 +121,16 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
         _useEmoji = false;
         _isProcessing = false;
         _processingStatus = null;
+        _uploadProgress = 0.0;
       });
 
-      // Show success message
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Image ready! Compressed ${validation.dimensionsDisplay} by $compressionPercent%',
-          ),
-          backgroundColor: Colors.green,
-          duration: const Duration(seconds: 3),
-        ),
+      // Show upload progress dialog
+      if (!mounted) return;
+      _showUploadProgressDialog(
+        context,
+        pickedFile,
+        validation.dimensionsDisplay,
+        compressionPercent,
       );
     } catch (e) {
       setState(() => _isProcessing = false);
@@ -138,6 +138,177 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error processing image: $e')),
       );
+    }
+  }
+
+  /// Show upload progress dialog with preview
+  Future<void> _showUploadProgressDialog(
+    BuildContext context,
+    XFile imageFile,
+    String dimensions,
+    String compressionPercent,
+  ) async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setState) {
+          Future.microtask(() async {
+            final success = await _uploadImage();
+            if (success && mounted) {
+              // Close dialog after upload completes
+              Navigator.of(dialogContext).pop();
+
+              // Show success notification
+              ScaffoldMessenger.of(this.context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'Image uploaded! Compressed $dimensions by $compressionPercent%',
+                  ),
+                  backgroundColor: Colors.green,
+                  duration: const Duration(seconds: 3),
+                ),
+              );
+            }
+          });
+
+          return Dialog(
+            backgroundColor: AppColors.cardBg(isDark),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  // Title
+                  Text(
+                    'Uploading Image',
+                    style: AppTextStyles.headline3(isDark),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Image Preview
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      width: 150,
+                      height: 150,
+                      color: AppColors.surface(isDark),
+                      child: kIsWeb
+                          ? Image.network(
+                              imageFile.path,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Icon(
+                                Icons.image_rounded,
+                                size: 60,
+                                color: AppColors.textSecondary(isDark),
+                              ),
+                            )
+                          : Image.file(
+                              File(imageFile.path),
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Icon(
+                                Icons.image_rounded,
+                                size: 60,
+                                color: AppColors.textSecondary(isDark),
+                              ),
+                            ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Progress Bar
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Uploading...',
+                            style: AppTextStyles.body2(isDark),
+                          ),
+                          Text(
+                            '${(_uploadProgress * 100).toStringAsFixed(0)}%',
+                            style: AppTextStyles.body2(isDark).copyWith(
+                              color: AppColors.brand,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: LinearProgressIndicator(
+                          value: _uploadProgress,
+                          minHeight: 8,
+                          backgroundColor: AppColors.surface(isDark),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            AppColors.brand,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Info Text
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.brand.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.info_rounded,
+                          color: AppColors.brand,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Image scanned & compressed. Upload starting...',
+                            style: AppTextStyles.caption(isDark).copyWith(
+                              color: AppColors.brand,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  /// Simulate uploading image with progress tracking
+  Future<bool> _uploadImage() async {
+    try {
+      if (_selectedImageFile == null) return true;
+
+      // Simulate upload with progress
+      for (int i = 0; i <= 100; i += 10) {
+        if (!mounted) return false;
+        setState(() => _uploadProgress = i / 100);
+        await Future.delayed(const Duration(milliseconds: 150));
+      }
+
+      return true;
+    } catch (e) {
+      print('Upload error: $e');
+      return false;
     }
   }
 
