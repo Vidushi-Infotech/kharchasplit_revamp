@@ -158,7 +158,7 @@ class IOweScreen extends ConsumerWidget {
                 child: Row(
                   children: [
                     Text(
-                      group.emoji ?? '🏠',
+                      group.coverEmoji ?? '🏠',
                       style: const TextStyle(fontSize: 28),
                     ),
                     const SizedBox(width: 12),
@@ -173,7 +173,7 @@ class IOweScreen extends ConsumerWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            '${group.category ?? 'Group'} • ${group.memberCount ?? 2} members',
+                            '${group.categoryName} • ${group.memberCount} members',
                             style: AppTextStyles.caption(isDark),
                             overflow: TextOverflow.ellipsis,
                           ),
