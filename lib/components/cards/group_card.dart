@@ -43,12 +43,12 @@ class GroupCard extends StatelessWidget {
                 Expanded(
                   child: Row(
                     children: [
-                      // Emoji
+                      // Emoji icon as group avatar
                       Text(
                         group.coverEmoji,
-                        style: const TextStyle(fontSize: 32),
+                        style: const TextStyle(fontSize: 44),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 16),
                       // Group name
                       Expanded(
                         child: Column(
@@ -73,59 +73,78 @@ class GroupCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                // My balance
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: isPositiveBalance
-                        ? AppColors.greenLight.withOpacity(0.2)
-                        : AppColors.warningOrange.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: CurrencyText(
-                    group.myBalance,
-                    currency: group.currency,
-                    textStyle: AppTextStyles.body2(isDark).copyWith(
-                      fontWeight: FontWeight.w700,
+                // My balance in this group
+                Semantics(
+                  label: isPositiveBalance
+                      ? 'You are owed ${group.currency}${group.myBalance.abs().toStringAsFixed(0)} in this group'
+                      : 'You owe ${group.currency}${group.myBalance.abs().toStringAsFixed(0)} in this group',
+                  child: Tooltip(
+                    message: isPositiveBalance ? 'You are owed' : 'You owe',
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isPositiveBalance
+                            ? AppColors.greenLight.withOpacity(0.2)
+                            : AppColors.warningOrange.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: CurrencyText(
+                        group.myBalance,
+                        currency: group.currency,
+                        textStyle: AppTextStyles.body2(isDark).copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                        showSign: true,
+                      ),
                     ),
-                    showSign: true,
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 12),
-            // Members and info
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                // Member avatars
-                Flexible(
-                  child: StackedAvatarsWidget(
-                    names: group.members.map((m) => m.name).toList(),
-                    imageUrls:
-                        group.members.map((m) => m.avatarUrl).toList(),
-                    radius: 12,
-                    maxVisible: 3,
-                  ),
-                ),
-                // Member count
-                Text(
-                  '${group.memberCount} members',
-                  style: AppTextStyles.caption(isDark).copyWith(
-                    color: AppColors.textSecondary(isDark),
-                  ),
-                ),
-              ],
+            // Members avatars
+            StackedAvatarsWidget(
+              names: group.members.map((m) => m.name).toList(),
+              imageUrls: group.members.map((m) => m.avatarUrl).toList(),
+              radius: 14,
+              maxVisible: 4,
             ),
-            const SizedBox(height: 12),
-            // Total spent
+            const SizedBox(height: 8),
+            // Member count
             Text(
-              'Total: ${group.currency}${group.totalExpenses.toStringAsFixed(2)}',
+              '${group.memberCount} members',
               style: AppTextStyles.caption(isDark).copyWith(
                 color: AppColors.textSecondary(isDark),
+              ),
+            ),
+            const SizedBox(height: 12),
+            // Total spent info
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: isDark ? AppColors.surface(isDark) : const Color(0xFFF5F9F8),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Group Total',
+                    style: AppTextStyles.caption(isDark).copyWith(
+                      color: AppColors.textSecondary(isDark),
+                    ),
+                  ),
+                  CurrencyText(
+                    group.totalExpenses,
+                    currency: group.currency,
+                    textStyle: AppTextStyles.body2(isDark).copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],

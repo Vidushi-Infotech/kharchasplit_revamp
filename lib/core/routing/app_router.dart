@@ -6,6 +6,8 @@ import '../../modules/auth/screens/login_screen.dart';
 import '../../modules/auth/screens/register_screen.dart';
 import '../../modules/auth/screens/forgot_password_screen.dart';
 import '../../modules/dashboard/screens/dashboard_screen.dart';
+import '../../modules/dashboard/screens/owed_to_me_screen.dart';
+import '../../modules/dashboard/screens/i_owe_screen.dart';
 import '../../modules/groups/screens/groups_screen.dart';
 import '../../modules/groups/screens/group_detail_screen.dart';
 import '../../modules/friends/screens/friends_screen.dart';
@@ -63,6 +65,16 @@ final appRouter = GoRouter(
           path: '/home/dashboard',
           name: 'dashboard',
           builder: (context, state) => const DashboardScreen(),
+        ),
+        GoRoute(
+          path: '/home/owed-to-me',
+          name: 'owed-to-me',
+          builder: (context, state) => const OwedToMeScreen(),
+        ),
+        GoRoute(
+          path: '/home/i-owe',
+          name: 'i-owe',
+          builder: (context, state) => const IOweScreen(),
         ),
         GoRoute(
           path: '/home/groups',

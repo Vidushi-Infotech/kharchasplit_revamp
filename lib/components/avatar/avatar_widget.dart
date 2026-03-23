@@ -144,18 +144,24 @@ class StackedAvatarsWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final displayCount = (names.length > maxVisible) ? maxVisible : names.length;
     final remainingCount = names.length - displayCount;
+    // Calculate width: spacing between avatars + final avatar diameter + padding
+    // Using 1.8x spacing to prevent any cropping with borders
+    final spacing = radius * 1.8;
+    final width = displayCount > 0
+        ? (displayCount - 1) * spacing + (radius * 2) + 8
+        : 0;
 
     return GestureDetector(
       onTap: onTap,
       child: SizedBox(
-        height: radius * 2,
-        width: radius * 2 * 0.6 * displayCount + (remainingCount > 0 ? 24 : 0),
+        height: radius * 2 + 8,
+        width: (remainingCount > 0 ? width + 24 : width).toDouble(),
         child: Stack(
           children: [
             // Display avatars
             for (int i = 0; i < displayCount; i++)
               Positioned(
-                left: i * (radius * 1.2),
+                left: (i * spacing).toDouble(),
                 child: Builder(
                   builder: (context) {
                     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -172,7 +178,7 @@ class StackedAvatarsWidget extends StatelessWidget {
             // Remaining count badge
             if (remainingCount > 0)
               Positioned(
-                left: displayCount * (radius * 1.2),
+                left: (displayCount * spacing).toDouble(),
                 child: Builder(
                   builder: (context) {
                     final isDark = Theme.of(context).brightness == Brightness.dark;

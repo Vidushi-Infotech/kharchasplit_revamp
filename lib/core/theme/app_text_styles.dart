@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'app_colors.dart';
 
 /// Responsive, theme-aware text styles
 /// Use with Theme.of(context) to get isDark boolean
 class AppTextStyles {
   static TextStyle _baseStyle(bool isDark, double fontSize) {
-    return GoogleFonts.poppins(
+    return TextStyle(
+      fontFamily: 'Roboto',
       fontSize: fontSize,
       color: AppColors.textPrimary(isDark),
       height: 1.5,

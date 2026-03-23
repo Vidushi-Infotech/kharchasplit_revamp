@@ -35,13 +35,11 @@ class DashboardScreen extends ConsumerWidget {
         children: [
           _buildTopBar(context, isDark),
           const SizedBox(height: 24),
-          _buildBalanceCard(isDark, data),
+          _buildBalanceCard(context, isDark, data),
           const SizedBox(height: 32),
           _buildRecentGroupsSection(context, isDark, data),
           const SizedBox(height: 32),
           _buildRecentExpensesSection(isDark, data),
-          const SizedBox(height: 32),
-          _buildQuickSettleSection(isDark, data),
         ],
       ),
     );
@@ -58,7 +56,7 @@ class DashboardScreen extends ConsumerWidget {
             children: [
               _buildTopBar(context, isDark),
               const SizedBox(height: 32),
-              _buildBalanceCard(isDark, data),
+              _buildBalanceCard(context, isDark, data),
               const SizedBox(height: 40),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -72,8 +70,6 @@ class DashboardScreen extends ConsumerWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 32),
-              _buildQuickSettleSection(isDark, data),
             ],
           ),
         ),
@@ -97,7 +93,7 @@ class DashboardScreen extends ConsumerWidget {
                 children: [
                   Expanded(
                     flex: 1,
-                    child: _buildBalanceCard(isDark, data),
+                    child: _buildBalanceCard(context, isDark, data),
                   ),
                   const SizedBox(width: 32),
                   Expanded(
@@ -111,8 +107,6 @@ class DashboardScreen extends ConsumerWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 40),
-              _buildQuickSettleSection(isDark, data),
             ],
           ),
         ),
@@ -189,12 +183,14 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildBalanceCard(bool isDark, DashboardData data) {
+  Widget _buildBalanceCard(BuildContext context, bool isDark, DashboardData data) {
     return BalanceCard(
       totalBalance: data.totalBalance,
       youAreOwed: data.youAreOwed,
       youOwe: data.youOwe,
       currency: '₹',
+      onOwedTap: () => context.pushNamed('owed-to-me'),
+      onOweTap: () => context.pushNamed('i-owe'),
     );
   }
 
@@ -300,61 +296,4 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildQuickSettleSection(bool isDark, DashboardData data) {
-    if (data.youOwe <= 0) {
-      return const SizedBox.shrink();
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppColors.warningOrange.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: AppColors.warningOrange.withOpacity(0.3),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Quick Settle',
-            style: AppTextStyles.headline3(isDark),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'You have unsettled debts',
-            style: AppTextStyles.body2(isDark).copyWith(
-              color: AppColors.textSecondary(isDark),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Semantics(
-            button: true,
-            label: 'Settle up button - pay your outstanding debts',
-            child: SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: ElevatedButton(
-                onPressed: () {},
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.brand,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: const Text(
-                  'Settle Up',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }

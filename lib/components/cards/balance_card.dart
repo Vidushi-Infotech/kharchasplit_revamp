@@ -10,6 +10,8 @@ class BalanceCard extends StatelessWidget {
   final double youOwe;
   final String currency;
   final VoidCallback? onTap;
+  final VoidCallback? onOwedTap;
+  final VoidCallback? onOweTap;
 
   const BalanceCard({
     Key? key,
@@ -18,6 +20,8 @@ class BalanceCard extends StatelessWidget {
     this.youOwe = 0,
     this.currency = '₹',
     this.onTap,
+    this.onOwedTap,
+    this.onOweTap,
   }) : super(key: key);
 
   @override
@@ -29,33 +33,32 @@ class BalanceCard extends StatelessWidget {
       child: RepaintBoundary(
         child: Container(
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                AppColors.tealDark,
-                AppColors.tealDark.withOpacity(0.8),
-              ],
-            ),
+            color: AppColors.cardBg(isDark),
             borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: AppColors.divider(isDark),
+              width: 1,
+            ),
             boxShadow: [
               BoxShadow(
-                color: AppColors.tealDark.withOpacity(0.2),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
+                color: AppColors.divider(isDark).withOpacity(0.1),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
               ),
             ],
           ),
-          padding: const EdgeInsets.all(24),
-          child: Column(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Label
               Text(
                 'Overall Balance',
-                style: AppTextStyles.body2(true).copyWith(
-                  color: Colors.white.withOpacity(0.8),
-                  fontSize: 14,
+                style: AppTextStyles.body2(isDark).copyWith(
+                  color: AppColors.textSecondary(isDark),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
               const SizedBox(height: 12),
@@ -67,46 +70,55 @@ class BalanceCard extends StatelessWidget {
                     child: CurrencyText(
                       totalBalance,
                       currency: currency,
-                      textStyle: const TextStyle(
+                      textStyle: TextStyle(
                         fontSize: 32,
                         fontWeight: FontWeight.w700,
-                        color: Colors.white,
+                        color: AppColors.textPrimary(isDark),
                       ),
                       animated: true,
-                      overrideColor: Colors.white,
+                      overrideColor: AppColors.textPrimary(isDark),
                     ),
                   ),
                   // Status badge
                   _buildStatusBadge(isDark),
                 ],
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
               // Breakdown chips with proper gap
               Row(
                 children: [
                   Expanded(
-                    child: _buildStatChip(
-                      icon: '✨',
-                      label: 'You are owed',
-                      amount: youAreOwed,
-                      color: AppColors.greenLight,
-                      currency: currency,
+                    child: GestureDetector(
+                      onTap: onOwedTap,
+                      child: _buildStatChip(
+                        isDark: isDark,
+                        icon: '✨',
+                        label: 'You are owed',
+                        amount: youAreOwed,
+                        color: AppColors.greenLight,
+                        currency: currency,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
-                    child: _buildStatChip(
-                      icon: '💸',
-                      label: 'You owe',
-                      amount: youOwe,
-                      color: AppColors.warningOrange,
-                      currency: currency,
+                    child: GestureDetector(
+                      onTap: onOweTap,
+                      child: _buildStatChip(
+                        isDark: isDark,
+                        icon: '💸',
+                        label: 'You owe',
+                        amount: youOwe,
+                        color: AppColors.warningOrange,
+                        currency: currency,
+                      ),
                     ),
                   ),
                 ],
               ),
             ],
           ),
+            ),
         ),
       ),
     );
@@ -119,15 +131,19 @@ class BalanceCard extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: isPositive
-            ? AppColors.greenLight.withOpacity(0.2)
-            : Colors.red.withOpacity(0.2),
+            ? AppColors.greenLight.withOpacity(0.15)
+            : AppColors.warningOrange.withOpacity(0.15),
         borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: isPositive ? AppColors.greenLight : AppColors.warningOrange,
+          width: 1,
+        ),
       ),
       child: Text(
         isPositive ? 'You are owed' : 'You owe',
-        style: AppTextStyles.caption(true).copyWith(
-          color: isPositive ? AppColors.greenLight : Colors.red,
-          fontSize: 12,
+        style: AppTextStyles.caption(isDark).copyWith(
+          color: isPositive ? AppColors.greenLight : AppColors.warningOrange,
+          fontSize: 11,
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -135,6 +151,7 @@ class BalanceCard extends StatelessWidget {
   }
 
   Widget _buildStatChip({
+    required bool isDark,
     required String icon,
     required String label,
     required double amount,
@@ -144,31 +161,35 @@ class BalanceCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.15),
+        color: AppColors.surface(isDark),
         borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: AppColors.divider(isDark),
+          width: 1,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             '$icon $label',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 12,
+            style: AppTextStyles.caption(isDark).copyWith(
+              color: AppColors.textSecondary(isDark),
+              fontSize: 11,
               fontWeight: FontWeight.w500,
             ),
             overflow: TextOverflow.ellipsis,
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 6),
           CurrencyText(
             amount,
             currency: currency,
-            textStyle: const TextStyle(
+            textStyle: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w700,
-              color: Colors.white,
+              color: AppColors.textPrimary(isDark),
             ),
-            overrideColor: Colors.white,
+            overrideColor: AppColors.textPrimary(isDark),
           ),
         ],
       ),

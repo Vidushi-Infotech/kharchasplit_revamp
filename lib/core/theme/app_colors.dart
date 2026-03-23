@@ -25,12 +25,12 @@ class AppColors {
   static const Color darkErrorText = Color(0xFFFF8B7B);
 
   // ── Light Theme Color Tokens ──────────────────────────────────────────────
-  static const Color lightBackground = Color(0xFFF0F7F6);
+  static const Color lightBackground = Color(0xFFEBF2F1);
   static const Color lightSurface = Color(0xFFFFFFFF);
-  static const Color lightCardBg = Color(0xFFFFFFFF);
+  static const Color lightCardBg = Color(0xFFFAFEFD);
   static const Color lightTextPrimary = Color(0xFF0D1F1D);
   static const Color lightTextSecondary = Color(0xFF4A6B68);
-  static const Color lightDivider = Color(0xFFDDECEA);
+  static const Color lightDivider = Color(0xFFD0E4E2);
   static const Color lightInputFill = Color(0xFFF5FAF9);
   static const Color lightInputBorder = Color(0xFFB0D4D0);
   static const Color lightErrorBg = Color(0xFFFBE4E1);
