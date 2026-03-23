@@ -205,13 +205,28 @@ class DashboardScreen extends ConsumerWidget {
               'Your Groups',
               style: AppTextStyles.headline3(isDark),
             ),
-            Semantics(
-              button: true,
-              label: 'See all groups button',
-              child: TextButton(
-                onPressed: () => context.go('/home/groups'),
-                child: const Text('See all'),
-              ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Semantics(
+                  button: true,
+                  label: 'Create new group button',
+                  child: IconButton(
+                    icon: const Icon(Icons.add_rounded, size: 20),
+                    onPressed: () => context.pushNamed('create-group'),
+                    padding: const EdgeInsets.all(4),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Semantics(
+                  button: true,
+                  label: 'See all groups button',
+                  child: TextButton(
+                    onPressed: () => context.go('/home/groups'),
+                    child: const Text('See all'),
+                  ),
+                ),
+              ],
             ),
           ],
         ),

@@ -10,6 +10,7 @@ import '../../modules/dashboard/screens/owed_to_me_screen.dart';
 import '../../modules/dashboard/screens/i_owe_screen.dart';
 import '../../modules/groups/screens/groups_screen.dart';
 import '../../modules/groups/screens/group_detail_screen.dart';
+import '../../modules/groups/screens/create_group_screen.dart';
 import '../../modules/friends/screens/friends_screen.dart';
 import '../../modules/friends/screens/friend_detail_screen.dart';
 import '../../modules/activity/screens/activity_screen.dart';
@@ -88,6 +89,11 @@ final appRouter = GoRouter(
             final groupId = state.pathParameters['groupId']!;
             return GroupDetailScreen(groupId: groupId);
           },
+        ),
+        GoRoute(
+          path: '/home/create-group',
+          name: 'create-group',
+          builder: (context, state) => const CreateGroupScreen(),
         ),
         GoRoute(
           path: '/home/friends',

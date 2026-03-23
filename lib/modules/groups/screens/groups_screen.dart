@@ -32,7 +32,7 @@ class GroupsScreen extends ConsumerWidget {
         button: true,
         label: 'Create new group button',
         child: FloatingActionButton(
-          onPressed: () {},
+          onPressed: () => context.pushNamed('create-group'),
           backgroundColor: AppColors.brand,
           child: const Icon(Icons.add_rounded, color: Colors.white),
         ),
