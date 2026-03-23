@@ -23,7 +23,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
   GroupCategory _selectedCategory = GroupCategory.other;
   String _selectedEmoji = '👥';
   XFile? _selectedImageFile;
-  bool _useEmoji = true;
+  bool _useEmoji = false;
 
   final ImagePicker _imagePicker = ImagePicker();
 
@@ -224,37 +224,6 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
             Expanded(
               child: Semantics(
                 button: true,
-                label: 'Use emoji cover',
-                child: GestureDetector(
-                  onTap: () => setState(() => _useEmoji = true),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    decoration: BoxDecoration(
-                      border: Border(
-                        bottom: BorderSide(
-                          color: _useEmoji ? AppColors.brand : Colors.transparent,
-                          width: 2,
-                        ),
-                      ),
-                    ),
-                    child: Center(
-                      child: Text(
-                        'Emoji',
-                        style: AppTextStyles.body1(isDark).copyWith(
-                          color: _useEmoji
-                              ? AppColors.brand
-                              : AppColors.textSecondary(isDark),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Semantics(
-                button: true,
                 label: 'Use image cover',
                 child: GestureDetector(
                   onTap: () => setState(() => _useEmoji = false),
@@ -273,6 +242,37 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
                         'Image',
                         style: AppTextStyles.body1(isDark).copyWith(
                           color: !_useEmoji
+                              ? AppColors.brand
+                              : AppColors.textSecondary(isDark),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Semantics(
+                button: true,
+                label: 'Use emoji cover',
+                child: GestureDetector(
+                  onTap: () => setState(() => _useEmoji = true),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(
+                          color: _useEmoji ? AppColors.brand : Colors.transparent,
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                    child: Center(
+                      child: Text(
+                        'Emoji',
+                        style: AppTextStyles.body1(isDark).copyWith(
+                          color: _useEmoji
                               ? AppColors.brand
                               : AppColors.textSecondary(isDark),
                         ),
