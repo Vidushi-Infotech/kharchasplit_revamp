@@ -505,57 +505,63 @@ class GroupDetailScreen extends ConsumerWidget {
     );
   }
 
-  // Members section for large layout - grid display
+  // Members section for large layout - compact list display
   Widget _buildMembersSection(BuildContext context, bool isDark, GroupDetail detail) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Members',
+          'Members (${detail.members.length})',
           style: AppTextStyles.headline3(isDark),
         ),
-        const SizedBox(height: 16),
-        GridView.builder(
+        const SizedBox(height: 12),
+        ListView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            childAspectRatio: 1,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-          ),
           itemCount: detail.members.length,
           itemBuilder: (context, index) {
             final member = detail.members[index];
-            return Container(
-              decoration: BoxDecoration(
-                color: AppColors.surface(isDark),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: AppColors.divider(isDark),
-                  width: 1,
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.surface(isDark),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: AppColors.divider(isDark),
+                    width: 1,
+                  ),
                 ),
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  AvatarWidget(
-                    imageUrl: member.avatarUrl,
-                    name: member.name,
-                    radius: 28,
-                  ),
-                  const SizedBox(height: 8),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: Text(
-                      member.name,
-                      style: AppTextStyles.body2(isDark),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
+                child: Row(
+                  children: [
+                    AvatarWidget(
+                      imageUrl: member.avatarUrl,
+                      name: member.name,
+                      radius: 18,
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            member.name,
+                            style: AppTextStyles.body2(isDark),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            member.email ?? 'No email',
+                            style: AppTextStyles.caption(isDark),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             );
           },
