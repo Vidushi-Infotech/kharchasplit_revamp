@@ -192,34 +192,51 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
             child: Center(
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 700),
-                child: Column(
+                constraints: const BoxConstraints(maxWidth: 950),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildInvoiceSection(isDark, state),
-                    const SizedBox(height: 24),
-                    _buildAmountSection(isDark, state),
-                    const SizedBox(height: 20),
-                    _buildMemberSection(isDark, state, groupMembers),
-                    const SizedBox(height: 20),
-                    // Description + Category in 2-column grid
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildDescriptionSection(isDark),
-                        ),
-                        const SizedBox(width: 20),
-                        Expanded(
-                          child: _buildCategorySection(isDark, state),
-                        ),
-                      ],
+                    // Left: Invoice + Form fields
+                    Expanded(
+                      flex: 1,
+                      child: Column(
+                        children: [
+                          _buildInvoiceSection(isDark, state),
+                          const SizedBox(height: 20),
+                          _buildAmountSection(isDark, state),
+                          const SizedBox(height: 18),
+                          _buildMemberSection(isDark, state, groupMembers),
+                          const SizedBox(height: 18),
+                          // Description + Category in 2-column grid
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildDescriptionSection(isDark),
+                              ),
+                              const SizedBox(width: 18),
+                              Expanded(
+                                child: _buildCategorySection(isDark, state),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 18),
+                          _buildDateSection(isDark, state),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 20),
-                    _buildDateSection(isDark, state),
-                    const SizedBox(height: 20),
-                    _buildSplitSection(isDark, state),
-                    const SizedBox(height: 12),
-                    _buildSplitBreakdownSection(isDark, state, groupMembers),
-                    const SizedBox(height: 120),
+                    const SizedBox(width: 32),
+                    // Right: Split selector + Breakdown
+                    Expanded(
+                      flex: 1,
+                      child: Column(
+                        children: [
+                          _buildSplitSection(isDark, state),
+                          const SizedBox(height: 18),
+                          _buildSplitBreakdownSection(isDark, state, groupMembers),
+                          const SizedBox(height: 120),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
