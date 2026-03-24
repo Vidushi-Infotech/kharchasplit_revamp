@@ -252,28 +252,24 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 32),
             child: Center(
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1200),
+                constraints: const BoxConstraints(maxWidth: 1300),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Left: Invoice section
+                    // Left: Invoice + Form fields
                     Expanded(
                       flex: 1,
-                      child: _buildInvoiceSection(isDark, state),
-                    ),
-                    const SizedBox(width: 48),
-                    // Right: Form fields in organized grid layout
-                    Expanded(
-                      flex: 2,
                       child: Column(
                         children: [
+                          _buildInvoiceSection(isDark, state),
+                          const SizedBox(height: 24),
                           // Row 1: Amount + Paid By
                           Row(
                             children: [
                               Expanded(
                                 child: _buildAmountSection(isDark, state),
                               ),
-                              const SizedBox(width: 24),
+                              const SizedBox(width: 20),
                               Expanded(
                                 child: _buildMemberSection(isDark, state, groupMembers),
                               ),
@@ -286,7 +282,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                               Expanded(
                                 child: _buildDescriptionSection(isDark),
                               ),
-                              const SizedBox(width: 24),
+                              const SizedBox(width: 20),
                               Expanded(
                                 child: _buildCategorySection(isDark, state),
                               ),
@@ -299,20 +295,25 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                               Expanded(
                                 child: _buildDateSection(isDark, state),
                               ),
-                              const SizedBox(width: 24),
+                              const SizedBox(width: 20),
                               Expanded(
                                 child: _buildNotesSection(isDark),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 18),
-                          // Full width: Split section
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 48),
+                    // Right: Split selector + Breakdown
+                    Expanded(
+                      flex: 1,
+                      child: Column(
+                        children: [
                           _buildSplitSection(isDark, state),
-                          const SizedBox(height: 12),
-                          // Full width: Split breakdown
+                          const SizedBox(height: 24),
                           _buildSplitBreakdownSection(isDark, state, groupMembers),
                           const SizedBox(height: 28),
-                          // Full width: Save button
                           _buildSaveButtonLarge(isDark, state),
                         ],
                       ),
