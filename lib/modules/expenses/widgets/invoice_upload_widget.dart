@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import 'dart:typed_data';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 
@@ -24,15 +26,29 @@ class InvoiceUploadWidget extends StatefulWidget {
 
 class _InvoiceUploadWidgetState extends State<InvoiceUploadWidget> {
   File? _selectedImage;
+  Uint8List? _selectedImageBytes;
+  String? _imagePath;
   final ImagePicker _picker = ImagePicker();
 
   Future<void> _pickImage(ImageSource source) async {
     try {
       final XFile? pickedFile = await _picker.pickImage(source: source);
       if (pickedFile != null) {
-        final file = File(pickedFile.path);
-        setState(() => _selectedImage = file);
-        widget.onImageSelected(pickedFile.path, file);
+        // For web, read image as bytes; for mobile, use File
+        if (kIsWeb) {
+          final bytes = await pickedFile.readAsBytes();
+          setState(() {
+            _selectedImageBytes = bytes;
+            _imagePath = pickedFile.path;
+          });
+        } else {
+          final file = File(pickedFile.path);
+          setState(() {
+            _selectedImage = file;
+            _imagePath = pickedFile.path;
+          });
+        }
+        widget.onImageSelected(pickedFile.path, File(pickedFile.path));
         widget.onProcessing();
       }
     } catch (e) {
@@ -50,6 +66,8 @@ class _InvoiceUploadWidgetState extends State<InvoiceUploadWidget> {
     final screenWidth = MediaQuery.of(context).size.width;
     final isCompact = screenWidth < 600;
 
+    final hasImage = kIsWeb ? _selectedImageBytes != null : _selectedImage != null;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -58,7 +76,7 @@ class _InvoiceUploadWidgetState extends State<InvoiceUploadWidget> {
           style: AppTextStyles.body2(isDark),
         ),
         const SizedBox(height: 12),
-        if (_selectedImage != null)
+        if (hasImage)
           _buildImagePreview(isDark, isCompact)
         else
           _buildUploadOptions(isDark, isCompact),
@@ -82,11 +100,17 @@ class _InvoiceUploadWidgetState extends State<InvoiceUploadWidget> {
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(11),
-            child: Image.file(
-              _selectedImage!,
-              height: isCompact ? 200 : 250,
-              fit: BoxFit.cover,
-            ),
+            child: kIsWeb
+                ? Image.memory(
+                    _selectedImageBytes!,
+                    height: isCompact ? 200 : 250,
+                    fit: BoxFit.cover,
+                  )
+                : Image.file(
+                    _selectedImage!,
+                    height: isCompact ? 200 : 250,
+                    fit: BoxFit.cover,
+                  ),
           ),
         ),
         const SizedBox(height: 12),
@@ -124,7 +148,11 @@ class _InvoiceUploadWidgetState extends State<InvoiceUploadWidget> {
             width: double.infinity,
             height: 40,
             child: OutlinedButton(
-              onPressed: () => setState(() => _selectedImage = null),
+              onPressed: () => setState(() {
+                _selectedImage = null;
+                _selectedImageBytes = null;
+                _imagePath = null;
+              }),
               style: OutlinedButton.styleFrom(
                 side: BorderSide(color: AppColors.warning),
               ),
