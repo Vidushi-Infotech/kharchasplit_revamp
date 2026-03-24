@@ -1,11 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Onboarding state provider
+/// Onboarding state provider (Riverpod 3.x)
 final onboardingPageProvider =
-    StateNotifierProvider<OnboardingNotifier, int>((ref) {
-  return OnboardingNotifier();
-});
+    NotifierProvider<OnboardingNotifier, int>(
+      OnboardingNotifier.new,
+    );
 
 /// Check if user has seen onboarding
 final hasSeenOnboardingProvider =
@@ -15,10 +15,11 @@ final hasSeenOnboardingProvider =
 });
 
 /// Notifier for managing onboarding state
-class OnboardingNotifier extends StateNotifier<int> {
+class OnboardingNotifier extends Notifier<int> {
   static const int totalPages = 3;
 
-  OnboardingNotifier() : super(0);
+  @override
+  int build() => 0;
 
   void nextPage() {
     if (state < totalPages - 1) {

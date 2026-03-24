@@ -28,14 +28,15 @@ class AuthData {
   }
 }
 
-/// Auth provider for managing authentication state
-final authProvider = StateNotifierProvider<AuthNotifier, AuthData>((ref) {
-  return AuthNotifier();
-});
+/// Auth provider for managing authentication state (Riverpod 3.x)
+final authProvider = NotifierProvider<AuthNotifier, AuthData>(
+  AuthNotifier.new,
+);
 
 /// Auth state notifier
-class AuthNotifier extends StateNotifier<AuthData> {
-  AuthNotifier() : super(const AuthData());
+class AuthNotifier extends Notifier<AuthData> {
+  @override
+  AuthData build() => const AuthData();
 
   /// Register user
   Future<void> register({

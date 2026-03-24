@@ -5,16 +5,18 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// App theme mode - system, light, or dark
 enum AppThemeMode { system, light, dark }
 
-/// Riverpod provider for theme mode state
+/// Riverpod provider for theme mode state (Riverpod 3.x)
 final themeModeProvider =
-    StateNotifierProvider<ThemeModeNotifier, AppThemeMode>((ref) {
-  return ThemeModeNotifier();
-});
+    NotifierProvider<ThemeModeNotifier, AppThemeMode>(
+      ThemeModeNotifier.new,
+    );
 
 /// State notifier for managing theme mode
-class ThemeModeNotifier extends StateNotifier<AppThemeMode> {
-  ThemeModeNotifier() : super(AppThemeMode.system) {
+class ThemeModeNotifier extends Notifier<AppThemeMode> {
+  @override
+  AppThemeMode build() {
     _loadSavedTheme();
+    return AppThemeMode.system;
   }
 
   /// Load saved theme preference from shared_preferences

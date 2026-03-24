@@ -3,13 +3,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 enum SplashState { initializing, ready, authenticated, unauthenticated }
 
 final splashProviderProvider =
-    StateNotifierProvider<SplashNotifier, SplashState>((ref) {
-  return SplashNotifier();
-});
+    NotifierProvider<SplashNotifier, SplashState>(
+      SplashNotifier.new,
+    );
 
-class SplashNotifier extends StateNotifier<SplashState> {
-  SplashNotifier() : super(SplashState.initializing) {
+class SplashNotifier extends Notifier<SplashState> {
+  @override
+  SplashState build() {
     _initialize();
+    return SplashState.initializing;
   }
 
   Future<void> _initialize() async {

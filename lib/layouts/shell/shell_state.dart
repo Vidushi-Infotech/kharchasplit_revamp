@@ -1,4 +1,4 @@
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 
 /// Provider for selected navigation index
 final selectedNavIndexProvider = StateProvider<int>((ref) => 0);

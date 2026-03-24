@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 import '../../../models/activity_model.dart';
 import '../../../models/user_model.dart';
 import '../../../models/group_model.dart';

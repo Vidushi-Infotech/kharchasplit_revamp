@@ -2,12 +2,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/onboarding_constants.dart';
 
 final onboardingPageProvider =
-    StateNotifierProvider<OnboardingNotifier, int>((ref) {
-  return OnboardingNotifier();
-});
+    NotifierProvider<OnboardingNotifier, int>(
+      OnboardingNotifier.new,
+    );
 
-class OnboardingNotifier extends StateNotifier<int> {
-  OnboardingNotifier() : super(0);
+class OnboardingNotifier extends Notifier<int> {
+  @override
+  int build() => 0;
 
   void nextPage() {
     if (state < onboardingPages.length - 1) {
