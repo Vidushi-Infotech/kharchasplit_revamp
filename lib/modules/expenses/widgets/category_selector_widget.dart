@@ -15,46 +15,80 @@ class CategorySelectorWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isCompact = screenWidth < 600;
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: CategoryModel.all.map((category) {
-          final isSelected = selectedCategory?.id == category.id;
-          final categoryColor = _hexToColor(category.colorHex);
+    return Container(
+      width: double.infinity,
+      constraints: const BoxConstraints(maxHeight: 60),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        child: IntrinsicHeight(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ...CategoryModel.all.map((category) {
+                final isSelected = selectedCategory?.id == category.id;
+                final categoryColor = _hexToColor(category.colorHex);
 
-          return Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: GestureDetector(
-              onTap: () => onCategorySelected(category),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? categoryColor.withValues(alpha: 0.2)
-                      : AppColors.divider(isDark),
-                  borderRadius: BorderRadius.circular(8),
-                  border: isSelected
-                      ? Border.all(color: categoryColor, width: 2)
-                      : null,
-                ),
-                child: Row(
-                  children: [
-                    Icon(category.icon, size: 20, color: categoryColor),
-                    const SizedBox(width: 8),
-                    Text(
-                      category.name,
-                      style: TextStyle(
-                        color: AppColors.textPrimary(isDark),
-                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                return Padding(
+                  padding: EdgeInsets.only(
+                    right: isCompact ? 8 : 12,
+                  ),
+                  child: Semantics(
+                    button: true,
+                    label:
+                        '${category.name} category${isSelected ? ' - selected' : ''}',
+                    onTap: () => onCategorySelected(category),
+                    child: GestureDetector(
+                      onTap: () => onCategorySelected(category),
+                      child: Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isCompact ? 10 : 12,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? categoryColor.withValues(alpha: 0.2)
+                              : AppColors.surface(isDark),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: isSelected
+                                ? categoryColor
+                                : AppColors.divider(isDark),
+                            width: isSelected ? 2 : 1,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              category.icon,
+                              size: 18,
+                              color: categoryColor,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              category.name,
+                              style: TextStyle(
+                                fontSize: isCompact ? 12 : 14,
+                                color: AppColors.textPrimary(isDark),
+                                fontWeight: isSelected
+                                    ? FontWeight.w600
+                                    : FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        }).toList(),
+                  ),
+                );
+              }).toList(),
+            ],
+          ),
+        ),
       ),
     );
   }
