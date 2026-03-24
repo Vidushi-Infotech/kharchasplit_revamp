@@ -16,6 +16,11 @@ class AddExpenseState {
   final bool isLoading;
   final String? error;
 
+  // Invoice scanning fields
+  final String? invoiceImagePath;
+  final bool isScanning;
+  final bool invoiceScanned;
+
   const AddExpenseState({
     this.title,
     this.amount = 0,
@@ -29,6 +34,9 @@ class AddExpenseState {
     this.groupId,
     this.isLoading = false,
     this.error,
+    this.invoiceImagePath,
+    this.isScanning = false,
+    this.invoiceScanned = false,
   });
 
   AddExpenseState copyWith({
@@ -44,6 +52,9 @@ class AddExpenseState {
     String? groupId,
     bool? isLoading,
     String? error,
+    String? invoiceImagePath,
+    bool? isScanning,
+    bool? invoiceScanned,
   }) {
     return AddExpenseState(
       title: title ?? this.title,
@@ -58,6 +69,9 @@ class AddExpenseState {
       groupId: groupId ?? this.groupId,
       isLoading: isLoading ?? this.isLoading,
       error: error ?? this.error,
+      invoiceImagePath: invoiceImagePath ?? this.invoiceImagePath,
+      isScanning: isScanning ?? this.isScanning,
+      invoiceScanned: invoiceScanned ?? this.invoiceScanned,
     );
   }
 
