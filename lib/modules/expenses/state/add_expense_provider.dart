@@ -8,8 +8,10 @@ class AddExpenseState {
   final String currency;
   final CategoryModel? category;
   final UserModel? paidBy;
+  final UserModel? expenseFor; // New: member the expense is for
   final SplitType splitType;
   final Map<String, double> splits; // userId -> amount/percentage/shares
+  final Set<String> includedMemberIds; // empty = all included
   final DateTime date;
   final String? notes;
   final String? groupId;
@@ -27,8 +29,10 @@ class AddExpenseState {
     this.currency = '₹',
     this.category,
     this.paidBy,
+    this.expenseFor,
     this.splitType = SplitType.equal,
     this.splits = const {},
+    this.includedMemberIds = const {},
     required this.date,
     this.notes,
     this.groupId,
@@ -45,8 +49,10 @@ class AddExpenseState {
     String? currency,
     CategoryModel? category,
     UserModel? paidBy,
+    UserModel? expenseFor,
     SplitType? splitType,
     Map<String, double>? splits,
+    Set<String>? includedMemberIds,
     DateTime? date,
     String? notes,
     String? groupId,
@@ -62,8 +68,10 @@ class AddExpenseState {
       currency: currency ?? this.currency,
       category: category ?? this.category,
       paidBy: paidBy ?? this.paidBy,
+      expenseFor: expenseFor ?? this.expenseFor,
       splitType: splitType ?? this.splitType,
       splits: splits ?? this.splits,
+      includedMemberIds: includedMemberIds ?? this.includedMemberIds,
       date: date ?? this.date,
       notes: notes ?? this.notes,
       groupId: groupId ?? this.groupId,
@@ -75,7 +83,48 @@ class AddExpenseState {
     );
   }
 
-  bool get isValid => title != null && title!.isNotEmpty && amount > 0;
+  bool get isValid {
+    // Basic validation
+    if (title == null || title!.isEmpty || amount <= 0) {
+      return false;
+    }
+
+    // If no group selected, equal split is valid
+    if (groupId == null) {
+      return true;
+    }
+
+    // If equal split, no additional validation needed
+    if (splitType == SplitType.equal) {
+      return true;
+    }
+
+    // For other split types, validate splits
+    if (splits.isEmpty) {
+      return false;
+    }
+
+    final includedSum = splits.entries
+        .where((e) => includedMemberIds.isEmpty || includedMemberIds.contains(e.key))
+        .fold<double>(0, (sum, e) => sum + e.value);
+
+    switch (splitType) {
+      case SplitType.exact:
+        // Sum of amounts should equal total (within 0.01)
+        return (includedSum - amount).abs() < 0.01;
+      case SplitType.percentage:
+        // Sum of percentages should equal 100 (within 0.01)
+        return (includedSum - 100).abs() < 0.01;
+      case SplitType.shares:
+        // Total shares should be > 0
+        return includedSum > 0;
+      case SplitType.adjustment:
+        // Sum of adjustments should equal 0 (within 0.01)
+        return includedSum.abs() < 0.01;
+      case SplitType.equal:
+        return true;
+    }
+  }
 }
 
 final addExpenseProvider = StateProvider<AddExpenseState>((ref) {

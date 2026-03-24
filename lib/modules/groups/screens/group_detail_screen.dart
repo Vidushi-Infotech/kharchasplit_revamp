@@ -56,7 +56,23 @@ class GroupDetailScreen extends ConsumerWidget {
           }
         },
       ),
+      floatingActionButton: tab == GroupTab.expenses
+          ? Semantics(
+              button: true,
+              label: 'Add expense button',
+              onTap: () => _navigateToAddExpense(context),
+              child: FloatingActionButton(
+                onPressed: () => _navigateToAddExpense(context),
+                backgroundColor: AppColors.brand,
+                child: const Icon(Icons.add_rounded, color: Colors.white),
+              ),
+            )
+          : null,
     );
+  }
+
+  void _navigateToAddExpense(BuildContext context) {
+    context.pushNamed('add-expense-to-group', pathParameters: {'groupId': groupId});
   }
 
   Widget _buildCompactLayout(

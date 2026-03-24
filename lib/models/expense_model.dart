@@ -9,6 +9,7 @@ enum SplitType {
   exact,
   percentage,
   shares,
+  adjustment,
 }
 
 /// Expense model representing a single expense

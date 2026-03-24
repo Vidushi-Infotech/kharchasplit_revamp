@@ -89,6 +89,27 @@ class CategoryModel extends Equatable {
     colorHex: '#4D96FF',
   );
 
+  static const CategoryModel gifts = CategoryModel(
+    id: 'gifts',
+    name: 'Gifts',
+    icon: Icons.card_giftcard_rounded,
+    colorHex: '#FF85A1',
+  );
+
+  static const CategoryModel fuel = CategoryModel(
+    id: 'fuel',
+    name: 'Fuel',
+    icon: Icons.local_gas_station_rounded,
+    colorHex: '#FF6B35',
+  );
+
+  static const CategoryModel work = CategoryModel(
+    id: 'work',
+    name: 'Work',
+    icon: Icons.work_outline_rounded,
+    colorHex: '#6C63FF',
+  );
+
   static const CategoryModel other = CategoryModel(
     id: 'other',
     name: 'Other',
@@ -106,6 +127,9 @@ class CategoryModel extends Equatable {
         utilities,
         medical,
         education,
+        gifts,
+        fuel,
+        work,
         other,
       ];
 

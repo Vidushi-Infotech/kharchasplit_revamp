@@ -5,12 +5,14 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/services/invoice_scanner_service.dart';
-import '../../../models/category_model.dart';
+import '../../../models/models.dart';
+import '../../../modules/groups/state/group_detail_provider.dart';
 import '../state/add_expense_provider.dart';
 import '../widgets/amount_input_widget.dart';
 import '../widgets/category_selector_widget.dart';
 import '../widgets/split_selector_widget.dart';
 import '../widgets/invoice_upload_widget.dart';
+import '../widgets/split_breakdown_widget.dart';
 
 class AddExpenseScreen extends ConsumerStatefulWidget {
   final String? groupId;
@@ -24,18 +26,21 @@ class AddExpenseScreen extends ConsumerStatefulWidget {
 class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   late TextEditingController _titleController;
   late TextEditingController _notesController;
+  late TextEditingController _equalSplitSearchController;
 
   @override
   void initState() {
     super.initState();
     _titleController = TextEditingController();
     _notesController = TextEditingController();
+    _equalSplitSearchController = TextEditingController();
   }
 
   @override
   void dispose() {
     _titleController.dispose();
     _notesController.dispose();
+    _equalSplitSearchController.dispose();
     super.dispose();
   }
 
@@ -45,13 +50,69 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     final screenWidth = MediaQuery.of(context).size.width;
     final expenseState = ref.watch(addExpenseProvider);
 
+    // Initialize with groupId if provided and not already set
+    if (widget.groupId != null && expenseState.groupId != widget.groupId) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(addExpenseProvider.notifier).state =
+            expenseState.copyWith(groupId: widget.groupId);
+      });
+    }
+
+    // Get group members if groupId is set
+    final groupAsync = expenseState.groupId != null
+        ? ref.watch(groupDetailProvider(expenseState.groupId!))
+        : null;
+    final List<UserModel> groupMembers =
+        groupAsync?.value?.members ?? [];
+
+    // Auto-initialize or recalculate splits for equal split
+    if (expenseState.splitType == SplitType.equal && groupMembers.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        // Initialize with all members included by default
+        Set<String> includedIds = expenseState.includedMemberIds;
+        if (includedIds.isEmpty) {
+          includedIds = Set<String>.from(groupMembers.map((m) => m.id));
+        }
+
+        if (expenseState.amount > 0) {
+          final includedCount = includedIds.length;
+          final equalShare = includedCount > 0
+              ? (expenseState.amount / includedCount).toDouble()
+              : 0.0;
+          final newSplits = <String, double>{};
+
+          // Calculate splits for included members only
+          for (final member in groupMembers) {
+            if (includedIds.contains(member.id)) {
+              newSplits[member.id] = equalShare;
+            } else {
+              newSplits[member.id] = 0;
+            }
+          }
+
+          // Update if splits or includedMemberIds changed
+          if (newSplits != expenseState.splits ||
+              includedIds != expenseState.includedMemberIds) {
+            ref.read(addExpenseProvider.notifier).state = expenseState.copyWith(
+              splits: newSplits,
+              includedMemberIds: includedIds,
+            );
+          }
+        } else if (includedIds != expenseState.includedMemberIds) {
+          // Initialize includedMemberIds even if amount is 0
+          ref.read(addExpenseProvider.notifier).state =
+              expenseState.copyWith(includedMemberIds: includedIds);
+        }
+      });
+    }
+
     // Responsive layout decision based on CLAUDE.md section 5
     if (screenWidth < 600) {
-      return _buildCompactLayout(context, isDark, expenseState);
+      return _buildCompactLayout(context, isDark, expenseState, groupMembers);
     } else if (screenWidth < 1100) {
-      return _buildStandardLayout(context, isDark, expenseState);
+      return _buildStandardLayout(context, isDark, expenseState, groupMembers);
     } else {
-      return _buildLargeLayout(context, isDark, expenseState);
+      return _buildLargeLayout(context, isDark, expenseState, groupMembers);
     }
   }
 
@@ -60,6 +121,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     BuildContext context,
     bool isDark,
     AddExpenseState state,
+    List<UserModel> groupMembers,
   ) {
     return Scaffold(
       backgroundColor: AppColors.background(isDark),
@@ -77,26 +139,31 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
           ),
         ),
       ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-          child: Column(
-            children: [
-              _buildInvoiceSection(isDark, state),
-              const SizedBox(height: 24),
-              _buildAmountSection(isDark, state),
-              const SizedBox(height: 20),
-              _buildDescriptionSection(isDark),
-              const SizedBox(height: 20),
-              _buildCategorySection(isDark, state),
-              const SizedBox(height: 20),
-              _buildDateSection(isDark, state),
-              const SizedBox(height: 20),
-              _buildSplitSection(isDark, state),
-              const SizedBox(height: 20),
-              _buildNotesSection(isDark),
-              const SizedBox(height: 100),
-            ],
+      body: ScrollConfiguration(
+        behavior: ScrollConfiguration.of(context).copyWith(scrollbars: true),
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+            child: Column(
+              children: [
+                _buildInvoiceSection(isDark, state),
+                const SizedBox(height: 24),
+                _buildAmountSection(isDark, state),
+                const SizedBox(height: 20),
+                _buildMemberSection(isDark, state, groupMembers),
+                const SizedBox(height: 20),
+                _buildDescriptionSection(isDark),
+                const SizedBox(height: 20),
+                _buildCategorySection(isDark, state),
+                const SizedBox(height: 20),
+                _buildDateSection(isDark, state),
+                const SizedBox(height: 20),
+                _buildSplitSection(isDark, state),
+                const SizedBox(height: 12),
+                _buildSplitBreakdownSection(isDark, state, groupMembers),
+                const SizedBox(height: 100),
+              ],
+            ),
           ),
         ),
       ),
@@ -109,6 +176,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     BuildContext context,
     bool isDark,
     AddExpenseState state,
+    List<UserModel> groupMembers,
   ) {
     return Scaffold(
       backgroundColor: AppColors.background(isDark),
@@ -117,29 +185,34 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
         elevation: 0,
         backgroundColor: AppColors.surface(isDark),
       ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 600),
-              child: Column(
-                children: [
-                  _buildInvoiceSection(isDark, state),
-                  const SizedBox(height: 28),
-                  _buildAmountSection(isDark, state),
-                  const SizedBox(height: 24),
-                  _buildDescriptionSection(isDark),
-                  const SizedBox(height: 24),
-                  _buildCategorySection(isDark, state),
-                  const SizedBox(height: 24),
-                  _buildDateSection(isDark, state),
-                  const SizedBox(height: 24),
-                  _buildSplitSection(isDark, state),
-                  const SizedBox(height: 24),
-                  _buildNotesSection(isDark),
-                  const SizedBox(height: 120),
-                ],
+      body: ScrollConfiguration(
+        behavior: ScrollConfiguration.of(context).copyWith(scrollbars: true),
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 600),
+                child: Column(
+                  children: [
+                    _buildInvoiceSection(isDark, state),
+                    const SizedBox(height: 28),
+                    _buildAmountSection(isDark, state),
+                    const SizedBox(height: 24),
+                    _buildMemberSection(isDark, state, groupMembers),
+                    const SizedBox(height: 24),
+                    _buildDescriptionSection(isDark),
+                    const SizedBox(height: 24),
+                    _buildCategorySection(isDark, state),
+                    const SizedBox(height: 24),
+                    _buildDateSection(isDark, state),
+                    const SizedBox(height: 24),
+                    _buildSplitSection(isDark, state),
+                    const SizedBox(height: 12),
+                    _buildSplitBreakdownSection(isDark, state, groupMembers),
+                    const SizedBox(height: 120),
+                  ],
+                ),
               ),
             ),
           ),
@@ -154,6 +227,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     BuildContext context,
     bool isDark,
     AddExpenseState state,
+    List<UserModel> groupMembers,
   ) {
     return Scaffold(
       backgroundColor: AppColors.background(isDark),
@@ -162,46 +236,55 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
         elevation: 0,
         backgroundColor: AppColors.surface(isDark),
       ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 32),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 700),
-              child: Column(
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        flex: 2,
-                        child: _buildInvoiceSection(isDark, state),
-                      ),
-                      const SizedBox(width: 40),
-                      Expanded(
-                        flex: 3,
-                        child: Column(
-                          children: [
-                            _buildAmountSection(isDark, state),
-                            const SizedBox(height: 28),
-                            _buildDescriptionSection(isDark),
-                            const SizedBox(height: 28),
-                            _buildCategorySection(isDark, state),
-                            const SizedBox(height: 28),
-                            _buildDateSection(isDark, state),
-                            const SizedBox(height: 28),
-                            _buildSplitSection(isDark, state),
-                            const SizedBox(height: 28),
-                            _buildNotesSection(isDark),
-                            const SizedBox(height: 32),
-                            _buildSaveButtonLarge(isDark, state),
-                          ],
+      body: ScrollConfiguration(
+        behavior: ScrollConfiguration.of(context).copyWith(scrollbars: true),
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 32),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1000),
+                child: Column(
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Left: Invoice section
+                        Expanded(
+                          flex: 1,
+                          child: _buildInvoiceSection(isDark, state),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 40),
-                ],
+                        const SizedBox(width: 48),
+                        // Right: Form fields stacked vertically
+                        Expanded(
+                          flex: 2,
+                          child: SingleChildScrollView(
+                            child: Column(
+                              children: [
+                                _buildAmountSection(isDark, state),
+                                const SizedBox(height: 20),
+                                _buildMemberSection(isDark, state, groupMembers),
+                                const SizedBox(height: 20),
+                                _buildDescriptionSection(isDark),
+                                const SizedBox(height: 20),
+                                _buildCategorySection(isDark, state),
+                                const SizedBox(height: 20),
+                                _buildDateSection(isDark, state),
+                                const SizedBox(height: 20),
+                                _buildSplitSection(isDark, state),
+                                const SizedBox(height: 12),
+                                _buildSplitBreakdownSection(isDark, state, groupMembers),
+                                const SizedBox(height: 32),
+                                _buildSaveButtonLarge(isDark, state),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 40),
+                  ],
+                ),
               ),
             ),
           ),
@@ -420,6 +503,430 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
         ref.read(addExpenseProvider.notifier).state =
             state.copyWith(splitType: type);
       },
+    );
+  }
+
+  Widget _buildSplitBreakdownSection(bool isDark, AddExpenseState state, List<UserModel> members) {
+    // Hide if no group selected
+    if (state.groupId == null || members.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    // For equal split, show member selection list
+    if (state.splitType == SplitType.equal) {
+      final includedMembers = state.includedMemberIds.length;
+      final searchQuery = _equalSplitSearchController.text.toLowerCase();
+      final filteredMembers = members
+          .where((m) => m.name.toLowerCase().contains(searchQuery))
+          .toList();
+      final totalIncluded = state.splits.entries
+          .where((e) => state.includedMemberIds.contains(e.key))
+          .fold<double>(0, (sum, e) => sum + e.value);
+
+      return Container(
+        decoration: BoxDecoration(
+          color: AppColors.surface(isDark),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.divider(isDark)),
+        ),
+        margin: const EdgeInsets.symmetric(vertical: 12),
+        child: Column(
+          children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.background(isDark),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(12),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Split Breakdown ($includedMembers members)',
+                      style: AppTextStyles.body2(isDark)
+                          .copyWith(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.success.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      '✓ Balanced',
+                      style: AppTextStyles.caption(isDark).copyWith(
+                        color: AppColors.success,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            // Search box
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: TextField(
+                controller: _equalSplitSearchController,
+                decoration: InputDecoration(
+                  hintText: 'Search members...',
+                  hintStyle: TextStyle(color: AppColors.textSecondary(isDark)),
+                  prefixIcon: Icon(Icons.search, color: AppColors.brand, size: 20),
+                  suffixIcon: _equalSplitSearchController.text.isNotEmpty
+                      ? GestureDetector(
+                          onTap: () {
+                            _equalSplitSearchController.clear();
+                            setState(() {});
+                          },
+                          child: Icon(Icons.close, color: AppColors.brand, size: 20),
+                        )
+                      : null,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: AppColors.inputBorder(isDark)),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                ),
+                onChanged: (_) => setState(() {}),
+              ),
+            ),
+            const Divider(height: 1),
+            // Select All / Deselect All buttons
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  TextButton.icon(
+                    onPressed: () {
+                      ref.read(addExpenseProvider.notifier).state = state.copyWith(
+                        includedMemberIds: Set<String>.from(members.map((m) => m.id)),
+                      );
+                    },
+                    icon: const Icon(Icons.done_all_rounded, size: 18),
+                    label: const Text('Select All'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.brand,
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: () {
+                      ref.read(addExpenseProvider.notifier).state =
+                          state.copyWith(includedMemberIds: <String>{});
+                    },
+                    icon: const Icon(Icons.clear_all_rounded, size: 18),
+                    label: const Text('Deselect All'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.brand,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            // Filtered members list
+            Column(
+              children: filteredMembers
+                  .map((member) => _buildMemberEqualSplitRow(isDark, state, member))
+                  .toList(),
+            ),
+            const Divider(height: 1),
+            // Footer with total
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Total Included',
+                    style: AppTextStyles.body2(isDark),
+                  ),
+                  Text(
+                    '₹${totalIncluded.toStringAsFixed(2)}',
+                    style: AppTextStyles.body2(isDark)
+                        .copyWith(fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // For other split types, show full breakdown widget
+    return SplitBreakdownWidget(
+      splitType: state.splitType,
+      totalAmount: state.amount,
+      members: members,
+      splits: state.splits,
+      includedMemberIds: state.includedMemberIds,
+      onSplitsChanged: (splits) {
+        ref.read(addExpenseProvider.notifier).state =
+            state.copyWith(splits: splits);
+      },
+      onIncludedMembersChanged: (includedIds) {
+        ref.read(addExpenseProvider.notifier).state =
+            state.copyWith(includedMemberIds: includedIds);
+      },
+    );
+  }
+
+  Widget _buildMemberEqualSplitRow(
+    bool isDark,
+    AddExpenseState state,
+    UserModel member,
+  ) {
+    final isIncluded = state.includedMemberIds.contains(member.id);
+    final splitAmount = state.splits[member.id] ?? 0.0;
+
+    return GestureDetector(
+      onTap: () {
+        final newSet = Set<String>.from(state.includedMemberIds);
+        if (newSet.contains(member.id)) {
+          newSet.remove(member.id);
+        } else {
+          newSet.add(member.id);
+        }
+        ref.read(addExpenseProvider.notifier).state =
+            state.copyWith(includedMemberIds: newSet);
+      },
+      child: Container(
+        color: isIncluded
+            ? Colors.transparent
+            : AppColors.textSecondary(isDark).withValues(alpha: 0.05),
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            Checkbox(
+              value: isIncluded,
+              tristate: false,
+              onChanged: (_) {
+                final newSet = Set<String>.from(state.includedMemberIds);
+                if (newSet.contains(member.id)) {
+                  newSet.remove(member.id);
+                } else {
+                  newSet.add(member.id);
+                }
+                ref.read(addExpenseProvider.notifier).state =
+                    state.copyWith(includedMemberIds: newSet);
+              },
+              activeColor: AppColors.brand,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            const SizedBox(width: 8),
+            // Avatar
+            CircleAvatar(
+              radius: 16,
+              backgroundColor: AppColors.brand.withValues(alpha: 0.2),
+              child: Text(
+                member.name.split(' ').map((e) => e[0]).join().toUpperCase(),
+                style: TextStyle(
+                  color: AppColors.brand,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 11,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            // Name and status
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    member.name,
+                    style: AppTextStyles.body2(isDark).copyWith(
+                      color: isIncluded
+                          ? AppColors.textPrimary(isDark)
+                          : AppColors.textSecondary(isDark),
+                      fontWeight: FontWeight.w500,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    isIncluded ? '✓ Selected' : '○ Not selected',
+                    style: AppTextStyles.caption(isDark).copyWith(
+                      color: isIncluded ? AppColors.success : AppColors.textSecondary(isDark),
+                      fontSize: 10,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Split amount
+            if (isIncluded)
+              Text(
+                '₹${splitAmount.toStringAsFixed(2)}',
+                style: AppTextStyles.body2(isDark).copyWith(
+                  color: AppColors.brand,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMemberSection(bool isDark, AddExpenseState state, List<UserModel> groupMembers) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Paid By', style: AppTextStyles.body2(isDark)),
+        const SizedBox(height: 12),
+        Semantics(
+          button: true,
+          label: 'Select member who paid',
+          onTap: () => _showMemberPicker(context, isDark, state, groupMembers),
+          child: GestureDetector(
+            onTap: () => _showMemberPicker(context, isDark, state, groupMembers),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              decoration: BoxDecoration(
+                border: Border.all(color: AppColors.inputBorder(isDark)),
+                borderRadius: BorderRadius.circular(8),
+                color: AppColors.inputFill(isDark),
+              ),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 16,
+                    backgroundColor: AppColors.brand.withValues(alpha: 0.2),
+                    child: Text(
+                      (state.expenseFor?.name ?? 'M')[0].toUpperCase(),
+                      style: TextStyle(
+                        color: AppColors.brand,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      state.expenseFor?.name ?? 'Me',
+                      style: AppTextStyles.body2(isDark),
+                    ),
+                  ),
+                  Icon(Icons.expand_more_rounded, color: AppColors.brand),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showMemberPicker(BuildContext context, bool isDark, AddExpenseState state, List<UserModel> groupMembers) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                'Who paid?',
+                style: AppTextStyles.headline3(isDark),
+              ),
+            ),
+            const Divider(),
+            Expanded(
+              child: ListView(
+                children: [
+                  _buildMemberListItem(
+                    isDark,
+                    'Me',
+                    'M',
+                    isSelected: state.expenseFor == null,
+                    onTap: () {
+                      ref.read(addExpenseProvider.notifier).state =
+                          state.copyWith(expenseFor: null);
+                      Navigator.pop(context);
+                    },
+                  ),
+                  ...groupMembers.map((member) => _buildMemberListItem(
+                    isDark,
+                    member.name,
+                    member.name.split(' ').map((e) => e[0]).join().toUpperCase(),
+                    isSelected: state.expenseFor?.id == member.id,
+                    onTap: () {
+                      ref.read(addExpenseProvider.notifier).state =
+                          state.copyWith(expenseFor: member);
+                      Navigator.pop(context);
+                    },
+                  )),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMemberListItem(
+    bool isDark,
+    String name,
+    String initials,
+    {required bool isSelected, required VoidCallback onTap}
+  ) {
+    return Semantics(
+      button: true,
+      label: '$name${isSelected ? ' - selected' : ''}',
+      onTap: onTap,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          color: isSelected ? AppColors.brand.withValues(alpha: 0.05) : Colors.transparent,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 20,
+                backgroundColor: AppColors.brand.withValues(alpha: 0.2),
+                child: Text(
+                  initials,
+                  style: TextStyle(
+                    color: AppColors.brand,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  name,
+                  style: AppTextStyles.body2(isDark),
+                ),
+              ),
+              if (isSelected)
+                Icon(Icons.check_rounded, color: AppColors.brand),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

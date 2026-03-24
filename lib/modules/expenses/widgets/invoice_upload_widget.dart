@@ -164,60 +164,92 @@ class _InvoiceUploadWidgetState extends State<InvoiceUploadWidget> {
   }
 
   Widget _buildUploadOptions(bool isDark, bool isCompact) {
-    return Column(
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: _buildUploadButton(
-                isDark,
-                Icons.camera_alt_rounded,
-                'Capture',
-                () => _pickImage(ImageSource.camera),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildUploadButton(
-                isDark,
-                Icons.image_rounded,
-                'Gallery',
-                () => _pickImage(ImageSource.gallery),
-              ),
-            ),
-          ],
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: CustomPaint(
+        painter: _DashedBorderPainter(
+          color: AppColors.brand,
+          strokeWidth: 2,
+          dashWidth: 8,
+          dashSpace: 4,
         ),
-        const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: AppColors.warningLight(isDark),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: AppColors.warning.withOpacity(0.3),
-            ),
-          ),
-          child: Row(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                Icons.info_rounded,
-                size: 16,
-                color: AppColors.warning,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Upload invoice to auto-detect amount, category & date',
-                  style: AppTextStyles.caption(isDark).copyWith(
-                    fontSize: 12,
-                    color: AppColors.warning,
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  GestureDetector(
+                    onTap: () => _pickImage(ImageSource.camera),
+                    child: Semantics(
+                      button: true,
+                      label: 'Take photo',
+                      onTap: () => _pickImage(ImageSource.camera),
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.camera_alt_rounded,
+                            color: AppColors.brand,
+                            size: 32,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Capture',
+                            style: AppTextStyles.caption(isDark).copyWith(
+                              color: AppColors.brand,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
+                  const SizedBox(width: 40),
+                  GestureDetector(
+                    onTap: () => _pickImage(ImageSource.gallery),
+                    child: Semantics(
+                      button: true,
+                      label: 'Pick from gallery',
+                      onTap: () => _pickImage(ImageSource.gallery),
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.image_rounded,
+                            color: AppColors.brand,
+                            size: 32,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Gallery',
+                            style: AppTextStyles.caption(isDark).copyWith(
+                              color: AppColors.brand,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Upload to auto-detect amount, category & date',
+                style: AppTextStyles.caption(isDark).copyWith(
+                  color: AppColors.textSecondary(isDark),
+                  fontSize: 12,
                 ),
+                textAlign: TextAlign.center,
               ),
             ],
           ),
         ),
-      ],
+      ),
     );
   }
 
@@ -259,5 +291,62 @@ class _InvoiceUploadWidgetState extends State<InvoiceUploadWidget> {
         ),
       ),
     );
+  }
+}
+
+/// Custom painter for dashed border
+class _DashedBorderPainter extends CustomPainter {
+  final Color color;
+  final double strokeWidth;
+  final double dashWidth;
+  final double dashSpace;
+
+  _DashedBorderPainter({
+    required this.color,
+    required this.strokeWidth,
+    required this.dashWidth,
+    required this.dashSpace,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = strokeWidth
+      ..style = PaintingStyle.stroke;
+
+    final path = Path();
+    const radius = 12.0;
+
+    // Create rounded rectangle path
+    path.addRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(0, 0, size.width, size.height),
+        const Radius.circular(radius),
+      ),
+    );
+
+    // Draw dashed path
+    _drawDashedPath(canvas, path, paint);
+  }
+
+  void _drawDashedPath(Canvas canvas, Path path, Paint paint) {
+    final metrics = path.computeMetrics();
+    for (var metric in metrics) {
+      var distance = 0.0;
+      while (distance < metric.length) {
+        final extractPath = metric.extractPath(distance, distance + dashWidth);
+        canvas.drawPath(extractPath, paint);
+        distance += dashWidth + dashSpace;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DashedBorderPainter oldDelegate) {
+    return oldDelegate.color != color ||
+        oldDelegate.strokeWidth != strokeWidth ||
+        oldDelegate.dashWidth != dashWidth ||
+        oldDelegate.dashSpace != dashSpace;
   }
 }

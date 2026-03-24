@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../models/models.dart';
 
-class SplitSelectorWidget extends StatelessWidget {
+class SplitSelectorWidget extends StatefulWidget {
   final SplitType splitType;
   final double amount;
   final Function(SplitType) onSplitTypeChanged;
@@ -16,6 +17,25 @@ class SplitSelectorWidget extends StatelessWidget {
   }) : super(key: key);
 
   @override
+  State<SplitSelectorWidget> createState() => _SplitSelectorWidgetState();
+}
+
+class _SplitSelectorWidgetState extends State<SplitSelectorWidget> {
+  late ScrollController _scrollController;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController = ScrollController();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -24,74 +44,161 @@ class SplitSelectorWidget extends StatelessWidget {
       children: [
         Text('How to split?', style: AppTextStyles.body2(isDark)),
         const SizedBox(height: 12),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              _buildSplitTypeButton(
-                isDark,
-                label: 'Equal',
-                type: SplitType.equal,
-                isSelected: splitType == SplitType.equal,
-                onTap: () => onSplitTypeChanged(SplitType.equal),
+        SizedBox(
+          height: 120,
+          child: Listener(
+            onPointerSignal: (PointerSignalEvent event) {
+              if (event is PointerScrollEvent) {
+                // Convert vertical scroll to horizontal scroll
+                _scrollController.animateTo(
+                  _scrollController.offset + event.scrollDelta.dy,
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOut,
+                );
+              }
+            },
+            child: Scrollbar(
+              controller: _scrollController,
+              child: ListView.builder(
+                controller: _scrollController,
+                scrollDirection: Axis.horizontal,
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.only(left: 12),
+                itemCount: 5,
+                itemBuilder: (context, index) {
+                  final splitTypes = [
+                    SplitType.equal,
+                    SplitType.exact,
+                    SplitType.percentage,
+                    SplitType.shares,
+                    SplitType.adjustment,
+                  ];
+                  final type = splitTypes[index];
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: _buildSplitCard(isDark, type),
+                  );
+                },
               ),
-              const SizedBox(width: 12),
-              _buildSplitTypeButton(
-                isDark,
-                label: 'Exact',
-                type: SplitType.exact,
-                isSelected: splitType == SplitType.exact,
-                onTap: () => onSplitTypeChanged(SplitType.exact),
-              ),
-              const SizedBox(width: 12),
-              _buildSplitTypeButton(
-                isDark,
-                label: 'Percentage',
-                type: SplitType.percentage,
-                isSelected: splitType == SplitType.percentage,
-                onTap: () => onSplitTypeChanged(SplitType.percentage),
-              ),
-              const SizedBox(width: 12),
-              _buildSplitTypeButton(
-                isDark,
-                label: 'Shares',
-                type: SplitType.shares,
-                isSelected: splitType == SplitType.shares,
-                onTap: () => onSplitTypeChanged(SplitType.shares),
-              ),
-            ],
+            ),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildSplitTypeButton(
-    bool isDark, {
-    required String label,
-    required SplitType type,
-    required bool isSelected,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected ? AppColors.brand : AppColors.surface(isDark),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: isSelected ? AppColors.brand : AppColors.divider(isDark),
+  Widget _buildSplitCard(bool isDark, SplitType type) {
+    final isSelected = widget.splitType == type;
+    final cardData = _getCardData(type);
+
+    return Semantics(
+      button: true,
+      label: '${cardData.label} split${isSelected ? ' - selected' : ''}',
+      onTap: () => widget.onSplitTypeChanged(type),
+      child: GestureDetector(
+        onTap: () => widget.onSplitTypeChanged(type),
+        child: Container(
+          width: 120,
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? AppColors.brand
+                : AppColors.surface(isDark),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected
+                  ? AppColors.brand
+                  : AppColors.brand.withValues(alpha: 0.3),
+              width: isSelected ? 0 : 1.5,
+            ),
           ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isSelected ? Colors.white : AppColors.textPrimary(isDark),
-            fontWeight: FontWeight.w600,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Icon(
+                cardData.icon,
+                size: 28,
+                color: isSelected
+                    ? Colors.white
+                    : AppColors.brand,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                cardData.label,
+                style: AppTextStyles.caption(isDark).copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: isSelected
+                      ? Colors.white
+                      : AppColors.textPrimary(isDark),
+                  fontSize: 12,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                cardData.description,
+                style: AppTextStyles.caption(isDark).copyWith(
+                  color: isSelected
+                      ? Colors.white70
+                      : AppColors.textSecondary(isDark),
+                  fontSize: 10,
+                ),
+                maxLines: 2,
+                textAlign: TextAlign.center,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
           ),
         ),
       ),
     );
   }
+
+  _SplitCardData _getCardData(SplitType type) {
+    switch (type) {
+      case SplitType.equal:
+        return _SplitCardData(
+          icon: Icons.people_outline,
+          label: 'Equally',
+          description: 'Same share',
+        );
+      case SplitType.exact:
+        return _SplitCardData(
+          icon: Icons.attach_money_rounded,
+          label: 'Exact',
+          description: 'Amount each',
+        );
+      case SplitType.percentage:
+        return _SplitCardData(
+          icon: Icons.percent,
+          label: 'By %',
+          description: 'Percent each',
+        );
+      case SplitType.shares:
+        return _SplitCardData(
+          icon: Icons.pie_chart_outline,
+          label: 'By Shares',
+          description: 'Weight-based',
+        );
+      case SplitType.adjustment:
+        return _SplitCardData(
+          icon: Icons.tune,
+          label: 'Adjustment',
+          description: 'Equal + offset',
+        );
+    }
+  }
+}
+
+class _SplitCardData {
+  final IconData icon;
+  final String label;
+  final String description;
+
+  _SplitCardData({
+    required this.icon,
+    required this.label,
+    required this.description,
+  });
 }

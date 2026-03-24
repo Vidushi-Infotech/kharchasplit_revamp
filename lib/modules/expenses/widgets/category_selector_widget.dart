@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../models/models.dart';
 
-class CategorySelectorWidget extends StatelessWidget {
+class CategorySelectorWidget extends StatefulWidget {
   final CategoryModel? selectedCategory;
   final Function(CategoryModel) onCategorySelected;
 
@@ -13,74 +14,107 @@ class CategorySelectorWidget extends StatelessWidget {
   }) : super(key: key);
 
   @override
+  State<CategorySelectorWidget> createState() => _CategorySelectorWidgetState();
+}
+
+class _CategorySelectorWidgetState extends State<CategorySelectorWidget> {
+  late ScrollController _scrollController;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController = ScrollController();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isCompact = screenWidth < 600;
-
-    final categoryButtons = CategoryModel.all.map((category) {
-      final isSelected = selectedCategory?.id == category.id;
-      final categoryColor = _hexToColor(category.colorHex);
-
-      return Padding(
-        padding: EdgeInsets.only(
-          right: isCompact ? 8 : 12,
-        ),
-        child: Semantics(
-          button: true,
-          label:
-              '${category.name} category${isSelected ? ' - selected' : ''}',
-          onTap: () => onCategorySelected(category),
-          child: GestureDetector(
-            onTap: () => onCategorySelected(category),
-            child: Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: isCompact ? 10 : 12,
-                vertical: 8,
-              ),
-              decoration: BoxDecoration(
-                color: isSelected
-                    ? categoryColor.withValues(alpha: 0.2)
-                    : AppColors.surface(isDark),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: isSelected ? categoryColor : AppColors.divider(isDark),
-                  width: isSelected ? 2 : 1,
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    category.icon,
-                    size: 18,
-                    color: categoryColor,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    category.name,
-                    style: TextStyle(
-                      fontSize: isCompact ? 12 : 14,
-                      color: AppColors.textPrimary(isDark),
-                      fontWeight:
-                          isSelected ? FontWeight.w600 : FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
-    }).toList();
 
     return SizedBox(
       height: 50,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        physics: const AlwaysScrollableScrollPhysics(),
-        itemCount: categoryButtons.length,
-        itemBuilder: (context, index) => categoryButtons[index],
+      child: Listener(
+        onPointerSignal: (PointerSignalEvent event) {
+          if (event is PointerScrollEvent) {
+            // Convert vertical scroll to horizontal scroll
+            _scrollController.animateTo(
+              _scrollController.offset + event.scrollDelta.dy,
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOut,
+            );
+          }
+        },
+        child: Scrollbar(
+          controller: _scrollController,
+          child: ListView.builder(
+            controller: _scrollController,
+            scrollDirection: Axis.horizontal,
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.only(left: 12),
+            itemCount: CategoryModel.all.length,
+            itemBuilder: (context, index) {
+              final category = CategoryModel.all[index];
+              final isSelected = widget.selectedCategory?.id == category.id;
+
+              return Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: Semantics(
+                  button: true,
+                  label:
+                      '${category.name} category${isSelected ? ' - selected' : ''}',
+                  onTap: () => widget.onCategorySelected(category),
+                  child: GestureDetector(
+                    onTap: () => widget.onCategorySelected(category),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? AppColors.brand
+                            : AppColors.surface(isDark),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: isSelected ? AppColors.brand : AppColors.brand.withValues(alpha: 0.4),
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            category.icon,
+                            size: 18,
+                            color: isSelected ? Colors.white : AppColors.brand,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            category.name,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: isSelected
+                                  ? Colors.white
+                                  : AppColors.brand,
+                              fontWeight: isSelected
+                                  ? FontWeight.w600
+                                  : FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
       ),
     );
   }
