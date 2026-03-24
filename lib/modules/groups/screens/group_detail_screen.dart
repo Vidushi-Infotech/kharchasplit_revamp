@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/currency_formatter.dart';
-import '../../../models/group_model.dart';
 import '../../../components/components.dart';
 import '../state/group_detail_provider.dart';
 
@@ -67,10 +66,11 @@ class GroupDetailScreen extends ConsumerWidget {
     GroupTab tab,
     WidgetRef ref,
   ) {
+    // Compact: <600px - full width, single column, tight spacing (16-20px)
     return SingleChildScrollView(
       child: Column(
         children: [
-          _buildHeader(context, isDark, detail),
+          _buildCompactHeader(context, isDark, detail),
           _buildTabs(context, isDark, tab, ref),
           if (tab == GroupTab.expenses)
             _buildExpensesList(context, isDark, detail)
@@ -88,10 +88,11 @@ class GroupDetailScreen extends ConsumerWidget {
     GroupTab tab,
     WidgetRef ref,
   ) {
+    // Standard: 600-1100px - improved spacing (24-32px), better grouped layout
     return SingleChildScrollView(
       child: Column(
         children: [
-          _buildHeader(context, isDark, detail),
+          _buildStandardHeader(context, isDark, detail),
           _buildTabs(context, isDark, tab, ref),
           if (tab == GroupTab.expenses)
             _buildExpensesList(context, isDark, detail)
@@ -109,41 +110,64 @@ class GroupDetailScreen extends ConsumerWidget {
     GroupTab tab,
     WidgetRef ref,
   ) {
+    // Large: >1100px - generous spacing (32-48px), sidebar + content layout
     return Row(
       children: [
+        // Left sidebar - Group info and members (32% width)
         Expanded(
           flex: 2,
           child: SingleChildScrollView(
-            child: Column(
-              children: [
-                _buildHeader(context, isDark, detail),
-                _buildMembersList(context, isDark, detail),
-              ],
+            child: Padding(
+              padding: const EdgeInsets.all(40),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildLargeHeader(context, isDark, detail),
+                  const SizedBox(height: 32),
+                  _buildMembersSection(context, isDark, detail),
+                ],
+              ),
             ),
           ),
         ),
+        // Right content area - Tabs + Expenses/Balances (68% width)
         Expanded(
           flex: 3,
-          child: Column(
-            children: [
-              _buildTabs(context, isDark, tab, ref),
-              Expanded(
-                child: SingleChildScrollView(
-                  child: tab == GroupTab.expenses
-                      ? _buildExpensesList(context, isDark, detail)
-                      : _buildBalancesList(context, isDark, detail),
+          child: Container(
+            decoration: BoxDecoration(
+              color: AppColors.surface(isDark),
+              border: Border(
+                left: BorderSide(
+                  color: AppColors.divider(isDark),
+                  width: 1,
                 ),
               ),
-            ],
+            ),
+            child: Column(
+              children: [
+                _buildTabs(context, isDark, tab, ref),
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: tab == GroupTab.expenses
+                          ? _buildExpensesList(context, isDark, detail)
+                          : _buildBalancesList(context, isDark, detail),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildHeader(BuildContext context, bool isDark, GroupDetail detail) {
+  // Compact header: <600px - optimized for mobile (tight spacing 16-20px)
+  Widget _buildCompactHeader(BuildContext context, bool isDark, GroupDetail detail) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
       decoration: BoxDecoration(
         color: AppColors.surface(isDark),
         border: Border(
@@ -156,27 +180,100 @@ class GroupDetailScreen extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Group title with emoji
           Row(
             children: [
               Text(
                 detail.group.coverEmoji,
-                style: const TextStyle(fontSize: 32),
+                style: const TextStyle(fontSize: 28),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      detail.group.name,
-                      style: AppTextStyles.headline3(isDark),
-                    ),
-                  ],
+                child: Text(
+                  detail.group.name,
+                  style: AppTextStyles.headline3(isDark),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
           ),
           const SizedBox(height: 16),
+          // Statistics in a compact row
+          Row(
+            children: [
+              Expanded(
+                child: _buildCompactStatistic(
+                  context,
+                  isDark,
+                  'Total',
+                  CurrencyFormatter.format(detail.totalExpense),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildCompactStatistic(
+                  context,
+                  isDark,
+                  'Members',
+                  '${detail.members.length}',
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildCompactStatistic(
+                  context,
+                  isDark,
+                  'Expenses',
+                  '${detail.expenses.length}',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Members list
+          _buildMembersList(context, isDark, detail),
+        ],
+      ),
+    );
+  }
+
+  // Standard header: 600-1100px - improved spacing (24-32px)
+  Widget _buildStandardHeader(BuildContext context, bool isDark, GroupDetail detail) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+      decoration: BoxDecoration(
+        color: AppColors.surface(isDark),
+        border: Border(
+          bottom: BorderSide(
+            color: AppColors.divider(isDark),
+            width: 1,
+          ),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Group title with emoji
+          Row(
+            children: [
+              Text(
+                detail.group.coverEmoji,
+                style: const TextStyle(fontSize: 36),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
+                  detail.group.name,
+                  style: AppTextStyles.headline2(isDark),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          // Statistics in a spacious row
           Row(
             children: [
               Expanded(
@@ -205,13 +302,147 @@ class GroupDetailScreen extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
+          // Members list
           _buildMembersList(context, isDark, detail),
         ],
       ),
     );
   }
 
+  // Large header: >1100px - generous spacing (32-48px)
+  Widget _buildLargeHeader(BuildContext context, bool isDark, GroupDetail detail) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Group title with large emoji
+        Row(
+          children: [
+            Text(
+              detail.group.coverEmoji,
+              style: const TextStyle(fontSize: 48),
+            ),
+            const SizedBox(width: 20),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    detail.group.name,
+                    style: AppTextStyles.headline1(isDark),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 32),
+        // Statistics cards stacked vertically for desktop
+        _buildLargeStatisticCard(
+          context,
+          isDark,
+          'Total Amount',
+          CurrencyFormatter.format(detail.totalExpense),
+          Icons.account_balance_wallet_rounded,
+          AppColors.brand,
+        ),
+        const SizedBox(height: 12),
+        _buildLargeStatisticCard(
+          context,
+          isDark,
+          'Total Members',
+          '${detail.members.length}',
+          Icons.people_rounded,
+          AppColors.brand,
+        ),
+        const SizedBox(height: 12),
+        _buildLargeStatisticCard(
+          context,
+          isDark,
+          'Total Expenses',
+          '${detail.expenses.length}',
+          Icons.receipt_long_rounded,
+          AppColors.success,
+        ),
+      ],
+    );
+  }
+
+  // Desktop-style statistics card with icon
+  Widget _buildLargeStatisticCard(
+    BuildContext context,
+    bool isDark,
+    String label,
+    String value,
+    IconData icon,
+    Color iconColor,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface(isDark),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppColors.divider(isDark),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: iconColor, size: 24),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: AppTextStyles.caption(isDark),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  style: AppTextStyles.headline3(isDark).copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Compact statistic for mobile (reduced font size)
+  Widget _buildCompactStatistic(
+    BuildContext context,
+    bool isDark,
+    String label,
+    String value,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: AppTextStyles.caption(isDark).copyWith(fontSize: 11),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: AppTextStyles.body2(isDark).copyWith(
+            fontWeight: FontWeight.w600,
+            fontSize: 14,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ],
+    );
+  }
+
+  // Standard statistic for tablet/desktop
   Widget _buildStatistic(
     BuildContext context,
     bool isDark,
@@ -237,30 +468,33 @@ class GroupDetailScreen extends ConsumerWidget {
     );
   }
 
+  // Responsive members list - horizontal scroll for compact/standard, grid for large
   Widget _buildMembersList(BuildContext context, bool isDark, GroupDetail detail) {
     return SizedBox(
-      height: 60,
+      height: 80,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         itemCount: detail.members.length,
         itemBuilder: (context, index) {
           final member = detail.members[index];
           return Padding(
-            padding: EdgeInsets.only(right: index == detail.members.length - 1 ? 0 : 8),
+            padding: EdgeInsets.only(right: 12),
             child: Column(
               children: [
                 AvatarWidget(
                   imageUrl: member.avatarUrl,
                   name: member.name,
-                  radius: 20,
+                  radius: 24,
                 ),
-                const SizedBox(height: 4),
-                Flexible(
+                const SizedBox(height: 6),
+                SizedBox(
+                  width: 56,
                   child: Text(
                     member.name.split(' ')[0],
                     style: AppTextStyles.caption(isDark),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
                   ),
                 ),
               ],
@@ -268,6 +502,65 @@ class GroupDetailScreen extends ConsumerWidget {
           );
         },
       ),
+    );
+  }
+
+  // Members section for large layout - grid display
+  Widget _buildMembersSection(BuildContext context, bool isDark, GroupDetail detail) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Members',
+          style: AppTextStyles.headline3(isDark),
+        ),
+        const SizedBox(height: 16),
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            childAspectRatio: 1,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+          ),
+          itemCount: detail.members.length,
+          itemBuilder: (context, index) {
+            final member = detail.members[index];
+            return Container(
+              decoration: BoxDecoration(
+                color: AppColors.surface(isDark),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: AppColors.divider(isDark),
+                  width: 1,
+                ),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  AvatarWidget(
+                    imageUrl: member.avatarUrl,
+                    name: member.name,
+                    radius: 28,
+                  ),
+                  const SizedBox(height: 8),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Text(
+                      member.name,
+                      style: AppTextStyles.body2(isDark),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ],
     );
   }
 
@@ -356,20 +649,32 @@ class GroupDetailScreen extends ConsumerWidget {
       return EmptyStateWidget.noExpenses();
     }
 
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isCompact = screenWidth < 600;
+    final horizontalPadding = isCompact ? 16.0 : 24.0;
+    final verticalSpacing = isCompact ? 8.0 : 12.0;
+
     return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: detail.expenses.length,
       itemBuilder: (context, index) {
         final expense = detail.expenses[index];
-        return Semantics(
-          button: true,
-          label: 'Expense - ${expense.title} for ₹${expense.amount}',
-          child: ExpenseCard(
-            expense: expense,
-            onTap: () {
-              context.go('/expense/${expense.id}');
-            },
+        return Padding(
+          padding: EdgeInsets.only(
+            left: horizontalPadding,
+            right: horizontalPadding,
+            bottom: verticalSpacing,
+          ),
+          child: Semantics(
+            button: true,
+            label: 'Expense - ${expense.title} for ₹${expense.amount}',
+            child: ExpenseCard(
+              expense: expense,
+              onTap: () {
+                context.go('/expense/${expense.id}');
+              },
+            ),
           ),
         );
       },
@@ -379,6 +684,11 @@ class GroupDetailScreen extends ConsumerWidget {
   Widget _buildBalancesList(BuildContext context, bool isDark, GroupDetail detail) {
     final sortedBalances = detail.memberBalances.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
+
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isCompact = screenWidth < 600;
+    final horizontalPadding = isCompact ? 16.0 : 24.0;
+    final verticalSpacing = isCompact ? 8.0 : 12.0;
 
     return ListView.builder(
       shrinkWrap: true,
@@ -390,51 +700,66 @@ class GroupDetailScreen extends ConsumerWidget {
         final balance = entry.value;
         final isNegative = balance < 0;
 
-        return Semantics(
-          label: '${member.name} ${isNegative ? 'is owed' : 'owes'} ₹${balance.abs()}',
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppColors.surface(isDark),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: AppColors.divider(isDark),
-                width: 1,
+        return Padding(
+          padding: EdgeInsets.only(
+            left: horizontalPadding,
+            right: horizontalPadding,
+            bottom: verticalSpacing,
+          ),
+          child: Semantics(
+            label: '${member.name} ${isNegative ? 'is owed' : 'owes'} ₹${balance.abs()}',
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.surface(isDark),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: AppColors.divider(isDark),
+                  width: 1,
+                ),
+              ),
+              child: Row(
+                children: [
+                  AvatarWidget(
+                    imageUrl: member.avatarUrl,
+                    name: member.name,
+                    radius: 24,
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          member.name,
+                          style: AppTextStyles.body2(isDark),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          isNegative ? 'is owed' : 'owes you',
+                          style: AppTextStyles.caption(isDark),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: (isNegative ? AppColors.success : AppColors.warning)
+                          .withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      CurrencyFormatter.format(balance.abs()),
+                      style: AppTextStyles.body2(isDark).copyWith(
+                        color: isNegative ? AppColors.success : AppColors.warning,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-          child: Row(
-            children: [
-              AvatarWidget(
-                imageUrl: member.avatarUrl,
-                name: member.name,
-                radius: 20,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      member.name,
-                      style: AppTextStyles.body2(isDark),
-                    ),
-                    Text(
-                      isNegative ? 'is owed' : 'owes',
-                      style: AppTextStyles.caption(isDark),
-                    ),
-                  ],
-                ),
-              ),
-              Text(
-                CurrencyFormatter.format(balance.abs()),
-                style: AppTextStyles.body2(isDark).copyWith(
-                  color: isNegative ? AppColors.success : AppColors.warning,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
           ),
         );
       },
