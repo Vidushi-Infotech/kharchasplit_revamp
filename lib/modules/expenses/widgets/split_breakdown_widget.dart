@@ -343,6 +343,28 @@ class _SplitBreakdownWidgetState extends State<SplitBreakdownWidget> {
         .fold<double>(0, (sum, e) => sum + e.value);
   }
 
+  String _formatDisplayAmount(double amount) {
+    if (amount == 0) return '';
+
+    switch (widget.splitType) {
+      case SplitType.exact:
+        return '₹${amount.toStringAsFixed(2)}';
+      case SplitType.percentage:
+        return '${amount.toStringAsFixed(1)}%';
+      case SplitType.shares:
+        return '${amount.toStringAsFixed(0)} shares';
+      case SplitType.adjustment:
+        if (amount > 0) {
+          return '+₹${amount.toStringAsFixed(2)}';
+        } else if (amount < 0) {
+          return '-₹${(-amount).toStringAsFixed(2)}';
+        }
+        return '±₹0.00';
+      default:
+        return '';
+    }
+  }
+
   Widget _buildMemberRow(bool isDark, UserModel member) {
     final isIncluded = _localIncludedMembers.contains(member.id);
     final controller = _controllers[member.id]!;
@@ -434,6 +456,23 @@ class _SplitBreakdownWidgetState extends State<SplitBreakdownWidget> {
                 ),
               ),
               onChanged: (_) => _updateSplits(),
+            ),
+          ),
+          const SizedBox(width: 8),
+          // Formatted split amount display
+          SizedBox(
+            width: 80,
+            child: Text(
+              _formatDisplayAmount(widget.splits[member.id] ?? 0),
+              style: AppTextStyles.body2(isDark).copyWith(
+                color: isIncluded
+                    ? AppColors.brand
+                    : AppColors.textSecondary(isDark),
+                fontWeight: FontWeight.w600,
+              ),
+              textAlign: TextAlign.right,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
