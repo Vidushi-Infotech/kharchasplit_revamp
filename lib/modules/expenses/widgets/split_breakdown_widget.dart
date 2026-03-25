@@ -352,7 +352,11 @@ class _SplitBreakdownWidgetState extends State<SplitBreakdownWidget> {
       case SplitType.percentage:
         return '${amount.toStringAsFixed(1)}%';
       case SplitType.shares:
-        return '${amount.toStringAsFixed(0)} shares';
+        // Calculate actual amount from shares
+        final totalShares = widget.splits.values.fold<double>(0, (sum, e) => sum + e);
+        if (totalShares <= 0) return '';
+        final calculatedAmount = (amount / totalShares) * widget.totalAmount;
+        return '₹${calculatedAmount.toStringAsFixed(2)}';
       case SplitType.adjustment:
         if (amount > 0) {
           return '+₹${amount.toStringAsFixed(2)}';
