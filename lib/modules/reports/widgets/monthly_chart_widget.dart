@@ -44,24 +44,41 @@ class MonthlyChartWidget extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             SizedBox(
-              height: 180,
+              height: 200,
               child: BarChart(
                 BarChartData(
                   barGroups: _buildBarGroups(report.monthlySpending),
                   borderData: FlBorderData(show: false),
-                  gridData: FlGridData(show: false),
+                  gridData: FlGridData(
+                    show: true,
+                    drawHorizontalLine: true,
+                    drawVerticalLine: false,
+                    horizontalInterval: 5000,
+                    getDrawingHorizontalLine: (value) {
+                      return FlLine(
+                        color: AppColors.divider(Theme.of(context).brightness == Brightness.dark)
+                            .withValues(alpha: 0.3),
+                        strokeWidth: 0.5,
+                      );
+                    },
+                  ),
                   titlesData: FlTitlesData(
+                    topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                     bottomTitles: AxisTitles(
                       sideTitles: SideTitles(
                         showTitles: true,
+                        reservedSize: 30,
                         getTitlesWidget: (value, meta) {
                           final months = report.monthlySpending.keys.toList();
                           if (value.toInt() < months.length) {
                             return Padding(
-                              padding: const EdgeInsets.only(top: 8.0),
+                              padding: const EdgeInsets.only(top: 12.0),
                               child: Text(
                                 months[value.toInt()],
-                                style: AppTextStyles.caption(false),
+                                style: AppTextStyles.body2(
+                                    Theme.of(context).brightness == Brightness.dark)
+                                    .copyWith(fontSize: 12),
                               ),
                             );
                           }
@@ -72,11 +89,21 @@ class MonthlyChartWidget extends StatelessWidget {
                     leftTitles: AxisTitles(
                       sideTitles: SideTitles(
                         showTitles: true,
+                        reservedSize: 45,
                         getTitlesWidget: (value, meta) {
-                          return Text(
-                            '₹${(value / 1000).toStringAsFixed(0)}K',
-                            style: AppTextStyles.caption(false),
-                          );
+                          if (value % 5000 == 0) {
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 8.0),
+                              child: Text(
+                                '₹${(value / 1000).toStringAsFixed(0)}K',
+                                style: AppTextStyles.caption(
+                                    Theme.of(context).brightness == Brightness.dark)
+                                    .copyWith(fontSize: 11),
+                                textAlign: TextAlign.right,
+                              ),
+                            );
+                          }
+                          return const SizedBox();
                         },
                       ),
                     ),
