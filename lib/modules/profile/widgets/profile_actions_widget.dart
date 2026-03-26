@@ -17,40 +17,82 @@ class ProfileActionsWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final screenWidth = MediaQuery.of(context).size.width;
+
+    final isLarge = screenWidth > 1100;
+    final gap = isLarge ? 16.0 : 12.0;
 
     return Semantics(
       label: 'Profile actions menu',
-      child: Column(
-        children: [
-          _buildActionButton(
-            isDark,
-            icon: Icons.help_rounded,
-            label: 'Help & Support',
-            description: 'Get help and support',
-            color: AppColors.brand,
-            onTap: onHelp,
-          ),
-          const SizedBox(height: 12),
-          _buildActionButton(
-            isDark,
-            icon: Icons.privacy_tip_rounded,
-            label: 'Privacy Policy',
-            description: 'Read our privacy terms',
-            color: AppColors.success,
-            onTap: onPrivacy,
-          ),
-          const SizedBox(height: 12),
-          _buildActionButton(
-            isDark,
-            icon: Icons.logout_rounded,
-            label: 'Logout',
-            description: 'Sign out of your account',
-            color: AppColors.warning,
-            onTap: onLogout,
-            isDestructive: true,
-          ),
-        ],
-      ),
+      child: isLarge
+          ? Row(
+              children: [
+                Expanded(
+                  child: _buildActionButton(
+                    isDark,
+                    icon: Icons.help_rounded,
+                    label: 'Help & Support',
+                    description: 'Get help and support',
+                    color: AppColors.brand,
+                    onTap: onHelp,
+                  ),
+                ),
+                SizedBox(width: gap),
+                Expanded(
+                  child: _buildActionButton(
+                    isDark,
+                    icon: Icons.privacy_tip_rounded,
+                    label: 'Privacy Policy',
+                    description: 'Read our privacy terms',
+                    color: AppColors.success,
+                    onTap: onPrivacy,
+                  ),
+                ),
+                SizedBox(width: gap),
+                Expanded(
+                  child: _buildActionButton(
+                    isDark,
+                    icon: Icons.logout_rounded,
+                    label: 'Logout',
+                    description: 'Sign out of your account',
+                    color: AppColors.warning,
+                    onTap: onLogout,
+                    isDestructive: true,
+                  ),
+                ),
+              ],
+            )
+          : Column(
+              children: [
+                _buildActionButton(
+                  isDark,
+                  icon: Icons.help_rounded,
+                  label: 'Help & Support',
+                  description: 'Get help and support',
+                  color: AppColors.brand,
+                  onTap: onHelp,
+                ),
+                SizedBox(height: gap),
+                _buildActionButton(
+                  isDark,
+                  icon: Icons.privacy_tip_rounded,
+                  label: 'Privacy Policy',
+                  description: 'Read our privacy terms',
+                  color: AppColors.success,
+                  onTap: onPrivacy,
+                ),
+                SizedBox(height: gap),
+                _buildActionButton(
+                  isDark,
+                  icon: Icons.logout_rounded,
+                  label: 'Logout',
+                  description: 'Sign out of your account',
+                  color: AppColors.warning,
+                  onTap: onLogout,
+                  isDestructive: true,
+                ),
+              ],
+            ),
     );
   }
 

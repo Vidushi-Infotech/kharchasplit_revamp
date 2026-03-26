@@ -22,6 +22,8 @@ class ProfileStatsWidget extends StatelessWidget {
 
     // Responsive grid
     final isCompact = screenWidth < 600;
+    final isLarge = screenWidth > 1100;
+    final gap = isLarge ? 16.0 : 12.0;
 
     return Semantics(
       label: 'Profile statistics',
@@ -30,10 +32,10 @@ class ProfileStatsWidget extends StatelessWidget {
               children: [
                 _buildStatCard(isDark, 'Total Expenses', totalExpenses.toString(),
                     Icons.receipt_long_rounded, AppColors.brand),
-                const SizedBox(height: 12),
+                SizedBox(height: gap),
                 _buildStatCard(isDark, 'Groups', totalGroups.toString(),
                     Icons.groups_rounded, AppColors.success),
-                const SizedBox(height: 12),
+                SizedBox(height: gap),
                 _buildStatCard(isDark, 'Total Spent', CurrencyFormatter.format(totalSpent),
                     Icons.trending_down_rounded, AppColors.warning),
               ],
@@ -44,12 +46,12 @@ class ProfileStatsWidget extends StatelessWidget {
                   child: _buildStatCard(isDark, 'Total Expenses',
                       totalExpenses.toString(), Icons.receipt_long_rounded, AppColors.brand),
                 ),
-                const SizedBox(width: 12),
+                SizedBox(width: gap),
                 Expanded(
                   child: _buildStatCard(isDark, 'Groups', totalGroups.toString(),
                       Icons.groups_rounded, AppColors.success),
                 ),
-                const SizedBox(width: 12),
+                SizedBox(width: gap),
                 Expanded(
                   child: _buildStatCard(isDark, 'Total Spent',
                       CurrencyFormatter.format(totalSpent), Icons.trending_down_rounded, AppColors.warning),

@@ -127,52 +127,49 @@ class ProfileScreen extends ConsumerWidget {
         padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 32),
         child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 900),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            constraints: const BoxConstraints(maxWidth: 1200),
+            child: Column(
               children: [
-                // Left: Avatar + Info
-                Expanded(
-                  flex: 1,
-                  child: Column(
+                // Avatar (centered)
+                ProfileAvatarWidget(
+                  name: 'You',
+                  onUpload: () {},
+                  onRegenerate: () {},
+                ),
+                const SizedBox(height: 40),
+                // Stats Cards (3 columns, full width)
+                ProfileStatsWidget(
+                  totalExpenses: 24,
+                  totalGroups: 5,
+                  totalSpent: 15850.00,
+                ),
+                const SizedBox(height: 32),
+                // Info Card (full width)
+                ProfileInfoWidget(
+                  name: 'John Doe',
+                  email: 'john@example.com',
+                  phone: '+91 98765 43210',
+                  onEditName: () {},
+                  onEditEmail: () {},
+                  onEditPhone: () {},
+                ),
+                const SizedBox(height: 32),
+                // Actions (3 columns for web)
+                SizedBox(
+                  width: double.infinity,
+                  child: Row(
                     children: [
-                      ProfileAvatarWidget(
-                        name: 'You',
-                        onUpload: () {},
-                        onRegenerate: () {},
-                      ),
-                      const SizedBox(height: 32),
-                      ProfileInfoWidget(
-                        name: 'John Doe',
-                        email: 'john@example.com',
-                        phone: '+91 98765 43210',
-                        onEditName: () {},
-                        onEditEmail: () {},
-                        onEditPhone: () {},
+                      Expanded(
+                        child: ProfileActionsWidget(
+                          onHelp: () {},
+                          onPrivacy: () {},
+                          onLogout: () {},
+                        ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(width: 48),
-                // Right: Stats + Actions
-                Expanded(
-                  flex: 1,
-                  child: Column(
-                    children: [
-                      ProfileStatsWidget(
-                        totalExpenses: 24,
-                        totalGroups: 5,
-                        totalSpent: 15850.00,
-                      ),
-                      const SizedBox(height: 32),
-                      ProfileActionsWidget(
-                        onHelp: () {},
-                        onPrivacy: () {},
-                        onLogout: () {},
-                      ),
-                    ],
-                  ),
-                ),
+                const SizedBox(height: 40),
               ],
             ),
           ),
