@@ -15,12 +15,18 @@ class CategoryChartWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final screenWidth = MediaQuery.of(context).size.width;
+
+    // Responsive spacing
+    final isLarge = screenWidth > 1100;
+    final margin = isLarge ? const EdgeInsets.only(right: 12) : const EdgeInsets.all(16);
+    final padding = isLarge ? const EdgeInsets.all(12) : const EdgeInsets.all(16);
 
     return Semantics(
       label: 'Spending by category pie chart',
       child: Container(
-        margin: const EdgeInsets.all(16),
-        padding: const EdgeInsets.all(16),
+        margin: margin,
+        padding: padding,
         decoration: BoxDecoration(
           color: AppColors.surface(isDark),
           borderRadius: BorderRadius.circular(16),
@@ -34,15 +40,15 @@ class CategoryChartWidget extends StatelessWidget {
           children: [
             Text(
               'Spending by Category',
-              style: AppTextStyles.headline3(isDark).copyWith(fontSize: 18),
+              style: AppTextStyles.headline3(isDark).copyWith(fontSize: 16),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             SizedBox(
-              height: 200,
+              height: 180,
               child: PieChart(
                 PieChartData(
                   sections: _buildPieChartSections(report.categorySpending, isDark),
-                  centerSpaceRadius: 40,
+                  centerSpaceRadius: 35,
                   sectionsSpace: 2,
                 ),
               ),

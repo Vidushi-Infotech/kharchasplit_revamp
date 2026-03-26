@@ -11,13 +11,20 @@ class PeriodSelectorWidget extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final period = ref.watch(reportsPeriodProvider);
+    final screenWidth = MediaQuery.of(context).size.width;
+
+    // Responsive spacing
+    final isLarge = screenWidth > 1100;
+    final horizontalPadding = isLarge ? 0.0 : 16.0;
+    final verticalPadding = isLarge ? 8.0 : 16.0;
+    final spacing = isLarge ? 12.0 : 16.0;
 
     return Semantics(
       label: 'Report period selector',
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: verticalPadding),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          mainAxisAlignment: MainAxisAlignment.start,
           children: [
             _buildPeriodChip(
               context,
@@ -27,6 +34,7 @@ class PeriodSelectorWidget extends ConsumerWidget {
               period,
               ref,
             ),
+            SizedBox(width: spacing),
             _buildPeriodChip(
               context,
               isDark,
@@ -35,6 +43,7 @@ class PeriodSelectorWidget extends ConsumerWidget {
               period,
               ref,
             ),
+            SizedBox(width: spacing),
             _buildPeriodChip(
               context,
               isDark,

@@ -15,12 +15,18 @@ class TopCategoriesWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final screenWidth = MediaQuery.of(context).size.width;
+
+    // Responsive spacing
+    final isLarge = screenWidth > 1100;
+    final margin = isLarge ? const EdgeInsets.only(left: 12) : const EdgeInsets.all(16);
+    final padding = isLarge ? const EdgeInsets.all(12) : const EdgeInsets.all(16);
 
     return Semantics(
       label: 'Top spending categories list',
       child: Container(
-        margin: const EdgeInsets.all(16),
-        padding: const EdgeInsets.all(16),
+        margin: margin,
+        padding: padding,
         decoration: BoxDecoration(
           color: AppColors.surface(isDark),
           borderRadius: BorderRadius.circular(16),
@@ -34,9 +40,9 @@ class TopCategoriesWidget extends StatelessWidget {
           children: [
             Text(
               'Top Categories',
-              style: AppTextStyles.headline3(isDark).copyWith(fontSize: 18),
+              style: AppTextStyles.headline3(isDark).copyWith(fontSize: 16),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             for (final category in report.topCategories)
               Semantics(
                 label: '${category.category}, ₹${CurrencyFormatter.format(category.amount)}',

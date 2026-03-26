@@ -17,11 +17,13 @@ class StatsSummaryWidget extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final screenWidth = MediaQuery.of(context).size.width;
 
-    // Responsive spacing
+    // Responsive layout
     final isCompact = screenWidth < 600;
-    final horizontalPadding = isCompact ? 16.0 : 24.0;
-    final verticalPadding = isCompact ? 12.0 : 16.0;
-    final spaceBetween = isCompact ? 8.0 : 12.0;
+    final isLarge = screenWidth > 1100;
+
+    final horizontalPadding = isLarge ? 0.0 : (isCompact ? 16.0 : 24.0);
+    final verticalPadding = isLarge ? 8.0 : (isCompact ? 12.0 : 16.0);
+    final spaceBetween = isLarge ? 12.0 : (isCompact ? 8.0 : 12.0);
 
     return Semantics(
       label: 'Spending summary statistics',
@@ -30,20 +32,20 @@ class StatsSummaryWidget extends StatelessWidget {
           horizontal: horizontalPadding,
           vertical: verticalPadding,
         ),
-        child: Column(
-          children: [
-            // Total Spending (Full width)
-            _buildStatCard(
-              context,
-              isDark,
-              'Total Spending',
-              report.totalSpending,
-              AppColors.brand,
-            ),
-            SizedBox(height: spaceBetween),
-            // You Owe + Owed to You (2 columns)
+        child: isLarge
+            ? // Large: 3 cards in a row
             Row(
               children: [
+                Expanded(
+                  child: _buildStatCard(
+                    context,
+                    isDark,
+                    'Total Spending',
+                    report.totalSpending,
+                    AppColors.brand,
+                  ),
+                ),
+                SizedBox(width: spaceBetween),
                 Expanded(
                   child: _buildStatCard(
                     context,
@@ -64,9 +66,45 @@ class StatsSummaryWidget extends StatelessWidget {
                   ),
                 ),
               ],
+            )
+            : // Compact/Standard: Stacked layout
+            Column(
+              children: [
+                // Total Spending (Full width)
+                _buildStatCard(
+                  context,
+                  isDark,
+                  'Total Spending',
+                  report.totalSpending,
+                  AppColors.brand,
+                ),
+                SizedBox(height: spaceBetween),
+                // You Owe + Owed to You (2 columns)
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildStatCard(
+                        context,
+                        isDark,
+                        'You Owe',
+                        report.totalYouOwe,
+                        AppColors.warning,
+                      ),
+                    ),
+                    SizedBox(width: spaceBetween),
+                    Expanded(
+                      child: _buildStatCard(
+                        context,
+                        isDark,
+                        'Owed to You',
+                        report.totalOwed,
+                        AppColors.success,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
-          ],
-        ),
       ),
     );
   }

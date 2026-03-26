@@ -15,12 +15,18 @@ class MonthlyChartWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final screenWidth = MediaQuery.of(context).size.width;
+
+    // Responsive spacing
+    final isLarge = screenWidth > 1100;
+    final margin = isLarge ? const EdgeInsets.only(left: 12) : const EdgeInsets.all(16);
+    final padding = isLarge ? const EdgeInsets.all(12) : const EdgeInsets.all(16);
 
     return Semantics(
       label: 'Monthly spending trend bar chart',
       child: Container(
-        margin: const EdgeInsets.all(16),
-        padding: const EdgeInsets.all(16),
+        margin: margin,
+        padding: padding,
         decoration: BoxDecoration(
           color: AppColors.surface(isDark),
           borderRadius: BorderRadius.circular(16),
@@ -34,11 +40,11 @@ class MonthlyChartWidget extends StatelessWidget {
           children: [
             Text(
               'Monthly Spending Trend',
-              style: AppTextStyles.headline3(isDark).copyWith(fontSize: 18),
+              style: AppTextStyles.headline3(isDark).copyWith(fontSize: 16),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             SizedBox(
-              height: 200,
+              height: 180,
               child: BarChart(
                 BarChartData(
                   barGroups: _buildBarGroups(report.monthlySpending),

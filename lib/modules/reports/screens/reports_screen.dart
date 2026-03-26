@@ -112,42 +112,40 @@ class ReportsScreen extends ConsumerWidget {
   Widget _buildLargeLayout(BuildContext context, bool isDark, ReportsData report) {
     return SingleChildScrollView(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 32),
+        padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 28),
         child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1400),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            constraints: const BoxConstraints(maxWidth: 1600),
+            child: Column(
               children: [
-                // Left: Period selector + Stats summary
-                Expanded(
-                  flex: 1,
-                  child: Column(
-                    children: [
-                      PeriodSelectorWidget(),
-                      const SizedBox(height: 20),
-                      StatsSummaryWidget(report: report),
-                    ],
-                  ),
+                // Period Selector (full width)
+                PeriodSelectorWidget(),
+                const SizedBox(height: 16),
+                // Stats Cards (full width, 3 columns)
+                StatsSummaryWidget(report: report),
+                const SizedBox(height: 16),
+                // Charts + Categories (3 column grid)
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Left: Category Chart
+                    Expanded(
+                      flex: 1,
+                      child: CategoryChartWidget(report: report),
+                    ),
+                    // Center: Monthly Chart
+                    Expanded(
+                      flex: 1,
+                      child: MonthlyChartWidget(report: report),
+                    ),
+                    // Right: Top Categories
+                    Expanded(
+                      flex: 1,
+                      child: TopCategoriesWidget(report: report),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 48),
-                // Center: Category + Monthly charts
-                Expanded(
-                  flex: 1,
-                  child: Column(
-                    children: [
-                      CategoryChartWidget(report: report),
-                      const SizedBox(height: 20),
-                      MonthlyChartWidget(report: report),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 48),
-                // Right: Top categories
-                Expanded(
-                  flex: 1,
-                  child: TopCategoriesWidget(report: report),
-                ),
+                const SizedBox(height: 20),
               ],
             ),
           ),
