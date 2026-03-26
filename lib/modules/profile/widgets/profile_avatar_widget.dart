@@ -1,26 +1,26 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/services/avatar_generator_service.dart';
+import '../state/profile_provider.dart';
+import 'avatar_picker_widget.dart';
 
-class ProfileAvatarWidget extends StatefulWidget {
+class ProfileAvatarWidget extends ConsumerStatefulWidget {
   final String name;
-  final String? photoUrl;
-  final VoidCallback onUpload;
-  final VoidCallback onRegenerate;
+  final VoidCallback? onPhotoSelected;
 
   const ProfileAvatarWidget({
     super.key,
     required this.name,
-    this.photoUrl,
-    required this.onUpload,
-    required this.onRegenerate,
+    this.onPhotoSelected,
   });
 
   @override
-  State<ProfileAvatarWidget> createState() => _ProfileAvatarWidgetState();
+  ConsumerState<ProfileAvatarWidget> createState() => _ProfileAvatarWidgetState();
 }
 
-class _ProfileAvatarWidgetState extends State<ProfileAvatarWidget>
+class _ProfileAvatarWidgetState extends ConsumerState<ProfileAvatarWidget>
     with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
   bool _isHovered = false;
@@ -50,32 +50,45 @@ class _ProfileAvatarWidgetState extends State<ProfileAvatarWidget>
     _animationController.reverse();
   }
 
-  Color _getGradientColorForName(int index) {
-    final colors = [
-      const Color(0xFF6366f1),
-      const Color(0xFF8b5cf6),
-      const Color(0xFFec4899),
-      const Color(0xFFf97316),
-      const Color(0xFFeab308),
-      const Color(0xFF10b981),
-      const Color(0xFF06b6d4),
-      const Color(0xFF3b82f6),
-    ];
-    return colors[index % colors.length];
+  void _showAvatarPicker() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.background(Theme.of(context).brightness == Brightness.dark),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => AvatarPickerWidget(
+        userName: widget.name,
+        onGenerateAvatar: () {
+          Navigator.pop(context);
+          widget.onPhotoSelected?.call();
+        },
+        onPickImage: () {
+          Navigator.pop(context);
+          // Image picker logic here
+          widget.onPhotoSelected?.call();
+        },
+        onClose: () => Navigator.pop(context),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final profileState = ref.watch(profileProvider);
+
     final initials = widget.name
         .split(' ')
         .take(2)
         .map((e) => e[0].toUpperCase())
         .join();
 
-    final colorIndex = widget.name.codeUnitAt(0);
-    final gradientColor1 = _getGradientColorForName(colorIndex);
-    final gradientColor2 = _getGradientColorForName(colorIndex + 1);
+    final colors = AvatarGeneratorService.getGradientColors(
+      widget.name,
+      profileState.selectedAvatarStyle ?? AvatarStyle.gradient,
+    );
 
     return Semantics(
       label: 'User profile avatar for ${widget.name}',
@@ -89,53 +102,66 @@ class _ProfileAvatarWidgetState extends State<ProfileAvatarWidget>
             ),
             child: Stack(
               children: [
-                // Avatar Circle with Gradient
-                Container(
-                  width: 120,
-                  height: 120,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [gradientColor1, gradientColor2],
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: gradientColor1.withValues(alpha: 0.3),
-                        blurRadius: _isHovered ? 20 : 8,
-                        offset: const Offset(0, 4),
+                // Avatar Circle with Generated Avatar or Photo
+                if (profileState.photoPath != null)
+                  // Show uploaded photo
+                  Container(
+                    width: 120,
+                    height: 120,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      image: DecorationImage(
+                        image: NetworkImage(profileState.photoPath!),
+                        fit: BoxFit.cover,
                       ),
-                    ],
-                  ),
-                  child: Center(
-                    child: Text(
-                      initials,
-                      style: AppTextStyles.headline1(isDark).copyWith(
-                        color: Colors.white,
-                        fontSize: 44,
-                        fontWeight: FontWeight.w700,
-                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.brand.withValues(alpha: 0.3),
+                          blurRadius: _isHovered ? 20 : 8,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  // Show generated avatar
+                  Container(
+                    width: 120,
+                    height: 120,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: colors[0].withValues(alpha: 0.3),
+                          blurRadius: _isHovered ? 20 : 8,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: AvatarGeneratorService.generateAvatarPreview(
+                      initials: initials,
+                      style: profileState.selectedAvatarStyle ?? AvatarStyle.gradient,
+                      colors: colors,
+                      size: 120,
                     ),
                   ),
-                ),
                 // Overlay on Hover
                 if (_isHovered)
                   Positioned.fill(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.black.withValues(alpha: 0.3),
-                      ),
-                      child: Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            GestureDetector(
-                              onTap: widget.onUpload,
-                              child: Semantics(
+                    child: GestureDetector(
+                      onTap: _showAvatarPicker,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.black.withValues(alpha: 0.3),
+                        ),
+                        child: Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Semantics(
                                 button: true,
-                                label: 'Upload profile photo',
+                                label: 'Edit profile avatar',
                                 child: Container(
                                   padding: const EdgeInsets.all(8),
                                   decoration: BoxDecoration(
@@ -143,34 +169,22 @@ class _ProfileAvatarWidgetState extends State<ProfileAvatarWidget>
                                     color: Colors.white.withValues(alpha: 0.9),
                                   ),
                                   child: const Icon(
-                                    Icons.camera_alt_rounded,
+                                    Icons.edit_rounded,
                                     color: Colors.black,
                                     size: 20,
                                   ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(height: 8),
-                            GestureDetector(
-                              onTap: widget.onRegenerate,
-                              child: Semantics(
-                                button: true,
-                                label: 'Regenerate avatar color',
-                                child: Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: Colors.white.withValues(alpha: 0.9),
-                                  ),
-                                  child: const Icon(
-                                    Icons.refresh_rounded,
-                                    color: Colors.black,
-                                    size: 20,
-                                  ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Change Avatar',
+                                style: AppTextStyles.caption(isDark).copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ),

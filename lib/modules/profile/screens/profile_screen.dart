@@ -42,10 +42,8 @@ class ProfileScreen extends ConsumerWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
         child: Column(
           children: [
-            ProfileAvatarWidget(
+            const ProfileAvatarWidget(
               name: 'You',
-              onUpload: () {},
-              onRegenerate: () {},
             ),
             const SizedBox(height: 20),
             ProfileInfoWidget(
@@ -85,10 +83,8 @@ class ProfileScreen extends ConsumerWidget {
             constraints: const BoxConstraints(maxWidth: 700),
             child: Column(
               children: [
-                ProfileAvatarWidget(
+                const ProfileAvatarWidget(
                   name: 'You',
-                  onUpload: () {},
-                  onRegenerate: () {},
                 ),
                 const SizedBox(height: 28),
                 ProfileInfoWidget(
@@ -131,10 +127,8 @@ class ProfileScreen extends ConsumerWidget {
             child: Column(
               children: [
                 // Avatar (centered)
-                ProfileAvatarWidget(
+                const ProfileAvatarWidget(
                   name: 'You',
-                  onUpload: () {},
-                  onRegenerate: () {},
                 ),
                 const SizedBox(height: 40),
                 // Stats Cards (3 columns, full width)
