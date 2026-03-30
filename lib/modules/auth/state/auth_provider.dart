@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../services/auth_api_service.dart';
 
 /// Auth state enum
 enum AuthState { initial, loading, success, error }
@@ -63,22 +64,35 @@ class AuthNotifier extends Notifier<AuthData> {
         throw Exception('Password must be at least 8 characters');
       }
 
-      // TODO: Implement actual registration API call
-      await Future.delayed(const Duration(seconds: 2));
+      if (phone.length != 10) {
+        throw Exception('Please enter a valid 10-digit phone number');
+      }
 
-      state = state.copyWith(
-        state: AuthState.success,
-        successMessage: 'Registration successful',
+      // Call backend API to register
+      final result = await AuthApiService.register(
+        phoneNumber: phone,
+        name: fullName,
+        email: email,
       );
+
+      if (result['success'] == true) {
+        state = state.copyWith(
+          state: AuthState.success,
+          successMessage: 'Registration successful. Please verify your OTP.',
+        );
+      } else {
+        throw Exception(result['message'] ?? 'Registration failed');
+      }
     } catch (e) {
       state = state.copyWith(
         state: AuthState.error,
-        errorMessage: e.toString(),
+        errorMessage: e.toString().replaceFirst('Exception: ', ''),
       );
     }
   }
 
-  /// Login user with email and password
+  /// Login user with phone number (simple login - no password)
+  /// Backend checks if user exists and returns tokens
   Future<void> login({
     required String email,
     required String password,
@@ -86,26 +100,37 @@ class AuthNotifier extends Notifier<AuthData> {
     state = state.copyWith(state: AuthState.loading);
 
     try {
-      // Validate inputs
-      if (email.isEmpty || password.isEmpty) {
-        throw Exception('Email and password are required');
+      // For now, we use the "email" field as phone number for backend compatibility
+      // TODO: Refactor to use phone field directly
+      final phoneNumber = email.isEmpty ? password : email;
+
+      if (phoneNumber.isEmpty) {
+        throw Exception('Phone number is required');
       }
 
-      if (!email.contains('@')) {
-        throw Exception('Invalid email format');
+      if (phoneNumber.length != 10 && !phoneNumber.startsWith('+91')) {
+        throw Exception('Please enter a valid 10-digit phone number');
       }
 
-      // TODO: Implement actual login API call
-      await Future.delayed(const Duration(seconds: 2));
-
-      state = state.copyWith(
-        state: AuthState.success,
-        successMessage: 'Login successful',
+      // Call backend API to login
+      final result = await AuthApiService.simpleLogin(
+        phoneNumber: phoneNumber,
       );
+
+      if (result['success'] == true && result['userExists'] == true) {
+        state = state.copyWith(
+          state: AuthState.success,
+          successMessage: 'Login successful',
+        );
+      } else if (result['userExists'] == false) {
+        throw Exception('User not found. Please register first.');
+      } else {
+        throw Exception(result['message'] ?? 'Login failed');
+      }
     } catch (e) {
       state = state.copyWith(
         state: AuthState.error,
-        errorMessage: e.toString(),
+        errorMessage: e.toString().replaceFirst('Exception: ', ''),
       );
     }
   }
@@ -133,6 +158,8 @@ class AuthNotifier extends Notifier<AuthData> {
       }
 
       // TODO: Implement actual password reset API call
+      // Expected endpoint: POST /auth/reset-password
+      // Params: { email, resetCode, newPassword }
       await Future.delayed(const Duration(seconds: 2));
 
       state = state.copyWith(
@@ -142,7 +169,7 @@ class AuthNotifier extends Notifier<AuthData> {
     } catch (e) {
       state = state.copyWith(
         state: AuthState.error,
-        errorMessage: e.toString(),
+        errorMessage: e.toString().replaceFirst('Exception: ', ''),
       );
     }
   }
