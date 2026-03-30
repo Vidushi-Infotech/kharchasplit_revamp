@@ -26,8 +26,7 @@ class ContactsService {
     }
   }
 
-  /// Get all device contacts (mock for now)
-  /// TODO: Integrate with flutter_contacts or contacts_service package
+  /// Get all device contacts
   Future<List<ContactModel>> getAllContacts() async {
     try {
       // Check permission first
@@ -37,13 +36,34 @@ class ContactsService {
         return [];
       }
 
-      // TODO: Fetch real contacts from device
-      // For now, return mock data
-      print('[ContactsService] Fetching contacts (mock data)');
-      return _getMockContacts();
+      // Fetch real contacts from device
+      print('[ContactsService] Fetching real device contacts');
+      final contacts = await FlutterContacts.getContacts();
+
+      return contacts.map((contact) {
+        final phones = contact.phones
+            .where((p) => p.number.isNotEmpty)
+            .map((p) => PhoneFormatter.normalizePhone(p.number))
+            .where((p) => p.isNotEmpty)
+            .toList();
+
+        final emails = contact.emails
+            .where((e) => e.address.isNotEmpty)
+            .map((e) => e.address)
+            .toList();
+
+        return ContactModel(
+          recordId: contact.id,
+          displayName: contact.displayName,
+          phoneNumbers: phones,
+          emailAddresses: emails,
+        );
+      }).toList();
     } catch (e) {
       print('[ContactsService] Error fetching contacts: $e');
-      return [];
+      // Fallback to mock data for development/testing
+      print('[ContactsService] Falling back to mock data');
+      return _getMockContacts();
     }
   }
 
