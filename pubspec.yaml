@@ -42,6 +42,9 @@ dependencies:
   # File & Image Handling
   image_picker: ^1.1.2
 
+  # Permissions & Contacts
+  flutter_contacts: ^1.1.1
+
   # Local Storage
   shared_preferences: ^2.2.3
 
