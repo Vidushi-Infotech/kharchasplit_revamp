@@ -1,33 +1,81 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../components/buttons/primary_button.dart';
 import '../../../components/inputs/app_text_field.dart';
+import '../state/auth_provider.dart';
 
 /// Forgot password screen with 2-step flow
-class ForgotPasswordScreen extends StatefulWidget {
+class ForgotPasswordScreen extends ConsumerStatefulWidget {
   const ForgotPasswordScreen({Key? key}) : super(key: key);
 
   @override
-  State<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
+  ConsumerState<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
 }
 
-class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
+class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
     with SingleTickerProviderStateMixin {
   final _emailController = TextEditingController();
+  final _codeController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
   bool _step2 = false;
+  bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
   int _resendCountdown = 0;
 
   @override
   void dispose() {
     _emailController.dispose();
+    _codeController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
   void _handleSendReset() {
+    if (_emailController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter your email')),
+      );
+      return;
+    }
+    // In real implementation, this would verify email on backend
     setState(() => _step2 = true);
     _startResendCountdown();
+  }
+
+  void _handleResetPassword() async {
+    if (_codeController.text.isEmpty ||
+        _passwordController.text.isEmpty ||
+        _confirmPasswordController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('All fields are required')),
+      );
+      return;
+    }
+
+    if (_passwordController.text != _confirmPasswordController.text) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Passwords do not match')),
+      );
+      return;
+    }
+
+    await ref.read(authProvider.notifier).resetPassword(
+      email: _emailController.text,
+      code: _codeController.text,
+      newPassword: _passwordController.text,
+    );
+
+    if (mounted && ref.read(authProvider).state == AuthState.success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Password reset successful')),
+      );
+      context.go('/login');
+    }
   }
 
   void _startResendCountdown() {
@@ -205,66 +253,117 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
   }
 
   Widget _buildStep2(bool isDark) {
+    final authState = ref.watch(authProvider);
+
     return Column(
       key: const ValueKey('step2'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Success icon
+        // Icon
         Center(
           child: Container(
             width: 100,
             height: 100,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: AppColors.greenLight.withValues(alpha: 0.1),
+              color: AppColors.tealDark.withValues(alpha: 0.1),
             ),
             child: Icon(
-              Icons.check_circle_rounded,
+              Icons.vpn_key_rounded,
               size: 50,
-              color: AppColors.greenLight,
+              color: AppColors.tealDark,
             ),
           ),
         ),
         const SizedBox(height: 24),
         Center(
-          child: Text('Check Your Email', style: AppTextStyles.headline2(isDark)),
+          child: Text(
+            'Create New Password',
+            style: AppTextStyles.headline2(isDark),
+          ),
         ),
         const SizedBox(height: 8),
         Center(
           child: Text(
-            'Reset link sent to ${_emailController.text}',
+            'Enter the code from your email',
             textAlign: TextAlign.center,
             style: AppTextStyles.body2(isDark),
           ),
         ),
         const SizedBox(height: 32),
-        if (_resendCountdown > 0)
-          Center(
+
+        // Reset Code
+        AppTextField(
+          label: 'Reset Code',
+          controller: _codeController,
+          keyboardType: TextInputType.text,
+          prefixIcon: Icons.mail_outline_rounded,
+          hint: '6-digit code',
+        ),
+        const SizedBox(height: 16),
+
+        // New Password
+        AppTextField(
+          label: 'New Password',
+          controller: _passwordController,
+          obscureText: _obscurePassword,
+          prefixIcon: Icons.lock_rounded,
+          suffixIcon: _obscurePassword
+              ? Icons.visibility_off_rounded
+              : Icons.visibility_rounded,
+          onSuffixIconPressed: () {
+            setState(() => _obscurePassword = !_obscurePassword);
+          },
+        ),
+        const SizedBox(height: 16),
+
+        // Confirm Password
+        AppTextField(
+          label: 'Confirm Password',
+          controller: _confirmPasswordController,
+          obscureText: _obscureConfirmPassword,
+          prefixIcon: Icons.lock_rounded,
+          suffixIcon: _obscureConfirmPassword
+              ? Icons.visibility_off_rounded
+              : Icons.visibility_rounded,
+          onSuffixIconPressed: () {
+            setState(() => _obscureConfirmPassword = !_obscureConfirmPassword);
+          },
+        ),
+        const SizedBox(height: 24),
+
+        // Error message
+        if (authState.state == AuthState.error)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16),
             child: Text(
-              'Resend in $_resendCountdown seconds',
-              style: AppTextStyles.caption(isDark),
-            ),
-          )
-        else
-          Center(
-            child: TextButton(
-              onPressed: () {
-                _handleSendReset();
-              },
-              child: Text(
-                'Resend Email',
-                style: AppTextStyles.body2(isDark).copyWith(
-                  color: AppColors.tealDark,
-                ),
-              ),
+              authState.errorMessage ?? 'An error occurred',
+              style: AppTextStyles.error(isDark),
+              textAlign: TextAlign.center,
             ),
           ),
-        const SizedBox(height: 24),
+
+        // Reset button
         SizedBox(
           width: double.infinity,
           child: PrimaryButton(
-            label: 'Back to Login',
+            label: 'Reset Password',
+            onPressed: _handleResetPassword,
+            isLoading: authState.state == AuthState.loading,
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // Back to login
+        Center(
+          child: TextButton(
             onPressed: () => context.go('/login'),
+            child: Text(
+              'Back to Login',
+              style: AppTextStyles.body2(isDark).copyWith(
+                color: AppColors.tealDark,
+              ),
+            ),
           ),
         ),
       ],

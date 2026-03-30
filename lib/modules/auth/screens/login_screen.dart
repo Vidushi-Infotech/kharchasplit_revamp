@@ -129,8 +129,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         Semantics(
           label: 'Social login options - Google and Facebook buttons',
           child: SocialAuthButtons(
-            onGooglePressed: () {},
-            onFacebookPressed: () {},
+            onGooglePressed: () async {
+              await ref.read(authProvider.notifier).signInWithGoogle();
+              if (mounted && ref.read(authProvider).state == AuthState.success) {
+                context.go('/home/dashboard');
+              }
+            },
+            onFacebookPressed: () async {
+              await ref.read(authProvider.notifier).signInWithFacebook();
+              if (mounted && ref.read(authProvider).state == AuthState.success) {
+                context.go('/home/dashboard');
+              }
+            },
             isLoading: authState.state == AuthState.loading,
           ),
         ),
@@ -177,6 +187,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
           ),
         ),
+        const SizedBox(height: 24),
+
+        // Error message
+        if (authState.state == AuthState.error)
+          Semantics(
+            label: 'Error message - login failed',
+            enabled: true,
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Text(
+                authState.errorMessage ?? 'An error occurred',
+                style: AppTextStyles.error(isDark),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+
         const SizedBox(height: 28),
         Semantics(
           button: true,
@@ -185,7 +212,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             width: double.infinity,
             child: PrimaryButton(
               label: 'Login',
-              onPressed: () => context.go('/home/dashboard'),
+              onPressed: () async {
+                await ref.read(authProvider.notifier).login(
+                  email: _emailController.text,
+                  password: _passwordController.text,
+                );
+                if (mounted && ref.read(authProvider).state == AuthState.success) {
+                  context.go('/home/dashboard');
+                }
+              },
               isLoading: authState.state == AuthState.loading,
             ),
           ),

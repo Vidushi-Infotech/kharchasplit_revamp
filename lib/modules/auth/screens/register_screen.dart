@@ -186,8 +186,18 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           Semantics(
             label: 'Social login options - Google and Facebook buttons',
             child: SocialAuthButtons(
-              onGooglePressed: () {},
-              onFacebookPressed: () {},
+              onGooglePressed: () async {
+                await ref.read(authProvider.notifier).signInWithGoogle();
+                if (mounted && ref.read(authProvider).state == AuthState.success) {
+                  context.go('/home/dashboard');
+                }
+              },
+              onFacebookPressed: () async {
+                await ref.read(authProvider.notifier).signInWithFacebook();
+                if (mounted && ref.read(authProvider).state == AuthState.success) {
+                  context.go('/home/dashboard');
+                }
+              },
               isLoading: authState.state == AuthState.loading,
             ),
           ),

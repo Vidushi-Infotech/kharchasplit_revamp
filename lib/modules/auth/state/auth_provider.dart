@@ -78,6 +78,115 @@ class AuthNotifier extends Notifier<AuthData> {
     }
   }
 
+  /// Login user with email and password
+  Future<void> login({
+    required String email,
+    required String password,
+  }) async {
+    state = state.copyWith(state: AuthState.loading);
+
+    try {
+      // Validate inputs
+      if (email.isEmpty || password.isEmpty) {
+        throw Exception('Email and password are required');
+      }
+
+      if (!email.contains('@')) {
+        throw Exception('Invalid email format');
+      }
+
+      // TODO: Implement actual login API call
+      await Future.delayed(const Duration(seconds: 2));
+
+      state = state.copyWith(
+        state: AuthState.success,
+        successMessage: 'Login successful',
+      );
+    } catch (e) {
+      state = state.copyWith(
+        state: AuthState.error,
+        errorMessage: e.toString(),
+      );
+    }
+  }
+
+  /// Reset password with email and code
+  Future<void> resetPassword({
+    required String email,
+    required String code,
+    required String newPassword,
+  }) async {
+    state = state.copyWith(state: AuthState.loading);
+
+    try {
+      // Validate inputs
+      if (email.isEmpty || code.isEmpty || newPassword.isEmpty) {
+        throw Exception('All fields are required');
+      }
+
+      if (!email.contains('@')) {
+        throw Exception('Invalid email format');
+      }
+
+      if (newPassword.length < 8) {
+        throw Exception('Password must be at least 8 characters');
+      }
+
+      // TODO: Implement actual password reset API call
+      await Future.delayed(const Duration(seconds: 2));
+
+      state = state.copyWith(
+        state: AuthState.success,
+        successMessage: 'Password reset successful',
+      );
+    } catch (e) {
+      state = state.copyWith(
+        state: AuthState.error,
+        errorMessage: e.toString(),
+      );
+    }
+  }
+
+  /// Sign in with Google
+  Future<void> signInWithGoogle() async {
+    state = state.copyWith(state: AuthState.loading);
+
+    try {
+      // TODO: Implement actual Google sign-in with google_sign_in package
+      await Future.delayed(const Duration(seconds: 2));
+
+      state = state.copyWith(
+        state: AuthState.success,
+        successMessage: 'Google sign-in successful',
+      );
+    } catch (e) {
+      state = state.copyWith(
+        state: AuthState.error,
+        errorMessage: 'Google sign-in failed: ${e.toString()}',
+      );
+    }
+  }
+
+  /// Sign in with Facebook
+  Future<void> signInWithFacebook() async {
+    state = state.copyWith(state: AuthState.loading);
+
+    try {
+      // TODO: Implement actual Facebook sign-in with flutter_facebook_auth package
+      await Future.delayed(const Duration(seconds: 2));
+
+      state = state.copyWith(
+        state: AuthState.success,
+        successMessage: 'Facebook sign-in successful',
+      );
+    } catch (e) {
+      state = state.copyWith(
+        state: AuthState.error,
+        errorMessage: 'Facebook sign-in failed: ${e.toString()}',
+      );
+    }
+  }
+
   /// Reset auth state
   void reset() {
     state = const AuthData();
