@@ -77,8 +77,8 @@ class MobileShell extends ConsumerWidget {
             label: 'Create',
           ),
           const BottomNavigationBarItem(
-            icon: Icon(Icons.people_alt_rounded),
-            label: 'Friends',
+            icon: Icon(Icons.account_balance_wallet_rounded),
+            label: 'Personal',
           ),
           BottomNavigationBarItem(
             icon: Badge(
@@ -106,7 +106,7 @@ class MobileShell extends ConsumerWidget {
         context.push('/home/create-group');
         break;
       case 3:
-        context.go('/home/friends');
+        context.go('/home/personal');
         break;
       case 4:
         context.go('/home/activity');

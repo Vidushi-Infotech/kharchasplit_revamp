@@ -82,9 +82,9 @@ class TabletShell extends ConsumerWidget {
                 label: Text('Create'),
               ),
               const NavigationRailDestination(
-                icon: Icon(Icons.people_alt_rounded),
-                selectedIcon: Icon(Icons.people_alt_rounded),
-                label: Text('Friends'),
+                icon: Icon(Icons.account_balance_wallet_rounded),
+                selectedIcon: Icon(Icons.account_balance_wallet_rounded),
+                label: Text('Personal'),
               ),
               NavigationRailDestination(
                 icon: Badge(
@@ -120,7 +120,7 @@ class TabletShell extends ConsumerWidget {
         context.go('/add-expense');
         break;
       case 3:
-        context.go('/home/friends');
+        context.go('/home/personal');
         break;
       case 4:
         context.go('/home/activity');
