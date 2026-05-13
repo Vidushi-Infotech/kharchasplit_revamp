@@ -114,7 +114,7 @@ CREATE TABLE IF NOT EXISTS personal_expenses (
   amount DECIMAL(12, 2) NOT NULL,
   currency VARCHAR(10) DEFAULT 'INR',
   category VARCHAR(50),
-  expense_date DATE DEFAULT CURRENT_DATE,
+  expense_date TIMESTAMP DEFAULT NOW(),
   receipt_base64 TEXT,
   notes TEXT,
   is_deleted BOOLEAN DEFAULT FALSE,

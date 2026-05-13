@@ -18,6 +18,8 @@ import '../../modules/activity/screens/activity_screen.dart';
 import '../../modules/profile/screens/profile_screen.dart';
 import '../../modules/expenses/screens/add_expense_screen.dart';
 import '../../modules/expenses/screens/expense_detail_screen.dart';
+import '../../modules/personal_expenses/screens/personal_expenses_screen.dart';
+import '../../modules/personal_expenses/screens/add_personal_expense_screen.dart';
 import '../../modules/reports/screens/reports_screen.dart';
 import '../../modules/settlements/screens/settle_screen.dart';
 import '../../layouts/shell/mobile_shell.dart';
@@ -83,6 +85,12 @@ final appRouter = GoRouter(
           builder: (context, state) => const GroupsScreen(),
         ),
         GoRoute(
+          path: '/home/personal',
+          name: 'personal',
+          builder: (context, state) => const PersonalExpensesScreen(),
+        ),
+        // Friends route kept for deep links from group/expense screens.
+        GoRoute(
           path: '/home/friends',
           name: 'friends',
           builder: (context, state) => const FriendsScreen(),
@@ -124,6 +132,11 @@ final appRouter = GoRouter(
         final friendId = state.pathParameters['friendId']!;
         return FriendDetailScreen(friendId: friendId);
       },
+    ),
+    GoRoute(
+      path: '/home/personal/new',
+      name: 'add-personal-expense',
+      builder: (context, state) => const AddPersonalExpenseScreen(),
     ),
     GoRoute(
       path: '/home/profile',
