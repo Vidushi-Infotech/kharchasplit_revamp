@@ -3,195 +3,171 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../text/currency_text.dart';
 
-/// Hero balance card showing total balance and breakdown
+/// Compact hero balance card with a teal gradient and inline status.
 class BalanceCard extends StatelessWidget {
   final double totalBalance;
-  final double youAreOwed;
-  final double youOwe;
   final String currency;
   final VoidCallback? onTap;
-  final VoidCallback? onOwedTap;
-  final VoidCallback? onOweTap;
 
   const BalanceCard({
-    Key? key,
+    super.key,
     required this.totalBalance,
-    this.youAreOwed = 0,
-    this.youOwe = 0,
     this.currency = '₹',
     this.onTap,
-    this.onOwedTap,
-    this.onOweTap,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final status = _statusFor(totalBalance);
 
-    return GestureDetector(
-      onTap: onTap,
-      child: RepaintBoundary(
-        child: Container(
-          decoration: BoxDecoration(
-            color: AppColors.cardBg(isDark),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: AppColors.divider(isDark),
-              width: 1,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.divider(isDark).withValues(alpha: 0.1),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
+    return RepaintBoundary(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Ink(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  AppColors.tealLight,
+                  AppColors.tealDark,
+                ],
               ),
-            ],
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Label
-              Text(
-                'Overall Balance',
-                style: AppTextStyles.body2(isDark).copyWith(
-                  color: AppColors.textSecondary(isDark),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.tealDark.withValues(alpha: 0.22),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
                 ),
-              ),
-              const SizedBox(height: 12),
-              // Large balance amount with animation
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: CurrencyText(
-                      totalBalance,
-                      currency: currency,
-                      textStyle: TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary(isDark),
-                      ),
-                      animated: true,
-                      overrideColor: AppColors.textPrimary(isDark),
-                    ),
-                  ),
-                  // Status badge
-                  _buildStatusBadge(isDark),
-                ],
-              ),
-              const SizedBox(height: 20),
-              // Breakdown chips with proper gap
-              Row(
-                children: [
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: onOwedTap,
-                      child: _buildStatChip(
-                        isDark: isDark,
-                        icon: '✨',
-                        label: 'You are owed',
-                        amount: youAreOwed,
-                        color: AppColors.greenLight,
-                        currency: currency,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: onOweTap,
-                      child: _buildStatChip(
-                        isDark: isDark,
-                        icon: '💸',
-                        label: 'You owe',
-                        amount: youOwe,
-                        color: AppColors.warningOrange,
-                        currency: currency,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
+              ],
             ),
+            child: Stack(
+              children: [
+                const Positioned(
+                  top: -30,
+                  right: -20,
+                  child: _BackdropOrb(size: 120, opacity: 0.08),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 14,
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'OVERALL BALANCE',
+                              style: AppTextStyles.caption(false).copyWith(
+                                color: Colors.white.withValues(alpha: 0.78),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 1.3,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            CurrencyText(
+                              totalBalance,
+                              currency: currency,
+                              textStyle: const TextStyle(
+                                fontSize: 28,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                                letterSpacing: -0.5,
+                              ),
+                              animated: true,
+                              overrideColor: Colors.white,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      _StatusBadge(status: status),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildStatusBadge(bool isDark) {
-    final isPositive = totalBalance >= 0;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: isPositive
-            ? AppColors.greenLight.withValues(alpha: 0.15)
-            : AppColors.warningOrange.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(
-          color: isPositive ? AppColors.greenLight : AppColors.warningOrange,
-          width: 1,
-        ),
-      ),
-      child: Text(
-        isPositive ? 'You are owed' : 'You owe',
-        style: AppTextStyles.caption(isDark).copyWith(
-          color: isPositive ? AppColors.greenLight : AppColors.warningOrange,
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
+  _BalanceStatus _statusFor(double amount) {
+    if (amount > 0) return _BalanceStatus.owed;
+    if (amount < 0) return _BalanceStatus.owes;
+    return _BalanceStatus.settled;
   }
+}
 
-  Widget _buildStatChip({
-    required bool isDark,
-    required String icon,
-    required String label,
-    required double amount,
-    required Color color,
-    required String currency,
-  }) {
+enum _BalanceStatus { settled, owed, owes }
+
+class _StatusBadge extends StatelessWidget {
+  const _StatusBadge({required this.status});
+
+  final _BalanceStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final (IconData icon, String label) = switch (status) {
+      _BalanceStatus.settled => (Icons.check_circle_rounded, 'Settled'),
+      _BalanceStatus.owed => (Icons.trending_up_rounded, "You're owed"),
+      _BalanceStatus.owes => (Icons.trending_down_rounded, 'You owe'),
+    };
+
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: AppColors.surface(isDark),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: AppColors.divider(isDark),
-          width: 1,
-        ),
+        color: Colors.white.withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.28)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
+          Icon(icon, size: 13, color: Colors.white),
+          const SizedBox(width: 5),
           Text(
-            '$icon $label',
-            style: AppTextStyles.caption(isDark).copyWith(
-              color: AppColors.textSecondary(isDark),
+            label,
+            style: const TextStyle(
+              color: Colors.white,
               fontSize: 11,
-              fontWeight: FontWeight.w500,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.2,
             ),
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 6),
-          CurrencyText(
-            amount,
-            currency: currency,
-            textStyle: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary(isDark),
-            ),
-            overrideColor: AppColors.textPrimary(isDark),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _BackdropOrb extends StatelessWidget {
+  const _BackdropOrb({required this.size, required this.opacity});
+
+  final double size;
+  final double opacity;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.white.withValues(alpha: opacity),
+        ),
       ),
     );
   }

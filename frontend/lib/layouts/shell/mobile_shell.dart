@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../core/theme/app_colors.dart';
+import 'floating_bottom_bar.dart';
 import 'shell_state.dart';
 
 /// Mobile shell with BottomNavigationBar
@@ -16,7 +16,6 @@ class MobileShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final selectedIndex = ref.watch(selectedNavIndexProvider);
     final unreadCount = ref.watch(unreadActivityCountProvider);
 
@@ -35,61 +34,39 @@ class MobileShell extends ConsumerWidget {
         }
       },
       child: Scaffold(
-      body: child,
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: selectedIndex,
-        onTap: (index) {
-          ref.read(selectedNavIndexProvider.notifier).state = index;
-          _navigateToTab(context, index);
-        },
-        type: BottomNavigationBarType.fixed,
-        backgroundColor: AppColors.surface(isDark),
-        selectedItemColor: AppColors.brand,
-        unselectedItemColor: AppColors.textSecondary(isDark),
-        items: [
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.home_rounded),
-            label: 'Home',
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.group_rounded),
-            label: 'Groups',
-          ),
-          BottomNavigationBarItem(
-            icon: Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  colors: [AppColors.brand, AppColors.tealDark],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.brand.withValues(alpha: 0.4),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: const Icon(Icons.add_rounded, color: Colors.white),
+        extendBody: true,
+        body: child,
+        bottomNavigationBar: FloatingBottomBar(
+          selectedIndex: selectedIndex,
+          fabIndex: 2,
+          onItemSelected: (index) {
+            ref.read(selectedNavIndexProvider.notifier).state = index;
+            _navigateToTab(context, index);
+          },
+          items: [
+            const FloatingNavItem(
+              icon: Icons.home_rounded,
+              label: 'Home',
             ),
-            label: 'Create',
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.account_balance_wallet_rounded),
-            label: 'Personal',
-          ),
-          BottomNavigationBarItem(
-            icon: Badge(
-              isLabelVisible: unreadCount > 0,
-              label: Text('$unreadCount'),
-              child: const Icon(Icons.notifications_rounded),
+            const FloatingNavItem(
+              icon: Icons.group_rounded,
+              label: 'Groups',
             ),
-            label: 'Activity',
-          ),
-        ],
-      ),
+            const FloatingNavItem(
+              icon: Icons.add_rounded,
+              label: 'Create',
+            ),
+            const FloatingNavItem(
+              icon: Icons.account_balance_wallet_rounded,
+              label: 'Personal',
+            ),
+            FloatingNavItem(
+              icon: Icons.notifications_rounded,
+              label: 'Activity',
+              badgeCount: unreadCount,
+            ),
+          ],
+        ),
       ),
     );
   }
