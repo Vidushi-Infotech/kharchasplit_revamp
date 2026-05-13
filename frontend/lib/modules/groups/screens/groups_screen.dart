@@ -7,117 +7,671 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../models/group_model.dart';
 import '../state/groups_provider.dart';
+import '../widgets/group_grid_card.dart';
 
-class GroupsScreen extends ConsumerWidget {
+enum _BalanceFilter { all, owed, owe, settled }
+
+class GroupsScreen extends ConsumerStatefulWidget {
   const GroupsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<GroupsScreen> createState() => _GroupsScreenState();
+}
+
+class _GroupsScreenState extends ConsumerState<GroupsScreen> {
+  final _searchController = TextEditingController();
+  final _searchFocus = FocusNode();
+  _BalanceFilter _filter = _BalanceFilter.all;
+  String _query = '';
+  bool _isSearching = false;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _searchFocus.dispose();
+    super.dispose();
+  }
+
+  void _openSearch() {
+    setState(() => _isSearching = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _searchFocus.requestFocus();
+    });
+  }
+
+  void _closeSearch() {
+    _searchController.clear();
+    _searchFocus.unfocus();
+    setState(() {
+      _isSearching = false;
+      _query = '';
+    });
+  }
+
+  List<GroupModel> _applyFilters(List<GroupModel> groups) {
+    return groups.where((g) {
+      final matchesQuery = _query.isEmpty ||
+          g.name.toLowerCase().contains(_query.toLowerCase());
+      final matchesFilter = switch (_filter) {
+        _BalanceFilter.all => true,
+        _BalanceFilter.owed => g.myBalance > 0,
+        _BalanceFilter.owe => g.myBalance < 0,
+        _BalanceFilter.settled => g.myBalance == 0,
+      };
+      return matchesQuery && matchesFilter;
+    }).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final screenWidth = MediaQuery.of(context).size.width;
     final groupsAsync = ref.watch(groupsProvider);
 
     return Scaffold(
       backgroundColor: AppColors.background(isDark),
-      appBar: AppBar(
-        title: const Text('Groups'),
-        elevation: 0,
-        backgroundColor: AppColors.surface(isDark),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded),
-            onPressed: () => ref.read(groupsProvider.notifier).refresh(),
-            tooltip: 'Refresh',
+      body: SafeArea(
+        bottom: false,
+        child: groupsAsync.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (err, _) => _ErrorState(
+            message: err.toString(),
+            onRetry: () => ref.read(groupsProvider.notifier).refresh(),
+          ),
+          data: (allGroups) {
+            final visible = _applyFilters(allGroups);
+            return RefreshIndicator(
+              onRefresh: () => ref.read(groupsProvider.notifier).refresh(),
+              child: CustomScrollView(
+                slivers: [
+                  SliverPersistentHeader(
+                    pinned: true,
+                    delegate: _CollapsibleHeader(
+                      isDark: isDark,
+                      totalCount: allGroups.length,
+                      filter: _filter,
+                      onFilter: (f) => setState(() => _filter = f),
+                      onCreate: () => context.push('/home/create-group'),
+                      isSearching: _isSearching,
+                      query: _query,
+                      searchController: _searchController,
+                      searchFocus: _searchFocus,
+                      onSearchTap: _openSearch,
+                      onSearchClose: _closeSearch,
+                      onSearchChanged: (q) => setState(() => _query = q),
+                    ),
+                  ),
+                  if (allGroups.isEmpty)
+                    SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: EmptyStateWidget.noGroups(
+                        onCreateGroup: () =>
+                            context.push('/home/create-group'),
+                      ),
+                    )
+                  else if (visible.isEmpty)
+                    SliverToBoxAdapter(
+                      child: _EmptyResultsCard(
+                        isDark: isDark,
+                        query: _query,
+                      ),
+                    )
+                  else
+                    SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 110),
+                      sliver: SliverGrid.builder(
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          mainAxisSpacing: 12,
+                          crossAxisSpacing: 12,
+                          childAspectRatio: 0.95,
+                        ),
+                        itemCount: visible.length,
+                        itemBuilder: (context, index) {
+                          final group = visible[index];
+                          return GroupGridCard(
+                            group: group,
+                            onTap: () =>
+                                context.push('/home/groups/${group.id}'),
+                          );
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _CollapsibleHeader extends SliverPersistentHeaderDelegate {
+  _CollapsibleHeader({
+    required this.isDark,
+    required this.totalCount,
+    required this.filter,
+    required this.onFilter,
+    required this.onCreate,
+    required this.isSearching,
+    required this.query,
+    required this.searchController,
+    required this.searchFocus,
+    required this.onSearchTap,
+    required this.onSearchClose,
+    required this.onSearchChanged,
+  });
+
+  final bool isDark;
+  final int totalCount;
+  final _BalanceFilter filter;
+  final ValueChanged<_BalanceFilter> onFilter;
+  final VoidCallback onCreate;
+  final bool isSearching;
+  final String query;
+  final TextEditingController searchController;
+  final FocusNode searchFocus;
+  final VoidCallback onSearchTap;
+  final VoidCallback onSearchClose;
+  final ValueChanged<String> onSearchChanged;
+
+  static const double _expandedExtent = 110;
+  static const double _collapsedExtent = 56;
+  static const double _filterStripHeight = 42;
+
+  @override
+  double get minExtent => _collapsedExtent + _filterStripHeight;
+  @override
+  double get maxExtent => _expandedExtent + _filterStripHeight;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    final range = _expandedExtent - _collapsedExtent;
+    final t = (shrinkOffset / range).clamp(0.0, 1.0);
+
+    return Material(
+      color: AppColors.background(isDark),
+      child: Column(
+        children: [
+          Expanded(
+            child: isSearching
+                ? _SearchBar(
+                    controller: searchController,
+                    focusNode: searchFocus,
+                    isDark: isDark,
+                    onChanged: onSearchChanged,
+                    onClose: onSearchClose,
+                  )
+                : _TitleRow(
+                    isDark: isDark,
+                    totalCount: totalCount,
+                    onSearch: onSearchTap,
+                    onCreate: onCreate,
+                    collapseProgress: t,
+                  ),
+          ),
+          SizedBox(
+            height: _filterStripHeight,
+            child: _FilterRow(
+              current: filter,
+              isDark: isDark,
+              onSelected: onFilter,
+            ),
+          ),
+          Container(
+            height: 1,
+            color: AppColors.divider(isDark).withValues(alpha: t * 0.8),
           ),
         ],
       ),
-      body: groupsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => _ErrorState(
-          message: err.toString(),
-          onRetry: () => ref.read(groupsProvider.notifier).refresh(),
+    );
+  }
+
+  @override
+  bool shouldRebuild(_CollapsibleHeader oldDelegate) {
+    return oldDelegate.isDark != isDark ||
+        oldDelegate.totalCount != totalCount ||
+        oldDelegate.filter != filter ||
+        oldDelegate.isSearching != isSearching ||
+        oldDelegate.query != query;
+  }
+}
+
+class _TitleRow extends StatelessWidget {
+  const _TitleRow({
+    required this.isDark,
+    required this.totalCount,
+    required this.onSearch,
+    required this.onCreate,
+    required this.collapseProgress,
+  });
+
+  final bool isDark;
+  final int totalCount;
+  final VoidCallback onSearch;
+  final VoidCallback onCreate;
+  final double collapseProgress;
+
+  @override
+  Widget build(BuildContext context) {
+    // Cross-fade between expanded and collapsed layouts. They share the same
+    // available height (animated by SliverPersistentHeader) so we just toggle
+    // opacity to morph the visible content.
+    final expandedOpacity = (1 - collapseProgress * 1.6).clamp(0.0, 1.0);
+    final collapsedOpacity =
+        ((collapseProgress - 0.4) / 0.6).clamp(0.0, 1.0);
+
+    return ClipRect(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 12, 4),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            OverflowBox(
+              alignment: Alignment.bottomLeft,
+              minHeight: 0,
+              maxHeight: double.infinity,
+              child: Opacity(
+                opacity: expandedOpacity,
+                child: IgnorePointer(
+                  ignoring: collapseProgress > 0.5,
+                  child: _ExpandedTitle(
+                    isDark: isDark,
+                    totalCount: totalCount,
+                    onSearch: onSearch,
+                    onCreate: onCreate,
+                  ),
+                ),
+              ),
+            ),
+            OverflowBox(
+              alignment: Alignment.bottomLeft,
+              minHeight: 0,
+              maxHeight: double.infinity,
+              child: Opacity(
+                opacity: collapsedOpacity,
+                child: IgnorePointer(
+                  ignoring: collapseProgress < 0.5,
+                  child: _CollapsedTitle(
+                    isDark: isDark,
+                    totalCount: totalCount,
+                    onSearch: onSearch,
+                    onCreate: onCreate,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
-        data: (groups) {
-          if (groups.isEmpty) {
-            return EmptyStateWidget.noGroups(
-              onCreateGroup: () => context.push('/home/create-group'),
-            );
-          }
-          if (screenWidth < 600) return _CompactList(groups: groups);
-          if (screenWidth < 1100) return _Grid(groups: groups, columns: 2);
-          return _Grid(groups: groups, columns: 3, maxWidth: 1200);
-        },
       ),
     );
   }
 }
 
-class _CompactList extends StatelessWidget {
-  const _CompactList({required this.groups});
-  final List<GroupModel> groups;
+class _ExpandedTitle extends StatelessWidget {
+  const _ExpandedTitle({
+    required this.isDark,
+    required this.totalCount,
+    required this.onSearch,
+    required this.onCreate,
+  });
+
+  final bool isDark;
+  final int totalCount;
+  final VoidCallback onSearch;
+  final VoidCallback onCreate;
 
   @override
   Widget build(BuildContext context) {
-    return ListView.separated(
-      padding: const EdgeInsets.all(16),
-      itemCount: groups.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 12),
-      itemBuilder: (context, index) {
-        final group = groups[index];
-        return Semantics(
-          button: true,
-          label: 'Group - ${group.name}',
-          child: GroupCard(
-            group: group,
-            onTap: () => context.push('/home/groups/${group.id}'),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'GROUPS',
+                style: AppTextStyles.caption(isDark).copyWith(
+                  color: AppColors.textSecondary(isDark),
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 1.5,
+                  fontSize: 11,
+                ),
+              ),
+            ),
+            _IconAction(
+              icon: Icons.search_rounded,
+              isDark: isDark,
+              onTap: onSearch,
+              label: 'Search groups',
+            ),
+            const SizedBox(width: 4),
+            _IconAction(
+              icon: Icons.add_rounded,
+              isDark: isDark,
+              onTap: onCreate,
+              label: 'Create group',
+            ),
+          ],
+        ),
+        const SizedBox(height: 2),
+        Text(
+          totalCount == 0
+              ? 'No groups yet'
+              : '$totalCount ${totalCount == 1 ? 'group' : 'groups'}',
+          style: AppTextStyles.headline2(isDark).copyWith(
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.4,
+            height: 1.1,
+            fontSize: 28,
           ),
-        );
-      },
+        ),
+      ],
     );
   }
 }
 
-class _Grid extends StatelessWidget {
-  const _Grid({
-    required this.groups,
-    required this.columns,
-    this.maxWidth = 800,
+class _CollapsedTitle extends StatelessWidget {
+  const _CollapsedTitle({
+    required this.isDark,
+    required this.totalCount,
+    required this.onSearch,
+    required this.onCreate,
   });
 
-  final List<GroupModel> groups;
-  final int columns;
-  final double maxWidth;
+  final bool isDark;
+  final int totalCount;
+  final VoidCallback onSearch;
+  final VoidCallback onCreate;
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: EdgeInsets.all(columns >= 3 ? 32 : 24),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: maxWidth),
-          child: GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: columns,
-              crossAxisSpacing: columns >= 3 ? 24 : 16,
-              mainAxisSpacing: columns >= 3 ? 24 : 16,
-              childAspectRatio: 1.2,
-            ),
-            itemCount: groups.length,
-            itemBuilder: (context, index) {
-              final group = groups[index];
-              return Semantics(
-                button: true,
-                label: 'Group - ${group.name}',
-                child: GroupCard(
-                  group: group,
-                  onTap: () => context.push('/home/groups/${group.id}'),
+    return Align(
+      alignment: Alignment.bottomLeft,
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                totalCount == 0 ? 'Groups' : 'Groups · $totalCount',
+                style: AppTextStyles.body1(isDark).copyWith(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 16,
+                  letterSpacing: -0.2,
                 ),
-              );
-            },
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            _IconAction(
+              icon: Icons.search_rounded,
+              isDark: isDark,
+              onTap: onSearch,
+              label: 'Search groups',
+              compact: true,
+            ),
+            const SizedBox(width: 4),
+            _IconAction(
+              icon: Icons.add_rounded,
+              isDark: isDark,
+              onTap: onCreate,
+              label: 'Create group',
+              compact: true,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _IconAction extends StatelessWidget {
+  const _IconAction({
+    required this.icon,
+    required this.isDark,
+    required this.onTap,
+    required this.label,
+    this.compact = false,
+  });
+
+  final IconData icon;
+  final bool isDark;
+  final VoidCallback onTap;
+  final String label;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final size = compact ? 34.0 : 38.0;
+    return Semantics(
+      button: true,
+      label: label,
+      child: Material(
+        color: Colors.transparent,
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          customBorder: const CircleBorder(),
+          child: Container(
+            width: size,
+            height: size,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppColors.cardBg(isDark),
+              border: Border.all(color: AppColors.divider(isDark)),
+            ),
+            child: Icon(
+              icon,
+              size: compact ? 17 : 18,
+              color: AppColors.textPrimary(isDark),
+            ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _SearchBar extends StatelessWidget {
+  const _SearchBar({
+    required this.controller,
+    required this.focusNode,
+    required this.isDark,
+    required this.onChanged,
+    required this.onClose,
+  });
+
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final bool isDark;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: onClose,
+            icon: const Icon(Icons.arrow_back_rounded, size: 20),
+            color: AppColors.textPrimary(isDark),
+            tooltip: 'Close search',
+          ),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              focusNode: focusNode,
+              onChanged: onChanged,
+              textInputAction: TextInputAction.search,
+              autofocus: false,
+              style: AppTextStyles.body1(isDark).copyWith(fontSize: 15),
+              decoration: InputDecoration(
+                isDense: true,
+                border: InputBorder.none,
+                hintText: 'Search groups',
+                hintStyle: AppTextStyles.body1(isDark).copyWith(
+                  color: AppColors.textSecondary(isDark),
+                  fontSize: 15,
+                ),
+                suffixIcon: controller.text.isEmpty
+                    ? null
+                    : IconButton(
+                        icon: const Icon(Icons.close_rounded, size: 18),
+                        color: AppColors.textSecondary(isDark),
+                        onPressed: () {
+                          controller.clear();
+                          onChanged('');
+                        },
+                      ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FilterRow extends StatelessWidget {
+  const _FilterRow({
+    required this.current,
+    required this.isDark,
+    required this.onSelected,
+  });
+
+  final _BalanceFilter current;
+  final bool isDark;
+  final ValueChanged<_BalanceFilter> onSelected;
+
+  static const _options = <(_BalanceFilter, String)>[
+    (_BalanceFilter.all, 'All'),
+    (_BalanceFilter.owed, 'Owed'),
+    (_BalanceFilter.owe, 'Owe'),
+    (_BalanceFilter.settled, 'Settled'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Row(
+        children: _options.map((opt) {
+          final (value, label) = opt;
+          final selected = current == value;
+          return Padding(
+            padding: const EdgeInsets.only(right: 18),
+            child: _FilterButton(
+              label: label,
+              isSelected: selected,
+              isDark: isDark,
+              onTap: () => onSelected(value),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
+class _FilterButton extends StatelessWidget {
+  const _FilterButton({
+    required this.label,
+    required this.isSelected,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool isSelected;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = isSelected
+        ? AppColors.textPrimary(isDark)
+        : AppColors.textSecondary(isDark);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(4),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: AppTextStyles.body2(isDark).copyWith(
+                color: fg,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                fontSize: 13,
+              ),
+            ),
+            const SizedBox(height: 4),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOutCubic,
+              height: 2,
+              width: isSelected ? 18 : 0,
+              decoration: BoxDecoration(
+                color: AppColors.tealDark,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyResultsCard extends StatelessWidget {
+  const _EmptyResultsCard({required this.isDark, required this.query});
+
+  final bool isDark;
+  final String query;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 32, 20, 110),
+      child: Column(
+        children: [
+          Icon(
+            Icons.search_off_rounded,
+            size: 36,
+            color: AppColors.textSecondary(isDark),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            query.isEmpty
+                ? 'No groups match this filter'
+                : 'No groups match "$query"',
+            style: AppTextStyles.body1(isDark).copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Try a different filter or search term',
+            style: AppTextStyles.caption(isDark).copyWith(
+              color: AppColors.textSecondary(isDark),
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
       ),
     );
   }
