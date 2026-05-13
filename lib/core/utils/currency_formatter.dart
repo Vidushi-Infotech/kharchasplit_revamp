@@ -48,7 +48,7 @@ class CurrencyFormatter {
     final chunks = <String>[];
 
     for (int i = 0; i < reversed.length; i++) {
-      if (i == 2 || (i > 2 && (i - 2) % 2 == 0)) {
+      if (i == 3 || (i > 3 && (i - 3) % 2 == 0)) {
         chunks.add(',');
       }
       chunks.add(reversed[i]);

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 
@@ -25,8 +26,9 @@ class _AmountInputWidgetState extends State<AmountInputWidget> {
   void initState() {
     super.initState();
     _controller = TextEditingController(
-      text: widget.amount > 0 ? widget.amount.toString() : '',
+      text: widget.amount > 0 ? widget.amount.toInt().toString() : '',
     );
+    _controller.addListener(_handleTextChanged);
     // Position cursor at end of text to prevent auto-selection
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _controller.selection = TextSelection.fromPosition(
@@ -35,12 +37,16 @@ class _AmountInputWidgetState extends State<AmountInputWidget> {
     });
   }
 
+  void _handleTextChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void didUpdateWidget(AmountInputWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
     // Update controller if amount changed externally (e.g., from invoice scan)
     if (oldWidget.amount != widget.amount && widget.amount > 0) {
-      _controller.text = widget.amount.toString();
+      _controller.text = widget.amount.toInt().toString();
       // Position cursor at end of text to prevent auto-selection
       _controller.selection = TextSelection.fromPosition(
         TextPosition(offset: _controller.text.length),
@@ -50,6 +56,7 @@ class _AmountInputWidgetState extends State<AmountInputWidget> {
 
   @override
   void dispose() {
+    _controller.removeListener(_handleTextChanged);
     _controller.dispose();
     super.dispose();
   }
@@ -78,8 +85,9 @@ class _AmountInputWidgetState extends State<AmountInputWidget> {
             Expanded(
               child: TextField(
                 controller: _controller,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
+                showCursor: _controller.text.isNotEmpty,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 48,
@@ -87,7 +95,7 @@ class _AmountInputWidgetState extends State<AmountInputWidget> {
                   color: AppColors.textPrimary(isDark),
                 ),
                 decoration: InputDecoration(
-                  hintText: '0.00',
+                  hintText: '0',
                   hintStyle: TextStyle(
                     fontSize: 48,
                     fontWeight: FontWeight.bold,

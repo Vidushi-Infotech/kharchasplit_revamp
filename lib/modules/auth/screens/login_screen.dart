@@ -1,31 +1,37 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_text_styles.dart';
+
 import '../../../components/buttons/primary_button.dart';
 import '../../../components/inputs/app_text_field.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_text_styles.dart';
 import '../state/auth_provider.dart';
-import '../widgets/social_auth_buttons.dart';
 
-/// Login screen with email and password
 class LoginScreen extends ConsumerStatefulWidget {
-  const LoginScreen({Key? key}) : super(key: key);
+  const LoginScreen({super.key});
 
   @override
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-  bool _obscurePassword = true;
+  final _formKey = GlobalKey<FormState>();
+  final _phoneController = TextEditingController();
 
   @override
   void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
+    _phoneController.dispose();
     super.dispose();
+  }
+
+  Future<void> _handleSendOtp() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    final phone = _phoneController.text.trim();
+    final ok = await ref.read(authProvider.notifier).requestLoginOtp(phone);
+    if (!mounted || !ok) return;
+    context.push('/verify-otp?phone=${Uri.encodeQueryComponent(phone)}');
   }
 
   @override
@@ -43,7 +49,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 
-  /// Compact layout for mobile devices (< 600px)
   Widget _buildCompactLayout(bool isDark) {
     return SafeArea(
       child: SingleChildScrollView(
@@ -58,7 +63,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 
-  /// Tablet layout (600-1100px)
   Widget _buildTabletLayout(bool isDark) {
     return SafeArea(
       child: Center(
@@ -73,7 +77,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 
-  /// Web layout (> 1100px) with split panel
   Widget _buildWebLayout(bool isDark) {
     return Row(
       children: [
@@ -112,95 +115,81 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   Widget _buildFormContent(bool isDark) {
     final authState = ref.watch(authProvider);
+    final loading = authState.state == AuthState.loading;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Center(
-          child: Column(
-            children: [
-              Text('Welcome Back', style: AppTextStyles.headline2(isDark)),
-              const SizedBox(height: 8),
-              Text('Sign in to continue', style: AppTextStyles.caption(isDark)),
-            ],
-          ),
-        ),
-        const SizedBox(height: 32),
-        Semantics(
-          label: 'Social login options - Google and Facebook buttons',
-          child: SocialAuthButtons(
-            onGooglePressed: () {},
-            onFacebookPressed: () {},
-            isLoading: authState.state == AuthState.loading,
-          ),
-        ),
-        const SizedBox(height: 32),
-        Semantics(
-          textField: true,
-          label: 'Email address input field',
-          child: AppTextField(
-            label: 'Email',
-            controller: _emailController,
-            keyboardType: TextInputType.emailAddress,
-            prefixIcon: Icons.email_rounded,
-          ),
-        ),
-        const SizedBox(height: 16),
-        Semantics(
-          textField: true,
-          label: 'Password input field with visibility toggle',
-          child: AppTextField(
-            label: 'Password',
-            controller: _passwordController,
-            obscureText: _obscurePassword,
-            prefixIcon: Icons.lock_rounded,
-            suffixIcon: _obscurePassword ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-            onSuffixIconPressed: () {
-              setState(() => _obscurePassword = !_obscurePassword);
-            },
-          ),
-        ),
-        const SizedBox(height: 16),
-        Align(
-          alignment: Alignment.centerRight,
-          child: Semantics(
-            button: true,
-            label: 'Forgot password button - navigate to password recovery',
-            child: TextButton(
-              onPressed: () => context.go('/forgot-password'),
-              child: Text(
-                'Forgot Password?',
-                style: AppTextStyles.body2(isDark).copyWith(
-                  color: AppColors.tealDark,
+    return Form(
+      key: _formKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(
+            child: Column(
+              children: [
+                Text('Welcome Back', style: AppTextStyles.headline2(isDark)),
+                const SizedBox(height: 8),
+                Text(
+                  'Sign in with your phone number',
+                  style: AppTextStyles.caption(isDark),
                 ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 40),
+          Semantics(
+            textField: true,
+            label: 'Phone number input — 10 digit Indian mobile',
+            child: AppTextField(
+              label: 'Phone Number',
+              hint: '9876543210',
+              controller: _phoneController,
+              keyboardType: TextInputType.phone,
+              prefixIcon: Icons.phone_rounded,
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'[0-9+]')),
+              ],
+              validator: (value) {
+                final v = value?.trim() ?? '';
+                if (v.isEmpty) return 'Phone number is required';
+                if (!RegExp(r'^(\+\d{10,15}|\d{10})$').hasMatch(v)) {
+                  return 'Enter 10 digits or +<country><number>';
+                }
+                return null;
+              },
+            ),
+          ),
+          const SizedBox(height: 24),
+          if (authState.state == AuthState.error)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(
+                authState.errorMessage ?? 'Something went wrong',
+                style: AppTextStyles.error(isDark),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          Semantics(
+            button: true,
+            label: 'Send OTP — request a one-time code by SMS',
+            child: SizedBox(
+              width: double.infinity,
+              child: PrimaryButton(
+                label: 'Send OTP',
+                onPressed: loading ? null : _handleSendOtp,
+                isLoading: loading,
               ),
             ),
           ),
-        ),
-        const SizedBox(height: 28),
-        Semantics(
-          button: true,
-          label: 'Login button - sign in with email and password',
-          child: SizedBox(
-            width: double.infinity,
-            child: PrimaryButton(
-              label: 'Login',
-              onPressed: () => context.go('/home/dashboard'),
-              isLoading: authState.state == AuthState.loading,
-            ),
-          ),
-        ),
-        const SizedBox(height: 20),
-        Center(
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text("Don't have an account? ", style: AppTextStyles.body2(isDark)),
-              Semantics(
-                button: true,
-                label: 'Register button - navigate to registration screen',
-                child: TextButton(
-                  onPressed: () => context.go('/register'),
+          const SizedBox(height: 20),
+          Center(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  "Don't have an account? ",
+                  style: AppTextStyles.body2(isDark),
+                ),
+                TextButton(
+                  onPressed: loading ? null : () => context.go('/register'),
                   child: Text(
                     'Register',
                     style: AppTextStyles.body2(isDark).copyWith(
@@ -209,11 +198,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

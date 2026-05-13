@@ -1,142 +1,60 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
+
+import '../../../data/activities/activities_repository.dart';
 import '../../../models/activity_model.dart';
-import '../../../models/user_model.dart';
-import '../../../models/group_model.dart';
+import '../../auth/state/auth_provider.dart';
 
-/// Activity feed provider with mock data
-final activityFeedProvider = FutureProvider<List<ActivityModel>>((ref) async {
-  // Simulate network delay
-  await Future.delayed(const Duration(milliseconds: 500));
+final activityFeedProvider =
+    AsyncNotifierProvider<ActivityFeedNotifier, List<ActivityModel>>(
+        ActivityFeedNotifier.new);
 
-  final now = DateTime.now();
+class ActivityFeedNotifier extends AsyncNotifier<List<ActivityModel>> {
+  @override
+  Future<List<ActivityModel>> build() async {
+    final user = ref.watch(authProvider).user;
+    if (user == null) return const [];
+    final result =
+        await ref.read(activitiesRepositoryProvider).listForUser(user.id);
+    return result.activities;
+  }
 
-  // Mock users
-  final priya = UserModel(
-    id: 'user_002',
-    name: 'Priya Sharma',
-    email: 'priya@example.com',
-    phone: '+919876543211',
-    avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=priya',
-    createdAt: now,
-  );
+  Future<void> refresh() async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(build);
+  }
 
-  final rahul = UserModel(
-    id: 'user_001',
-    name: 'Rahul Verma',
-    email: 'rahul@example.com',
-    phone: '+919876543210',
-    avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=rahul',
-    createdAt: now,
-  );
+  Future<void> markAsRead(String activityId) async {
+    final repo = ref.read(activitiesRepositoryProvider);
+    try {
+      await repo.markAsRead(activityId);
+      state = state.whenData((items) =>
+          items.map((a) => a.id == activityId ? a.copyWith(isRead: true) : a).toList());
+    } catch (_) {
+      // Silent — UI already shows the activity, marking is best-effort.
+    }
+  }
 
-  final anjali = UserModel(
-    id: 'user_003',
-    name: 'Anjali Patel',
-    email: 'anjali@example.com',
-    phone: '+919876543212',
-    avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=anjali',
-    createdAt: now,
-  );
+  Future<void> markAllAsRead() async {
+    final user = ref.read(authProvider).user;
+    if (user == null) return;
+    try {
+      await ref.read(activitiesRepositoryProvider).markAllAsRead(user.id);
+      state = state.whenData(
+          (items) => items.map((a) => a.copyWith(isRead: true)).toList());
+    } catch (_) {
+      // Best-effort.
+    }
+  }
+}
 
-  final neha = UserModel(
-    id: 'user_004',
-    name: 'Neha Singh',
-    email: 'neha@example.com',
-    phone: '+919876543213',
-    avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=neha',
-    createdAt: now,
-  );
-
-  // Mock groups
-  final goaTrip = GroupModel(
-    id: 'grp_001',
-    name: 'Goa Trip',
-    coverEmoji: '✈️',
-    category: GroupCategory.trip,
-    members: [rahul, priya, anjali],
-    createdAt: now.subtract(const Duration(days: 10)),
-  );
-
-  final homeRent = GroupModel(
-    id: 'grp_002',
-    name: 'Home Rent',
-    coverEmoji: '🏠',
-    category: GroupCategory.home,
-    members: [rahul, anjali],
-    createdAt: now.subtract(const Duration(days: 30)),
-  );
-
-  // Mock data - activity feed
-  final mockActivities = [
-    ActivityModel(
-      id: 'act_001',
-      type: ActivityType.expenseAdded,
-      actorUser: priya,
-      group: goaTrip,
-      description: 'Priya added expense "Hotel booking" ₹2,500',
-      timestamp: now.subtract(const Duration(hours: 2)),
-      isRead: true,
-    ),
-    ActivityModel(
-      id: 'act_002',
-      type: ActivityType.settled,
-      actorUser: rahul,
-      targetUser: anjali,
-      group: goaTrip,
-      description: 'Rahul settled ₹3,200 with Anjali',
-      timestamp: now.subtract(const Duration(hours: 5)),
-      isRead: true,
-    ),
-    ActivityModel(
-      id: 'act_003',
-      type: ActivityType.expenseAdded,
-      actorUser: anjali,
-      group: homeRent,
-      description: 'Anjali added expense "March rent" ₹15,000',
-      timestamp: now.subtract(const Duration(days: 1)),
-      isRead: true,
-    ),
-    ActivityModel(
-      id: 'act_004',
-      type: ActivityType.memberAdded,
-      actorUser: rahul,
-      targetUser: neha,
-      group: goaTrip,
-      description: 'Rahul added Neha to "Goa Trip"',
-      timestamp: now.subtract(const Duration(days: 1, hours: 3)),
-      isRead: false,
-    ),
-    ActivityModel(
-      id: 'act_005',
-      type: ActivityType.expenseEdited,
-      actorUser: priya,
-      group: goaTrip,
-      description: 'Priya edited expense "Dinner" amount changed to ₹1,800',
-      timestamp: now.subtract(const Duration(days: 2)),
-      isRead: true,
-    ),
-    ActivityModel(
-      id: 'act_006',
-      type: ActivityType.groupCreated,
-      actorUser: rahul,
-      group: goaTrip,
-      description: 'Rahul created group "Goa Trip"',
-      timestamp: now.subtract(const Duration(days: 3)),
-      isRead: true,
-    ),
-  ];
-
-  return mockActivities;
-});
-
-/// Activity filter provider
 enum ActivityFilter { all, expenses, settlements, groups }
 
-final activityFilterProvider = StateProvider<ActivityFilter>((ref) => ActivityFilter.all);
+final activityFilterProvider =
+    StateProvider<ActivityFilter>((ref) => ActivityFilter.all);
 
-/// Filtered activity feed
-final filteredActivityFeedProvider = Provider<AsyncValue<List<ActivityModel>>>((ref) {
+final filteredActivityFeedProvider =
+    Provider<AsyncValue<List<ActivityModel>>>((ref) {
   final feedAsync = ref.watch(activityFeedProvider);
   final filter = ref.watch(activityFilterProvider);
 
@@ -146,12 +64,22 @@ final filteredActivityFeedProvider = Provider<AsyncValue<List<ActivityModel>>>((
         return activities;
       case ActivityFilter.expenses:
         return activities
-            .where((a) => a.type == ActivityType.expenseAdded || a.type == ActivityType.expenseEdited || a.type == ActivityType.expenseDeleted)
+            .where((a) =>
+                a.type == ActivityType.expenseAdded ||
+                a.type == ActivityType.expenseEdited ||
+                a.type == ActivityType.expenseDeleted)
             .toList();
       case ActivityFilter.settlements:
-        return activities.where((a) => a.type == ActivityType.settled).toList();
+        return activities
+            .where((a) => a.type == ActivityType.settled)
+            .toList();
       case ActivityFilter.groups:
-        return activities.where((a) => a.type == ActivityType.groupCreated || a.type == ActivityType.memberAdded || a.type == ActivityType.memberRemoved).toList();
+        return activities
+            .where((a) =>
+                a.type == ActivityType.groupCreated ||
+                a.type == ActivityType.memberAdded ||
+                a.type == ActivityType.memberRemoved)
+            .toList();
     }
   });
 });

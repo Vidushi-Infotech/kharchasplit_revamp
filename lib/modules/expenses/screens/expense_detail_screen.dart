@@ -49,20 +49,23 @@ class ExpenseDetailScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: expenseAsync.when(
-        loading: () => Center(
-          child: ShimmerList(itemCount: 3),
+      body: SafeArea(
+        top: false,
+        child: expenseAsync.when(
+          loading: () => Center(
+            child: ShimmerList(itemCount: 3),
+          ),
+          error: (error, _) => ErrorStateWidget(
+            title: 'Failed to load expense',
+            message: 'Unable to fetch expense details. Please try again.',
+            onRetry: () {
+              // Trigger refresh
+            },
+          ),
+          data: (expense) => screenWidth < 600
+              ? _buildCompactLayout(isDark, expense)
+              : _buildWideLayout(isDark, expense),
         ),
-        error: (error, _) => ErrorStateWidget(
-          title: 'Failed to load expense',
-          message: 'Unable to fetch expense details. Please try again.',
-          onRetry: () {
-            // Trigger refresh
-          },
-        ),
-        data: (expense) => screenWidth < 600
-            ? _buildCompactLayout(isDark, expense)
-            : _buildWideLayout(isDark, expense),
       ),
     );
   }

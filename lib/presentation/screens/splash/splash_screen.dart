@@ -10,10 +10,18 @@ class SplashScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final splashState = ref.watch(splashProviderProvider);
 
-    // Navigate to onboarding when splash is done
+    // Route based on stored auth state once splash finishes initializing.
     ref.listen(splashProviderProvider, (previous, next) {
-      if (next != SplashState.initializing) {
-        context.go('/onboarding');
+      switch (next) {
+        case SplashState.authenticated:
+          context.go('/home/dashboard');
+          break;
+        case SplashState.unauthenticated:
+        case SplashState.ready:
+          context.go('/onboarding');
+          break;
+        case SplashState.initializing:
+          break;
       }
     });
 

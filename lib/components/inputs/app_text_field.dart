@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 
@@ -16,6 +17,9 @@ class AppTextField extends StatefulWidget {
   final String? Function(String?)? validator;
   final int maxLines;
   final int minLines;
+  final FocusNode? focusNode;
+  final bool autofocus;
+  final List<TextInputFormatter>? inputFormatters;
 
   const AppTextField({
     Key? key,
@@ -30,6 +34,9 @@ class AppTextField extends StatefulWidget {
     this.validator,
     this.maxLines = 1,
     this.minLines = 1,
+    this.focusNode,
+    this.autofocus = false,
+    this.inputFormatters,
   }) : super(key: key);
 
   @override
@@ -66,11 +73,14 @@ class _AppTextFieldState extends State<AppTextField> {
         // Input field
         TextFormField(
           controller: widget.controller,
+          focusNode: widget.focusNode,
+          autofocus: widget.autofocus,
           keyboardType: widget.keyboardType,
           obscureText: _obscureText,
           maxLines: _obscureText ? 1 : widget.maxLines,
           minLines: widget.minLines,
           validator: widget.validator,
+          inputFormatters: widget.inputFormatters,
           style: AppTextStyles.body2(isDark).copyWith(
             color: AppColors.textPrimary(isDark),
           ),

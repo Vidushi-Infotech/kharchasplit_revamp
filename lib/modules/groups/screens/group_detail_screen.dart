@@ -5,7 +5,9 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../components/components.dart';
+import '../../../data/groups/groups_repository.dart';
 import '../state/group_detail_provider.dart';
+import '../state/groups_provider.dart';
 
 class GroupDetailScreen extends ConsumerWidget {
   final String groupId;
@@ -29,23 +31,22 @@ class GroupDetailScreen extends ConsumerWidget {
         elevation: 0,
         backgroundColor: AppColors.surface(isDark),
         actions: [
-          IconButton(
+          PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert_rounded),
-            onPressed: () {
-              // Show menu
+            onSelected: (value) {
+              if (value == 'invite') {
+                _showInviteDialog(context, ref);
+              }
             },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'invite', child: Text('Invite member')),
+            ],
           ),
         ],
       ),
       body: detailAsync.when(
         loading: () => const ShimmerList(type: ShimmerListType.group),
-        error: (err, stack) => ErrorStateWidget(
-          title: 'Failed to load group details',
-          message: 'Unable to fetch group information. Please try again.',
-          onRetry: () {
-            // Trigger refresh
-          },
-        ),
+        error: (err, stack) => _buildErrorState(context, ref, err),
         data: (detail) {
           if (screenWidth < 600) {
             return _buildCompactLayout(context, isDark, detail, tab, ref);
@@ -73,6 +74,128 @@ class GroupDetailScreen extends ConsumerWidget {
 
   void _navigateToAddExpense(BuildContext context) {
     context.pushNamed('add-expense-to-group', pathParameters: {'groupId': groupId});
+  }
+
+  Widget _buildErrorState(BuildContext context, WidgetRef ref, Object err) {
+    final status = err is GroupsApiException ? err.statusCode : null;
+    final isAccessDenied = status == 403;
+    final isMissing = status == 404;
+
+    final title = isAccessDenied
+        ? "You don't have access to this group"
+        : isMissing
+            ? 'This group no longer exists'
+            : 'Failed to load group details';
+    final message = isAccessDenied
+        ? "It looks like you're no longer a member, or this group belongs to a different account."
+        : isMissing
+            ? "The group may have been deleted. Pick another from your list."
+            : (err is GroupsApiException ? err.message : err.toString());
+
+    final showRetry = !isAccessDenied && !isMissing;
+
+    return ErrorStateWidget(
+      title: title,
+      message: message,
+      onRetry: showRetry
+          ? () => ref.invalidate(groupDetailProvider(groupId))
+          : null,
+      onSecondaryAction: () => context.go('/home/groups'),
+      secondaryActionLabel: 'Back to Groups',
+    );
+  }
+
+  Future<void> _showInviteDialog(BuildContext context, WidgetRef ref) async {
+    final nameController = TextEditingController();
+    final phoneController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    bool submitting = false;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setLocal) {
+            return AlertDialog(
+              title: const Text('Invite member'),
+              content: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextFormField(
+                      controller: nameController,
+                      decoration: const InputDecoration(labelText: 'Name'),
+                      validator: (v) =>
+                          (v == null || v.trim().isEmpty) ? 'Name required' : null,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: phoneController,
+                      decoration: const InputDecoration(
+                        labelText: 'Phone (10 digits or +<country><number>)',
+                      ),
+                      keyboardType: TextInputType.phone,
+                      validator: (v) {
+                        final s = (v ?? '').trim();
+                        if (s.isEmpty) return 'Phone required';
+                        if (!RegExp(r'^(\+\d{10,15}|\d{10})$').hasMatch(s)) {
+                          return 'Use 10 digits or +91XXXXXXXXXX';
+                        }
+                        return null;
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: submitting ? null : () => Navigator.pop(dialogContext),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: submitting
+                      ? null
+                      : () async {
+                          if (!(formKey.currentState?.validate() ?? false)) return;
+                          setLocal(() => submitting = true);
+                          try {
+                            await ref.read(groupsRepositoryProvider).invitePhone(
+                                  groupId: groupId,
+                                  name: nameController.text.trim(),
+                                  phoneNumber: phoneController.text.trim(),
+                                );
+                            ref.invalidate(groupDetailProvider(groupId));
+                            ref.invalidate(groupsProvider);
+                            if (dialogContext.mounted) {
+                              Navigator.pop(dialogContext);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Invite sent.')),
+                              );
+                            }
+                          } catch (e) {
+                            setLocal(() => submitting = false);
+                            if (dialogContext.mounted) {
+                              ScaffoldMessenger.of(dialogContext).showSnackBar(
+                                SnackBar(content: Text('Could not invite: $e')),
+                              );
+                            }
+                          }
+                        },
+                  child: submitting
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Invite'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   Widget _buildCompactLayout(
@@ -694,7 +817,7 @@ class GroupDetailScreen extends ConsumerWidget {
             child: ExpenseCard(
               expense: expense,
               onTap: () {
-                context.go('/expense/${expense.id}');
+                context.push('/expense/${expense.id}');
               },
             ),
           ),

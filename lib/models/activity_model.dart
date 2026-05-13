@@ -39,6 +39,70 @@ class ActivityModel extends Equatable {
     this.isRead = false,
   });
 
+  factory ActivityModel.fromJson(Map<String, dynamic> json) {
+    final type = _parseType(json['activityType'] as String?);
+    final actorName = (json['actorName'] as String?)?.trim();
+    final actorUser = (actorName != null && actorName.isNotEmpty)
+        ? UserModel(
+            id: '',
+            name: actorName,
+            email: '',
+            phone: '',
+            createdAt: DateTime.now(),
+          )
+        : null;
+    final groupId = json['groupId'] as String?;
+    final groupName = (json['groupName'] as String?) ?? '';
+    final group = (groupId != null && groupId.isNotEmpty)
+        ? GroupModel(
+            id: groupId,
+            name: groupName,
+            coverEmoji: '👥',
+            members: const [],
+            createdAt: DateTime.now(),
+          )
+        : null;
+    final created = json['createdAt'] ?? json['created_at'];
+    return ActivityModel(
+      id: json['id'] as String,
+      type: type,
+      actorUser: actorUser,
+      group: group,
+      description: ((json['description'] as String?)?.trim().isNotEmpty ?? false)
+          ? json['description'] as String
+          : (json['title'] as String? ?? ''),
+      timestamp: created is String ? DateTime.parse(created) : DateTime.now(),
+      isRead: (json['isRead'] as bool?) ?? false,
+    );
+  }
+
+  static ActivityType _parseType(String? raw) {
+    switch (raw) {
+      case 'expense_added':
+        return ActivityType.expenseAdded;
+      case 'expense_edited':
+      case 'expense_updated':
+        return ActivityType.expenseEdited;
+      case 'expense_deleted':
+        return ActivityType.expenseDeleted;
+      case 'settled':
+      case 'settlement_added':
+        return ActivityType.settled;
+      case 'group_created':
+        return ActivityType.groupCreated;
+      case 'group_updated':
+        return ActivityType.groupCreated;
+      case 'member_added':
+        return ActivityType.memberAdded;
+      case 'member_removed':
+        return ActivityType.memberRemoved;
+      case 'comment_added':
+        return ActivityType.commentAdded;
+      default:
+        return ActivityType.expenseAdded;
+    }
+  }
+
   ActivityModel copyWith({
     String? id,
     ActivityType? type,

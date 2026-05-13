@@ -2,24 +2,26 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../models/models.dart';
 import '../state/dashboard_provider.dart';
 
+// NOTE: GroupModel.myBalance is not yet populated by the backend list endpoint —
+// these providers will return empty lists until per-group balances are wired in.
+// See data/groups/groups_repository.dart for where to extend that.
+
 /// Provider for groups where user is owed money (myBalance > 0)
 final owedToMeGroupsProvider = Provider<List<GroupModel>>((ref) {
-  final dashboard = ref.watch(dashboardProvider);
-  final groups = dashboard.recentGroups
+  final groups = ref.watch(dashboardProvider).value?.recentGroups ?? const [];
+  return groups
       .where((g) => g.myBalance > 0)
       .toList()
-    ..sort((a, b) => b.myBalance.compareTo(a.myBalance)); // Highest first
-  return groups;
+    ..sort((a, b) => b.myBalance.compareTo(a.myBalance));
 });
 
 /// Provider for groups where user owes money (myBalance < 0)
 final iOweGroupsProvider = Provider<List<GroupModel>>((ref) {
-  final dashboard = ref.watch(dashboardProvider);
-  final groups = dashboard.recentGroups
+  final groups = ref.watch(dashboardProvider).value?.recentGroups ?? const [];
+  return groups
       .where((g) => g.myBalance < 0)
       .toList()
-    ..sort((a, b) => a.myBalance.compareTo(b.myBalance)); // Most owed first
-  return groups;
+    ..sort((a, b) => a.myBalance.compareTo(b.myBalance));
 });
 
 /// Provider for calculating total amount owed to user

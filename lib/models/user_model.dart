@@ -22,6 +22,24 @@ class UserModel extends Equatable {
     required this.createdAt,
   });
 
+  factory UserModel.fromJson(Map<String, dynamic> json) {
+    final created = json['created_at'] ?? json['createdAt'] ?? json['joinedAt'];
+    return UserModel(
+      id: (json['id'] ?? json['userId'] ?? '') as String,
+      name: (json['name'] as String?) ?? '',
+      email: (json['email'] as String?) ?? '',
+      phone: (json['phoneNumber'] ?? json['phone_number'] ?? json['phone'] ?? '')
+          as String,
+      avatarUrl: (json['profileImageBase64'] ??
+          json['profileImage'] ??
+          json['avatar_url'] ??
+          json['avatarUrl']) as String?,
+      totalOwed: (json['totalOwed'] as num?)?.toDouble() ?? 0,
+      totalOwing: (json['totalOwing'] as num?)?.toDouble() ?? 0,
+      createdAt: created is String ? DateTime.parse(created) : DateTime.now(),
+    );
+  }
+
   UserModel copyWith({
     String? id,
     String? name,

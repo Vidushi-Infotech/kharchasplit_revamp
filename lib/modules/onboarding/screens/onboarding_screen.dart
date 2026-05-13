@@ -71,7 +71,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background(isDark),
-      body: RepaintBoundary(
+      body: SafeArea(
+        child: RepaintBoundary(
         child: Column(
           children: [
             // Skip button
@@ -158,6 +159,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

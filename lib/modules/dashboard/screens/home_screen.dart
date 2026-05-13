@@ -21,7 +21,8 @@ class HomeScreen extends ConsumerWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final screenWidth = MediaQuery.of(context).size.width;
     final hasCompactWidth = screenWidth < 600; // Mobile, Folded Foldables
-    final dashboardData = ref.watch(dashboardProvider);
+    final dashboardData =
+        ref.watch(dashboardProvider).value ?? DashboardData.empty;
     final selectedIndex = ref.watch(selectedNavIndexProvider);
 
     return Scaffold(

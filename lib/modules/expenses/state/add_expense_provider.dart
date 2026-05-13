@@ -84,8 +84,8 @@ class AddExpenseState {
   }
 
   bool get isValid {
-    // Basic validation
-    if (title == null || title!.isEmpty || amount <= 0) {
+    // Basic validation (title is optional, defaults to "Untitled" on save)
+    if (amount <= 0) {
       return false;
     }
 

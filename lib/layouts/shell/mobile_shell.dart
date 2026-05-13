@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
@@ -19,7 +20,21 @@ class MobileShell extends ConsumerWidget {
     final selectedIndex = ref.watch(selectedNavIndexProvider);
     final unreadCount = ref.watch(unreadActivityCountProvider);
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        final router = GoRouter.of(context);
+        if (router.canPop()) {
+          router.pop();
+        } else if (selectedIndex != 0) {
+          ref.read(selectedNavIndexProvider.notifier).state = 0;
+          context.go('/home/dashboard');
+        } else {
+          SystemNavigator.pop();
+        }
+      },
+      child: Scaffold(
       body: child,
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: selectedIndex,
@@ -59,7 +74,7 @@ class MobileShell extends ConsumerWidget {
               ),
               child: const Icon(Icons.add_rounded, color: Colors.white),
             ),
-            label: 'Add',
+            label: 'Create',
           ),
           const BottomNavigationBarItem(
             icon: Icon(Icons.people_alt_rounded),
@@ -75,17 +90,7 @@ class MobileShell extends ConsumerWidget {
           ),
         ],
       ),
-      floatingActionButton: selectedIndex == 2
-          ? null
-          : FloatingActionButton(
-              onPressed: () => context.go('/add-expense'),
-              backgroundColor: AppColors.brand,
-              elevation: 8,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: const Icon(Icons.add_rounded, color: Colors.white, size: 28),
-            ),
+      ),
     );
   }
 
@@ -98,7 +103,7 @@ class MobileShell extends ConsumerWidget {
         context.go('/home/groups');
         break;
       case 2:
-        context.go('/add-expense');
+        context.push('/home/create-group');
         break;
       case 3:
         context.go('/home/friends');

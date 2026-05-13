@@ -1,113 +1,91 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../models/user_model.dart';
+
+import '../../../data/expenses/expenses_repository.dart';
 import '../../../models/expense_model.dart';
-import '../../../models/category_model.dart';
+import '../../../models/user_model.dart';
+import '../../auth/state/auth_provider.dart';
+import '../../groups/state/groups_provider.dart';
 
 class FriendDetail {
-  final UserModel friend;
-  final double balanceYouOwe; // negative = they owe you
-  final List<ExpenseModel> sharedExpenses;
-
   const FriendDetail({
     required this.friend,
     required this.balanceYouOwe,
     required this.sharedExpenses,
   });
+
+  final UserModel friend;
+
+  /// Positive = you owe them; negative = they owe you.
+  final double balanceYouOwe;
+
+  final List<ExpenseModel> sharedExpenses;
 }
 
-/// Friend detail provider
-final friendDetailProvider = FutureProvider.family<FriendDetail, String>((ref, friendId) async {
-  // Simulate network delay
-  await Future.delayed(const Duration(milliseconds: 500));
+final friendDetailProvider =
+    FutureProvider.family<FriendDetail, String>((ref, friendId) async {
+  final me = ref.watch(authProvider).user;
+  final groups = ref.watch(groupsProvider).value ?? const [];
 
-  final now = DateTime.now();
+  final sharedGroups =
+      groups.where((g) => g.members.any((m) => m.id == friendId)).toList();
 
-  // Mock data
-  final mockFriend = UserModel(
-    id: friendId,
-    name: 'Priya Sharma',
-    email: 'priya@example.com',
-    phone: '+919876543211',
-    avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=priya',
-    createdAt: now,
+  if (sharedGroups.isEmpty || me == null) {
+    return FriendDetail(
+      friend: UserModel(
+        id: friendId,
+        name: 'Unknown',
+        email: '',
+        phone: '',
+        createdAt: DateTime.now(),
+      ),
+      balanceYouOwe: 0,
+      sharedExpenses: const [],
+    );
+  }
+
+  final friend = sharedGroups
+      .expand((g) => g.members)
+      .firstWhere((m) => m.id == friendId);
+
+  // Fetch expenses for every shared group in parallel.
+  final repo = ref.read(expensesRepositoryProvider);
+  final perGroup = await Future.wait(
+    sharedGroups.map((g) => repo.listForGroup(g.id)),
   );
 
-  final mockSharedExpenses = [
-    ExpenseModel(
-      id: 'exp_001',
-      title: 'Hotel booking',
-      amount: 2500.00,
-      category: const CategoryModel(
-        id: 'cat_004',
-        name: 'Hotel',
-        colorHex: '#FF6B6B',
-        icon: Icons.hotel_rounded,
-      ),
-      paidBy: mockFriend,
-      splits: [],
-      groupId: 'grp_001',
-      date: now,
-      createdAt: now,
-      notes: 'Goa Trip',
-    ),
-    ExpenseModel(
-      id: 'exp_002',
-      title: 'Dinner',
-      amount: 1500.00,
-      category: const CategoryModel(
-        id: 'cat_001',
-        name: 'Food',
-        colorHex: '#FFD93D',
-        icon: Icons.restaurant_rounded,
-      ),
-      paidBy: UserModel(
-        id: 'user_001',
-        name: 'You',
-        email: 'you@example.com',
-        phone: '+919876543210',
-        createdAt: now,
-      ),
-      splits: [],
-      groupId: 'grp_001',
-      date: now,
-      createdAt: now,
-      notes: 'Dinner at Taj',
-    ),
-    ExpenseModel(
-      id: 'exp_003',
-      title: 'Cab',
-      amount: 800.00,
-      category: const CategoryModel(
-        id: 'cat_002',
-        name: 'Travel',
-        colorHex: '#A8DADC',
-        icon: Icons.directions_car_rounded,
-      ),
-      paidBy: mockFriend,
-      splits: [],
-      groupId: 'grp_001',
-      date: now,
-      createdAt: now,
-      notes: 'Airport transport',
-    ),
-  ];
+  // Keep only expenses that involve both me and the friend.
+  // Compute net: positive split.owedShare for friend means I (payer) am owed
+  // by them; for me means I owe payer.
+  double balance = 0; // positive = I owe friend
+  final shared = <ExpenseModel>[];
+  for (final expenses in perGroup) {
+    for (final e in expenses) {
+      final friendInvolved =
+          e.paidBy.id == friendId || e.splits.any((s) => s.userId == friendId);
+      final meInvolved =
+          e.paidBy.id == me.id || e.splits.any((s) => s.userId == me.id);
+      if (!friendInvolved || !meInvolved) continue;
+      shared.add(e);
 
-  // Calculate balance: if positive, you owe them; if negative, they owe you
-  double balance = 0;
-  for (final expense in mockSharedExpenses) {
-    if (expense.paidBy.id == friendId) {
-      // They paid, you owe them your share
-      balance += expense.amount / 2;
-    } else {
-      // You paid, they owe you their share
-      balance -= expense.amount / 2;
+      if (e.paidBy.id == friendId) {
+        // Friend paid; I owe my share.
+        for (final s in e.splits) {
+          if (s.userId == me.id) balance += s.owedShare;
+        }
+      } else if (e.paidBy.id == me.id) {
+        // I paid; friend owes their share.
+        for (final s in e.splits) {
+          if (s.userId == friendId) balance -= s.owedShare;
+        }
+      }
     }
   }
 
+  shared.sort((a, b) => b.date.compareTo(a.date));
+
   return FriendDetail(
-    friend: mockFriend,
+    friend: friend,
     balanceYouOwe: balance,
-    sharedExpenses: mockSharedExpenses,
+    sharedExpenses: shared,
   );
 });

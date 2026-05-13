@@ -1,20 +1,19 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'dart:io';
-import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_text_styles.dart';
+
 import '../../../components/avatar_picker_widget.dart';
 import '../../../components/buttons/primary_button.dart';
 import '../../../components/inputs/app_text_field.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_text_styles.dart';
 import '../state/auth_provider.dart';
-import '../widgets/password_strength_widget.dart';
-import '../widgets/referral_code_field.dart';
-import '../widgets/social_auth_buttons.dart';
 
-/// Register screen with profile image, name, email, phone, password, referral code
 class RegisterScreen extends ConsumerStatefulWidget {
-  const RegisterScreen({Key? key}) : super(key: key);
+  const RegisterScreen({super.key});
 
   @override
   ConsumerState<RegisterScreen> createState() => _RegisterScreenState();
@@ -25,40 +24,27 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
-  final _passwordController = TextEditingController();
-  final _confirmPasswordController = TextEditingController();
-  final _referralController = TextEditingController();
 
   File? _selectedImage;
-  bool _obscurePassword = true;
-  bool _obscureConfirmPassword = true;
 
   @override
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
-    _passwordController.dispose();
-    _confirmPasswordController.dispose();
-    _referralController.dispose();
     super.dispose();
   }
 
-  void _handleRegister() async {
-    if (_formKey.currentState!.validate()) {
-      await ref.read(authProvider.notifier).register(
-            fullName: _nameController.text,
-            email: _emailController.text,
-            phone: _phoneController.text,
-            password: _passwordController.text,
-            confirmPassword: _confirmPasswordController.text,
-            referralCode: _referralController.text.isEmpty ? null : _referralController.text,
-          );
-      // Navigate to home after successful registration
-      if (mounted && ref.read(authProvider).state == AuthState.success) {
-        context.go('/home/dashboard');
-      }
-    }
+  Future<void> _handleRegister() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    final phone = _phoneController.text.trim();
+    final ok = await ref.read(authProvider.notifier).register(
+          name: _nameController.text,
+          phone: phone,
+          email: _emailController.text,
+        );
+    if (!mounted || !ok) return;
+    context.push('/verify-otp?phone=${Uri.encodeQueryComponent(phone)}');
   }
 
   @override
@@ -103,7 +89,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   Widget _buildWebLayout(bool isDark, AuthData authState) {
     return Row(
       children: [
-        // Left brand panel
         Expanded(
           child: Container(
             color: AppColors.tealDark,
@@ -111,10 +96,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(
-                    'Kharcha Split',
-                    style: AppTextStyles.headline1(true),
-                  ),
+                  Text('Kharcha Split', style: AppTextStyles.headline1(true)),
                   const SizedBox(height: 16),
                   Text(
                     'Smart expense splitting\nfor modern groups',
@@ -126,7 +108,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             ),
           ),
         ),
-        // Right form panel
         Expanded(
           child: Center(
             child: SingleChildScrollView(
@@ -143,35 +124,25 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   }
 
   Widget _buildFormContent(bool isDark, AuthData authState) {
+    final loading = authState.state == AuthState.loading;
+
     return Form(
       key: _formKey,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Avatar picker - centered
-          Semantics(
-            label: 'Profile picture selector button - tap to choose or take photo',
-            button: true,
-            child: Center(
-              child: AvatarPickerWidget(
-                onImageSelected: (image) {
-                  setState(() => _selectedImage = image);
-                },
-                selectedImage: _selectedImage,
-                size: 100,
-              ),
+          Center(
+            child: AvatarPickerWidget(
+              onImageSelected: (image) => setState(() => _selectedImage = image),
+              selectedImage: _selectedImage,
+              size: 100,
             ),
           ),
           const SizedBox(height: 32),
-
-          // Heading - centered
           Center(
             child: Column(
               children: [
-                Text(
-                  'Create Account',
-                  style: AppTextStyles.headline2(isDark),
-                ),
+                Text('Create Account', style: AppTextStyles.headline2(isDark)),
                 const SizedBox(height: 8),
                 Text(
                   'Join thousands splitting smart',
@@ -181,161 +152,72 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             ),
           ),
           const SizedBox(height: 32),
-
-          // Social auth buttons
-          Semantics(
-            label: 'Social login options - Google and Facebook buttons',
-            child: SocialAuthButtons(
-              onGooglePressed: () {},
-              onFacebookPressed: () {},
-              isLoading: authState.state == AuthState.loading,
-            ),
-          ),
-          const SizedBox(height: 32),
-
-          // Full Name
-          Semantics(
-            textField: true,
-            label: 'Full name input field - required',
-            child: AppTextField(
-              label: 'Full Name',
-              hint: 'John Doe',
-              controller: _nameController,
-              prefixIcon: Icons.person_rounded,
-              validator: (value) {
-                if (value?.isEmpty ?? true) return 'Name is required';
-                return null;
-              },
-            ),
+          AppTextField(
+            label: 'Full Name',
+            hint: 'John Doe',
+            controller: _nameController,
+            prefixIcon: Icons.person_rounded,
+            validator: (value) {
+              final v = value?.trim() ?? '';
+              if (v.isEmpty) return 'Name is required';
+              if (v.length < 2) return 'Name is too short';
+              return null;
+            },
           ),
           const SizedBox(height: 16),
-
-          // Email
-          Semantics(
-            textField: true,
-            label: 'Email address input field - required',
-            child: AppTextField(
-              label: 'Email',
-              hint: 'john@example.com',
-              controller: _emailController,
-              keyboardType: TextInputType.emailAddress,
-              prefixIcon: Icons.email_rounded,
-              validator: (value) {
-                if (value?.isEmpty ?? true) return 'Email is required';
-                if (!value!.contains('@')) return 'Invalid email';
-                return null;
-              },
-            ),
+          AppTextField(
+            label: 'Phone Number',
+            hint: '9876543210',
+            controller: _phoneController,
+            keyboardType: TextInputType.phone,
+            prefixIcon: Icons.phone_rounded,
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'[0-9+]')),
+            ],
+            validator: (value) {
+              final v = value?.trim() ?? '';
+              if (v.isEmpty) return 'Phone is required';
+              if (!RegExp(r'^(\+\d{10,15}|\d{10})$').hasMatch(v)) {
+                return 'Enter 10 digits or +<country><number>';
+              }
+              return null;
+            },
           ),
           const SizedBox(height: 16),
-
-          // Phone Number
-          Semantics(
-            textField: true,
-            label: 'Phone number input field - 10 digit Indian number - required',
-            child: AppTextField(
-              label: 'Phone Number',
-              hint: '9876543210',
-              controller: _phoneController,
-              keyboardType: TextInputType.phone,
-              prefixIcon: Icons.phone_rounded,
-              validator: (value) {
-                if (value?.isEmpty ?? true) return 'Phone is required';
-                if (value!.length != 10) return 'Enter valid 10-digit number';
-                return null;
-              },
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Password
-          Semantics(
-            textField: true,
-            label: 'Password input field with visibility toggle - minimum 8 characters - required',
-            child: AppTextField(
-              label: 'Password',
-              hint: 'Min. 8 characters',
-              controller: _passwordController,
-              obscureText: _obscurePassword,
-              prefixIcon: Icons.lock_rounded,
-              suffixIcon: _obscurePassword ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-              onSuffixIconPressed: () {
-                setState(() => _obscurePassword = !_obscurePassword);
-              },
-              validator: (value) {
-                if (value?.isEmpty ?? true) return 'Password is required';
-                if (value!.length < 8) return 'Min. 8 characters';
-                return null;
-              },
-            ),
-          ),
-          Semantics(
-            label: 'Password strength indicator',
-            child: PasswordStrengthWidget(password: _passwordController.text),
-          ),
-          const SizedBox(height: 16),
-
-          // Confirm Password
-          Semantics(
-            textField: true,
-            label: 'Confirm password input field - must match password above - required',
-            child: AppTextField(
-              label: 'Confirm Password',
-              hint: 'Re-enter password',
-              controller: _confirmPasswordController,
-              obscureText: _obscureConfirmPassword,
-              prefixIcon: Icons.lock_rounded,
-              suffixIcon: _obscureConfirmPassword ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-              onSuffixIconPressed: () {
-                setState(() => _obscureConfirmPassword = !_obscureConfirmPassword);
-              },
-              validator: (value) {
-                if (value?.isEmpty ?? true) return 'Confirm password';
-                if (value != _passwordController.text) return 'Passwords must match';
-                return null;
-              },
-            ),
+          AppTextField(
+            label: 'Email (optional)',
+            hint: 'john@example.com',
+            controller: _emailController,
+            keyboardType: TextInputType.emailAddress,
+            prefixIcon: Icons.email_rounded,
+            validator: (value) {
+              final v = value?.trim() ?? '';
+              if (v.isEmpty) return null;
+              if (!v.contains('@') || !v.contains('.')) {
+                return 'Enter a valid email';
+              }
+              return null;
+            },
           ),
           const SizedBox(height: 24),
-
-          // Referral code (collapsible)
-          Semantics(
-            label: 'Optional referral code input field - expandable',
-            child: ReferralCodeField(controller: _referralController),
-          ),
-          const SizedBox(height: 24),
-
-          // Error message
           if (authState.state == AuthState.error)
-            Semantics(
-              label: 'Error message - registration failed',
-              enabled: true,
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: Text(
-                  authState.errorMessage ?? 'An error occurred',
-                  style: AppTextStyles.error(isDark),
-                  textAlign: TextAlign.center,
-                ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(
+                authState.errorMessage ?? 'Something went wrong',
+                style: AppTextStyles.error(isDark),
+                textAlign: TextAlign.center,
               ),
             ),
-
-          // Register button
-          Semantics(
-            button: true,
-            label: 'Create account button - submit registration form',
-            child: SizedBox(
-              width: double.infinity,
-              child: PrimaryButton(
-                label: 'Create Account',
-                onPressed: _handleRegister,
-                isLoading: authState.state == AuthState.loading,
-              ),
+          SizedBox(
+            width: double.infinity,
+            child: PrimaryButton(
+              label: 'Create Account',
+              onPressed: loading ? null : _handleRegister,
+              isLoading: loading,
             ),
           ),
           const SizedBox(height: 20),
-
-          // Login link
           Center(
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -345,7 +227,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   style: AppTextStyles.body2(isDark),
                 ),
                 TextButton(
-                  onPressed: () => context.go('/login'),
+                  onPressed: loading ? null : () => context.go('/login'),
                   child: Text(
                     'Login',
                     style: AppTextStyles.body2(isDark).copyWith(

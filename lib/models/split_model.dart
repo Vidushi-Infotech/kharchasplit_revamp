@@ -20,6 +20,26 @@ class SplitModel extends Equatable {
     this.isSettled = false,
   });
 
+  factory SplitModel.fromJson(Map<String, dynamic> json) {
+    return SplitModel(
+      userId: (json['userId'] ?? json['user_id'] ?? '') as String,
+      userName:
+          (json['userName'] ?? json['user_name'] ?? json['name'] ?? '') as String,
+      userAvatarUrl: json['userAvatarUrl'] as String?,
+      owedShare: _parseAmount(json['owedShare'] ?? json['amount']),
+      paidShare: _parseAmount(json['paidShare']),
+      percentage: _parseAmount(json['percentage']),
+      isSettled: (json['isSettled'] ?? json['is_settled'] ?? false) as bool,
+    );
+  }
+
+  static double _parseAmount(dynamic v) {
+    if (v == null) return 0;
+    if (v is num) return v.toDouble();
+    if (v is String) return double.tryParse(v) ?? 0;
+    return 0;
+  }
+
   SplitModel copyWith({
     String? userId,
     String? userName,

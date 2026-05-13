@@ -1,16 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_riverpod/legacy.dart';
-import 'package:uuid/uuid.dart';
-import '../../../models/models.dart';
 
-/// Dashboard data state
+import '../../../data/dashboard/dashboard_repository.dart';
+import '../../../models/expense_model.dart';
+import '../../../models/group_model.dart';
+import '../../auth/state/auth_provider.dart';
+import '../../groups/state/groups_provider.dart';
+
 class DashboardData {
-  final double totalBalance;
-  final double youAreOwed;
-  final double youOwe;
-  final List<GroupModel> recentGroups;
-  final List<ExpenseModel> recentExpenses;
-
   const DashboardData({
     required this.totalBalance,
     required this.youAreOwed,
@@ -18,75 +14,55 @@ class DashboardData {
     required this.recentGroups,
     required this.recentExpenses,
   });
+
+  final double totalBalance;
+  final double youAreOwed;
+  final double youOwe;
+  final List<GroupModel> recentGroups;
+  final List<ExpenseModel> recentExpenses;
+
+  static const empty = DashboardData(
+    totalBalance: 0,
+    youAreOwed: 0,
+    youOwe: 0,
+    recentGroups: <GroupModel>[],
+    recentExpenses: <ExpenseModel>[],
+  );
 }
 
-/// Mock dashboard provider with sample data
-final dashboardProvider = StateProvider<DashboardData>((ref) {
-  final currentUser = UserModel(
-    id: 'user1',
-    name: 'You',
-    email: 'user@example.com',
-    phone: '9876543210',
-    avatarUrl: 'https://i.pravatar.cc/150?img=1',
-    createdAt: DateTime.now(),
-  );
+final dashboardProvider =
+    AsyncNotifierProvider<DashboardNotifier, DashboardData>(
+        DashboardNotifier.new);
 
-  final user2 = UserModel(
-    id: 'user2',
-    name: 'Raj',
-    email: 'raj@example.com',
-    phone: '9876543211',
-    avatarUrl: 'https://i.pravatar.cc/150?img=2',
-    createdAt: DateTime.now(),
-  );
+class DashboardNotifier extends AsyncNotifier<DashboardData> {
+  static const int _recentGroupsCount = 5;
+  static const int _recentExpensesCount = 10;
 
-  final groups = [
-    GroupModel(
-      id: const Uuid().v4(),
-      name: 'Goa Trip',
-      coverEmoji: '🏝️',
-      members: [currentUser, user2],
-      totalExpenses: 15000,
-      myBalance: 2500,
-      currency: '₹',
-      createdAt: DateTime.now().subtract(const Duration(days: 30)),
-      category: GroupCategory.trip,
-    ),
-    GroupModel(
-      id: const Uuid().v4(),
-      name: 'Home Rent',
-      coverEmoji: '🏠',
-      members: [currentUser, user2],
-      totalExpenses: 45000,
-      myBalance: -5000,
-      currency: '₹',
-      createdAt: DateTime.now().subtract(const Duration(days: 90)),
-      category: GroupCategory.home,
-    ),
-  ];
+  @override
+  Future<DashboardData> build() async {
+    final user = ref.watch(authProvider).user;
+    if (user == null) return DashboardData.empty;
 
-  final expenses = [
-    ExpenseModel(
-      id: const Uuid().v4(),
-      title: 'Flight Tickets',
-      amount: 12000,
-      currency: '₹',
-      category: CategoryModel.travel,
-      paidBy: currentUser,
-      splits: [
-        SplitModel(userId: 'user1', userName: 'You', owedShare: 4000),
-      ],
-      date: DateTime.now().subtract(const Duration(hours: 5)),
-      splitType: SplitType.equal,
-      createdAt: DateTime.now(),
-    ),
-  ];
+    // Surface the current groups list immediately, then layer the API
+    // summary on top — keeps the recent-groups carousel snappy.
+    final groups = ref.watch(groupsProvider).value ?? const <GroupModel>[];
+    final recentGroups = groups.take(_recentGroupsCount).toList();
 
-  return DashboardData(
-    totalBalance: 2500,
-    youAreOwed: 7500,
-    youOwe: 5000,
-    recentGroups: groups,
-    recentExpenses: expenses,
-  );
-});
+    final summary = await ref
+        .read(dashboardRepositoryProvider)
+        .getForUser(user.id, recentLimit: _recentExpensesCount);
+
+    return DashboardData(
+      totalBalance: summary.totalBalance,
+      youAreOwed: summary.youAreOwed,
+      youOwe: summary.youOwe,
+      recentGroups: recentGroups,
+      recentExpenses: summary.recentExpenses,
+    );
+  }
+
+  Future<void> refresh() async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(build);
+  }
+}

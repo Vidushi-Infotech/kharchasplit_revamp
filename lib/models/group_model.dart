@@ -34,6 +34,29 @@ class GroupModel extends Equatable {
     this.category = GroupCategory.other,
   });
 
+  factory GroupModel.fromJson(Map<String, dynamic> json) {
+    final rawMembers = json['members'];
+    final members = rawMembers is List
+        ? rawMembers
+            .whereType<Map<String, dynamic>>()
+            .map(UserModel.fromJson)
+            .toList()
+        : <UserModel>[];
+    final created = json['created_at'] ?? json['createdAt'];
+    return GroupModel(
+      id: json['id'] as String,
+      name: (json['name'] as String?) ?? '',
+      coverEmoji: (json['coverEmoji'] as String?) ?? '👥',
+      members: members,
+      totalExpenses: (json['totalExpenses'] as num?)?.toDouble() ?? 0,
+      myBalance: (json['myBalance'] as num?)?.toDouble() ?? 0,
+      currency: (json['currency'] as String?) ?? 'INR',
+      createdAt:
+          created is String ? DateTime.parse(created) : DateTime.now(),
+      category: GroupCategory.other,
+    );
+  }
+
   GroupModel copyWith({
     String? id,
     String? name,

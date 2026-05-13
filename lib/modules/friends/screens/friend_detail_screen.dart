@@ -261,7 +261,7 @@ class FriendDetailScreen extends ConsumerWidget {
                 child: ExpenseCard(
                   expense: expense,
                   onTap: () {
-                    context.go('/expense/${expense.id}');
+                    context.push('/expense/${expense.id}');
                   },
                 ),
               );

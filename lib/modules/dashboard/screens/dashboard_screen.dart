@@ -9,21 +9,33 @@ import '../state/dashboard_provider.dart';
 
 /// Main dashboard screen showing balance, groups, and recent expenses
 class DashboardScreen extends ConsumerWidget {
-  const DashboardScreen({Key? key}) : super(key: key);
+  const DashboardScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final screenWidth = MediaQuery.of(context).size.width;
-    final dashboardData = ref.watch(dashboardProvider);
+    final dashboardAsync = ref.watch(dashboardProvider);
 
     return Scaffold(
       backgroundColor: AppColors.background(isDark),
-      body: screenWidth < 600
-          ? _buildCompactLayout(context, isDark, dashboardData)
-          : screenWidth < 1100
-              ? _buildStandardLayout(context, isDark, dashboardData)
-              : _buildLargeLayout(context, isDark, dashboardData),
+      body: SafeArea(
+        child: dashboardAsync.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (err, _) => _DashboardError(
+            message: err.toString(),
+            onRetry: () => ref.read(dashboardProvider.notifier).refresh(),
+          ),
+          data: (data) => RefreshIndicator(
+            onRefresh: () => ref.read(dashboardProvider.notifier).refresh(),
+            child: screenWidth < 600
+                ? _buildCompactLayout(context, isDark, data)
+                : screenWidth < 1100
+                    ? _buildStandardLayout(context, isDark, data)
+                    : _buildLargeLayout(context, isDark, data),
+          ),
+        ),
+      ),
     );
   }
 
@@ -239,7 +251,7 @@ class DashboardScreen extends ConsumerWidget {
               padding: const EdgeInsets.only(bottom: 12),
               child: GroupCard(
                 group: group,
-                onTap: () => context.go('/home/groups/${group.id}'),
+                onTap: () => context.push('/home/groups/${group.id}'),
               ),
             ),
           ),
@@ -310,5 +322,48 @@ class DashboardScreen extends ConsumerWidget {
       ],
     );
   }
+}
 
+class _DashboardError extends StatelessWidget {
+  const _DashboardError({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.error_outline_rounded,
+              size: 48,
+              color: AppColors.errorText(isDark),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              "Couldn't load your dashboard",
+              style: AppTextStyles.headline3(isDark),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              message,
+              style: AppTextStyles.body2(isDark),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Retry'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

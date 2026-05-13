@@ -1,63 +1,53 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_riverpod/legacy.dart';
-import 'package:uuid/uuid.dart';
-import '../../../models/models.dart';
 
-class GroupsData {
-  final List<GroupModel> groups;
-  final bool isLoading;
-  final String? error;
+import '../../../data/groups/groups_repository.dart';
+import '../../../models/group_model.dart';
+import '../../auth/state/auth_provider.dart';
 
-  const GroupsData({
-    required this.groups,
-    this.isLoading = false,
-    this.error,
-  });
+/// Live list of the current user's groups (server-backed).
+final groupsProvider =
+    AsyncNotifierProvider<GroupsNotifier, List<GroupModel>>(GroupsNotifier.new);
+
+class GroupsNotifier extends AsyncNotifier<List<GroupModel>> {
+  @override
+  Future<List<GroupModel>> build() async {
+    final user = ref.watch(authProvider).user;
+    if (user == null) return const <GroupModel>[];
+    return ref.read(groupsRepositoryProvider).listForUser(user.id);
+  }
+
+  Future<void> refresh() async {
+    final user = ref.read(authProvider).user;
+    if (user == null) {
+      state = const AsyncData(<GroupModel>[]);
+      return;
+    }
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(
+      () => ref.read(groupsRepositoryProvider).listForUser(user.id),
+    );
+  }
+
+  /// Creates a group via the API and prepends it to local state.
+  /// Throws on failure so the caller can surface an inline error.
+  Future<GroupModel> addGroup({
+    required String name,
+    String? description,
+    String? coverImageBase64,
+    String currency = 'INR',
+    List<CreateGroupMember> members = const [],
+  }) async {
+    final repo = ref.read(groupsRepositoryProvider);
+    final created = await repo.create(
+      name: name,
+      description: description,
+      coverImageBase64: coverImageBase64,
+      currency: currency,
+      members: members,
+    );
+    // Re-fetch from server so the optimistic state matches what the
+    // detail/list endpoints will return (member_count, totals, etc.).
+    await refresh();
+    return created;
+  }
 }
-
-final groupsProvider = StateProvider<GroupsData>((ref) {
-  final user1 = UserModel(
-    id: 'user1',
-    name: 'You',
-    email: 'user@example.com',
-    phone: '9876543210',
-    avatarUrl: 'https://i.pravatar.cc/150?img=1',
-    createdAt: DateTime.now(),
-  );
-
-  final user2 = UserModel(
-    id: 'user2',
-    name: 'Raj',
-    email: 'raj@example.com',
-    phone: '9876543211',
-    avatarUrl: 'https://i.pravatar.cc/150?img=2',
-    createdAt: DateTime.now(),
-  );
-
-  final groups = [
-    GroupModel(
-      id: const Uuid().v4(),
-      name: 'Goa Trip',
-      coverEmoji: '🏝️',
-      members: [user1, user2],
-      totalExpenses: 15000,
-      myBalance: 2500,
-      currency: '₹',
-      createdAt: DateTime.now().subtract(const Duration(days: 30)),
-      category: GroupCategory.trip,
-    ),
-    GroupModel(
-      id: const Uuid().v4(),
-      name: 'Home Rent',
-      coverEmoji: '🏠',
-      members: [user1, user2],
-      totalExpenses: 45000,
-      myBalance: -5000,
-      currency: '₹',
-      createdAt: DateTime.now().subtract(const Duration(days: 90)),
-      category: GroupCategory.home,
-    ),
-  ];
-
-  return GroupsData(groups: groups);
-});

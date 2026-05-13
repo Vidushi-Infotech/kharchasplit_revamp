@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
@@ -10,6 +11,9 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../components/components.dart';
 import '../../../models/models.dart';
 import '../../../core/services/image_processor_service.dart';
+import 'package:share_plus/share_plus.dart';
+import '../state/groups_provider.dart';
+import '../state/registered_users_provider.dart';
 
 /// Screen for creating a new group
 class CreateGroupScreen extends ConsumerStatefulWidget {
@@ -22,6 +26,7 @@ class CreateGroupScreen extends ConsumerStatefulWidget {
 class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
   late TextEditingController _groupNameController;
   late TextEditingController _descriptionController;
+  late FocusNode _groupNameFocus;
   GroupCategory _selectedCategory = GroupCategory.other;
   String _selectedEmoji = '👥';
   XFile? _selectedImageFile;
@@ -29,6 +34,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
   bool _isProcessing = false;
   String? _processingStatus;
   double _uploadProgress = 0.0;
+  final List<Contact> _selectedContacts = [];
 
   final ImagePicker _imagePicker = ImagePicker();
 
@@ -37,13 +43,46 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
     super.initState();
     _groupNameController = TextEditingController();
     _descriptionController = TextEditingController();
+    _groupNameFocus = FocusNode();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _groupNameFocus.requestFocus();
+    });
   }
 
   @override
   void dispose() {
     _groupNameController.dispose();
     _descriptionController.dispose();
+    _groupNameFocus.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickContacts() async {
+    final hasPermission = await FlutterContacts.requestPermission(readonly: true);
+    if (!hasPermission) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Contacts permission denied')),
+      );
+      return;
+    }
+    final contacts = await FlutterContacts.getContacts(withProperties: true);
+    if (!mounted) return;
+    final picked = await showModalBottomSheet<List<Contact>>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => _ContactsPickerSheet(
+        contacts: contacts,
+        initialSelected: _selectedContacts,
+      ),
+    );
+    if (picked != null) {
+      setState(() {
+        _selectedContacts
+          ..clear()
+          ..addAll(picked);
+      });
+    }
   }
 
   Future<void> _pickImage() async {
@@ -335,18 +374,32 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
     }
   }
 
-  void _createGroup() {
-    if (_groupNameController.text.isEmpty) {
+  Future<void> _createGroup() async {
+    final name = _groupNameController.text.trim();
+    if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter a group name')),
       );
       return;
     }
 
-    // Navigate back to groups screen after creation
+    // Selected contacts can't go straight into the create call — the backend
+    // expects existing user IDs. Member invites flow through the dedicated
+    // /groups/:id/pending-members endpoint, which the detail screen handles.
+    try {
+      await ref.read(groupsProvider.notifier).addGroup(name: name);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not create group: $e')),
+      );
+      return;
+    }
+
+    if (!mounted) return;
     context.go('/home/groups');
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Group "${_groupNameController.text}" created!')),
+      SnackBar(content: Text('Group "$name" created!')),
     );
   }
 
@@ -374,11 +427,14 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
         backgroundColor: AppColors.cardBg(isDark),
         foregroundColor: AppColors.textPrimary(isDark),
       ),
-      body: screenWidth < 600
-          ? _buildCompactLayout(isDark)
-          : screenWidth < 1100
-              ? _buildStandardLayout(isDark)
-              : _buildLargeLayout(isDark),
+      body: SafeArea(
+        top: false,
+        child: screenWidth < 600
+            ? _buildCompactLayout(isDark)
+            : screenWidth < 1100
+                ? _buildStandardLayout(isDark)
+                : _buildLargeLayout(isDark),
+      ),
     );
   }
 
@@ -417,15 +473,6 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Group Cover Section
-        Text(
-          'Group Cover',
-          style: AppTextStyles.body1(isDark),
-        ),
-        const SizedBox(height: 12),
-        _buildCoverSelector(isDark),
-        const SizedBox(height: 32),
-
         // Group Name
         Text(
           'Group Name',
@@ -436,11 +483,21 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
           label: 'Group name input',
           child: AppTextField(
             controller: _groupNameController,
+            focusNode: _groupNameFocus,
             hint: 'e.g., Goa Trip',
             label: 'Group Name',
           ),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 32),
+
+        // Group Cover Section
+        Text(
+          'Group Cover',
+          style: AppTextStyles.body1(isDark),
+        ),
+        const SizedBox(height: 12),
+        _buildCoverSelector(isDark),
+        const SizedBox(height: 32),
 
         // Category Selector
         Text(
@@ -449,6 +506,15 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
         ),
         const SizedBox(height: 12),
         _buildCategorySelector(isDark),
+        const SizedBox(height: 32),
+
+        // Members
+        Text(
+          'Members',
+          style: AppTextStyles.body1(isDark),
+        ),
+        const SizedBox(height: 12),
+        _buildMembersSection(isDark),
         const SizedBox(height: 32),
 
         // Description
@@ -477,6 +543,49 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
             child: PrimaryButton(
               label: 'Create Group',
               onPressed: _createGroup,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMembersSection(bool isDark) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_selectedContacts.isNotEmpty) ...[
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _selectedContacts.map((c) {
+              final name = c.displayName.isEmpty ? 'Unknown' : c.displayName;
+              return Chip(
+                label: Text(name),
+                onDeleted: () => setState(() => _selectedContacts.remove(c)),
+                deleteIconColor: AppColors.errorText(isDark),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 12),
+        ],
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: _pickContacts,
+            icon: const Icon(Icons.contacts_rounded),
+            label: Text(
+              _selectedContacts.isEmpty
+                  ? 'Add Members from Contacts'
+                  : 'Edit Members',
+            ),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              side: BorderSide(color: AppColors.brand),
+              foregroundColor: AppColors.brand,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
           ),
         ),
@@ -755,6 +864,212 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
           ),
         );
       }).toList(),
+    );
+  }
+}
+
+class _ContactsPickerSheet extends ConsumerStatefulWidget {
+  final List<Contact> contacts;
+  final List<Contact> initialSelected;
+
+  const _ContactsPickerSheet({
+    required this.contacts,
+    required this.initialSelected,
+  });
+
+  @override
+  ConsumerState<_ContactsPickerSheet> createState() =>
+      _ContactsPickerSheetState();
+}
+
+class _ContactsPickerSheetState extends ConsumerState<_ContactsPickerSheet> {
+  late Set<String> _selectedIds;
+  late TextEditingController _searchController;
+  String _query = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedIds = widget.initialSelected.map((c) => c.id).toSet();
+    _searchController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final filtered = _query.isEmpty
+        ? widget.contacts
+        : widget.contacts
+            .where((c) =>
+                c.displayName.toLowerCase().contains(_query.toLowerCase()))
+            .toList();
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.85,
+      minChildSize: 0.5,
+      maxChildSize: 0.95,
+      expand: false,
+      builder: (ctx, scrollController) {
+        return SafeArea(
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Select Contacts',
+                        style: AppTextStyles.headline3(isDark),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        final selected = widget.contacts
+                            .where((c) => _selectedIds.contains(c.id))
+                            .toList();
+                        Navigator.of(context).pop(selected);
+                      },
+                      child: Text('Done (${_selectedIds.length})'),
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: (v) => setState(() => _query = v),
+                  decoration: InputDecoration(
+                    hintText: 'Search contacts',
+                    prefixIcon: const Icon(Icons.search_rounded),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Expanded(
+                child: filtered.isEmpty
+                    ? Center(
+                        child: Text(
+                          'No contacts found',
+                          style: AppTextStyles.body2(isDark).copyWith(
+                            color: AppColors.textSecondary(isDark),
+                          ),
+                        ),
+                      )
+                    : ListView.builder(
+                        controller: scrollController,
+                        itemCount: filtered.length,
+                        itemBuilder: (_, i) {
+                          final c = filtered[i];
+                          final isSelected = _selectedIds.contains(c.id);
+                          final name =
+                              c.displayName.isEmpty ? 'Unknown' : c.displayName;
+                          final phone = c.phones.isNotEmpty
+                              ? c.phones.first.number
+                              : '';
+                          final subtitle = phone.isNotEmpty
+                              ? phone
+                              : (c.emails.isNotEmpty
+                                  ? c.emails.first.address
+                                  : '');
+                          final registered = ref.watch(registeredPhonesProvider);
+                          final isRegistered = phone.isNotEmpty &&
+                              registered.contains(normalizePhone(phone));
+                          return ListTile(
+                            onTap: () => _toggle(c.id),
+                            title: Text(name),
+                            subtitle:
+                                subtitle.isEmpty ? null : Text(subtitle),
+                            leading: CircleAvatar(
+                              backgroundColor:
+                                  AppColors.brand.withValues(alpha: 0.2),
+                              child: Text(
+                                name.isNotEmpty ? name[0].toUpperCase() : '?',
+                                style: TextStyle(color: AppColors.brand),
+                              ),
+                            ),
+                            trailing: _buildActionButton(
+                              isRegistered: isRegistered,
+                              isSelected: isSelected,
+                              onAdd: () => _toggle(c.id),
+                              onInvite: () => _invite(c, name, phone),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _toggle(String id) {
+    setState(() {
+      if (_selectedIds.contains(id)) {
+        _selectedIds.remove(id);
+      } else {
+        _selectedIds.add(id);
+      }
+    });
+  }
+
+  Future<void> _invite(Contact c, String name, String phone) async {
+    _selectedIds.add(c.id);
+    setState(() {});
+    final msg = phone.isNotEmpty
+        ? 'Hey $name, I added you on KharchaSplit to split expenses. Join: https://kharchasplit.app/invite'
+        : 'Hey $name, join me on KharchaSplit: https://kharchasplit.app/invite';
+    await SharePlus.instance.share(ShareParams(text: msg));
+  }
+
+  Widget _buildActionButton({
+    required bool isRegistered,
+    required bool isSelected,
+    required VoidCallback onAdd,
+    required VoidCallback onInvite,
+  }) {
+    if (isSelected) {
+      return TextButton.icon(
+        onPressed: onAdd,
+        icon: Icon(Icons.check_circle, color: AppColors.brand, size: 18),
+        label: Text(
+          isRegistered ? 'Added' : 'Invited',
+          style: TextStyle(color: AppColors.brand),
+        ),
+      );
+    }
+    if (isRegistered) {
+      return FilledButton(
+        onPressed: onAdd,
+        style: FilledButton.styleFrom(
+          backgroundColor: AppColors.brand,
+          minimumSize: const Size(72, 36),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+        ),
+        child: const Text('Add'),
+      );
+    }
+    return OutlinedButton(
+      onPressed: onInvite,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: AppColors.brand,
+        side: BorderSide(color: AppColors.brand),
+        minimumSize: const Size(72, 36),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+      ),
+      child: const Text('Invite'),
     );
   }
 }

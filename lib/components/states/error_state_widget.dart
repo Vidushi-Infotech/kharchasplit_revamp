@@ -8,6 +8,8 @@ class ErrorStateWidget extends StatelessWidget {
   final String message;
   final String? title;
   final VoidCallback? onRetry;
+  final VoidCallback? onSecondaryAction;
+  final String? secondaryActionLabel;
   final IconData icon;
 
   const ErrorStateWidget({
@@ -15,6 +17,8 @@ class ErrorStateWidget extends StatelessWidget {
     required this.message,
     this.title,
     this.onRetry,
+    this.onSecondaryAction,
+    this.secondaryActionLabel,
     this.icon = Icons.error_outline_rounded,
   }) : super(key: key);
 
@@ -76,6 +80,16 @@ class ErrorStateWidget extends StatelessWidget {
                   onPressed: onRetry!,
                 ),
               ),
+            if (onSecondaryAction != null) ...[
+              if (onRetry != null) const SizedBox(height: 12),
+              SizedBox(
+                width: isCompact ? double.infinity : 200,
+                child: TextButton(
+                  onPressed: onSecondaryAction,
+                  child: Text(secondaryActionLabel ?? 'Go back'),
+                ),
+              ),
+            ],
           ],
         ),
       ),

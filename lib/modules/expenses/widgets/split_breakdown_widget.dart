@@ -433,7 +433,28 @@ class _SplitBreakdownWidgetState extends State<SplitBreakdownWidget> {
                   ),
                 ),
               ),
-              onChanged: (_) => _updateSplits(),
+              onChanged: (value) {
+                if (widget.splitType == SplitType.percentage &&
+                    _localIncludedMembers.length == 2) {
+                  final entered = double.tryParse(value) ?? 0;
+                  final clamped = entered.clamp(0, 100).toDouble();
+                  final otherId = _localIncludedMembers
+                      .firstWhere((id) => id != member.id);
+                  final otherController = _controllers[otherId];
+                  if (otherController != null) {
+                    final remaining = (100 - clamped);
+                    final formatted = remaining == remaining.toInt()
+                        ? remaining.toInt().toString()
+                        : remaining.toStringAsFixed(1);
+                    otherController.value = TextEditingValue(
+                      text: formatted,
+                      selection:
+                          TextSelection.collapsed(offset: formatted.length),
+                    );
+                  }
+                }
+                _updateSplits();
+              },
             ),
           ),
         ],

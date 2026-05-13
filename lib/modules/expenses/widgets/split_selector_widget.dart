@@ -46,40 +46,33 @@ class _SplitSelectorWidgetState extends State<SplitSelectorWidget> {
         const SizedBox(height: 12),
         SizedBox(
           height: 120,
-          child: Listener(
-            onPointerSignal: (PointerSignalEvent event) {
-              if (event is PointerScrollEvent) {
-                // Convert vertical scroll to horizontal scroll
-                _scrollController.animateTo(
-                  _scrollController.offset + event.scrollDelta.dy,
-                  duration: const Duration(milliseconds: 200),
-                  curve: Curves.easeOut,
-                );
-              }
-            },
-            child: Scrollbar(
+          child: ScrollConfiguration(
+            behavior: ScrollConfiguration.of(context).copyWith(
+              scrollbars: false,
+              dragDevices: {
+                PointerDeviceKind.touch,
+                PointerDeviceKind.mouse,
+                PointerDeviceKind.trackpad,
+              },
+            ),
+            child: ListView.builder(
               controller: _scrollController,
-              child: ListView.builder(
-                controller: _scrollController,
-                scrollDirection: Axis.horizontal,
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.only(left: 12),
-                itemCount: 5,
-                itemBuilder: (context, index) {
-                  final splitTypes = [
-                    SplitType.equal,
-                    SplitType.exact,
-                    SplitType.percentage,
-                    SplitType.shares,
-                    SplitType.adjustment,
-                  ];
-                  final type = splitTypes[index];
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 12),
-                    child: _buildSplitCard(isDark, type),
-                  );
-                },
-              ),
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              itemCount: 4,
+              itemBuilder: (context, index) {
+                final splitTypes = [
+                  SplitType.equal,
+                  SplitType.percentage,
+                  SplitType.shares,
+                  SplitType.adjustment,
+                ];
+                final type = splitTypes[index];
+                return Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: _buildSplitCard(isDark, type),
+                );
+              },
             ),
           ),
         ),

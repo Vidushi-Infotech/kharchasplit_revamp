@@ -42,6 +42,48 @@ class SettlementModel extends Equatable {
     required this.createdAt,
   });
 
+  factory SettlementModel.fromJson(Map<String, dynamic> json) {
+    UserModel _user(String key, String nameKey) {
+      final maybe = json[key];
+      if (maybe is Map<String, dynamic>) return UserModel.fromJson(maybe);
+      return UserModel(
+        id: (json[key] ?? '') as String,
+        name: (json[nameKey] as String?) ?? 'Unknown',
+        email: '',
+        phone: '',
+        createdAt: DateTime.now(),
+      );
+    }
+
+    final created = json['createdAt'] ?? json['created_at'];
+    final settledAt = json['settledAt'] ?? json['settled_at'] ?? created;
+    final statusRaw = (json['status'] as String?) ?? 'completed';
+
+    return SettlementModel(
+      id: json['id'] as String,
+      fromUser: json['fromUser'] is Map<String, dynamic>
+          ? UserModel.fromJson(json['fromUser'] as Map<String, dynamic>)
+          : _user('from_user_id', 'from_user_name'),
+      toUser: json['toUser'] is Map<String, dynamic>
+          ? UserModel.fromJson(json['toUser'] as Map<String, dynamic>)
+          : _user('to_user_id', 'to_user_name'),
+      amount: (json['amount'] is num)
+          ? (json['amount'] as num).toDouble()
+          : double.tryParse(json['amount']?.toString() ?? '') ?? 0,
+      currency: (json['currency'] as String?) ?? 'INR',
+      method: SettlementMethod.cash,
+      date: settledAt is String ? DateTime.parse(settledAt) : DateTime.now(),
+      note: json['notes'] as String?,
+      status: statusRaw == 'pending'
+          ? SettlementStatus.pending
+          : statusRaw == 'failed'
+              ? SettlementStatus.failed
+              : SettlementStatus.completed,
+      createdAt:
+          created is String ? DateTime.parse(created) : DateTime.now(),
+    );
+  }
+
   SettlementModel copyWith({
     String? id,
     UserModel? fromUser,

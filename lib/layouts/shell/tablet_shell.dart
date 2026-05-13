@@ -79,7 +79,7 @@ class TabletShell extends ConsumerWidget {
                   ),
                   child: const Icon(Icons.add_rounded, color: Colors.white),
                 ),
-                label: Text('Add'),
+                label: Text('Create'),
               ),
               const NavigationRailDestination(
                 icon: Icon(Icons.people_alt_rounded),

@@ -5,8 +5,12 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/services/invoice_scanner_service.dart';
+import '../../../data/expenses/expenses_repository.dart';
 import '../../../models/models.dart';
+import '../../../modules/auth/state/auth_provider.dart';
+import '../../../modules/dashboard/state/dashboard_provider.dart';
 import '../../../modules/groups/state/group_detail_provider.dart';
+import '../../../modules/groups/state/groups_provider.dart';
 import '../state/add_expense_provider.dart';
 import '../widgets/amount_input_widget.dart';
 import '../widgets/category_selector_widget.dart';
@@ -123,7 +127,13 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     AddExpenseState state,
     List<UserModel> groupMembers,
   ) {
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _closeScreen();
+      },
+      child: Scaffold(
       backgroundColor: AppColors.background(isDark),
       appBar: AppBar(
         title: const Text('Add Expense'),
@@ -132,9 +142,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
         leading: Semantics(
           button: true,
           label: 'Close',
-          onTap: () => context.pop(),
+          onTap: _closeScreen,
           child: GestureDetector(
-            onTap: () => context.pop(),
+            onTap: _closeScreen,
             child: const Icon(Icons.close_rounded),
           ),
         ),
@@ -168,6 +178,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
         ),
       ),
       bottomNavigationBar: _buildSaveButton(isDark, state),
+      ),
     );
   }
 
@@ -960,7 +971,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
 
   // Save button for mobile/tablet
   Widget _buildSaveButton(bool isDark, AddExpenseState state) {
-    return Padding(
+    return SafeArea(
+      top: false,
+      child: Padding(
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom + 16,
         left: 16,
@@ -993,6 +1006,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
             ),
           ),
         ),
+      ),
       ),
     );
   }
@@ -1028,15 +1042,155 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     );
   }
 
-  void _handleSave() {
-    // TODO: Save expense to backend
+  Future<void> _handleSave() async {
+    final state = ref.read(addExpenseProvider);
+    if (state.groupId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Pick a group before saving the expense.')),
+      );
+      return;
+    }
+    final groupId = state.groupId!;
+    final currentUser = ref.read(authProvider).user;
+    if (currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You must be signed in to save an expense.')),
+      );
+      return;
+    }
+
+    final groups = ref.read(groupsProvider).value ?? const <GroupModel>[];
+    final group = groups
+        .where((g) => g.id == groupId)
+        .cast<GroupModel?>()
+        .firstWhere((g) => true, orElse: () => null);
+    final members = group?.members ?? const <UserModel>[];
+
+    final paidBy = state.paidBy ??
+        (members.where((m) => m.id == currentUser.id).isNotEmpty
+            ? members.firstWhere((m) => m.id == currentUser.id)
+            : UserModel(
+                id: currentUser.id,
+                name: currentUser.name,
+                email: currentUser.email,
+                phone: currentUser.phone,
+                avatarUrl: currentUser.avatarUrl,
+                createdAt: currentUser.createdAt,
+              ));
+
+    final memberById = {for (final m in members) m.id: m};
+    final includedIds = state.includedMemberIds.isNotEmpty
+        ? state.includedMemberIds.toList()
+        : members.map((m) => m.id).toList();
+
+    double shareFor(String id) {
+      final raw = state.splits[id] ?? 0;
+      switch (state.splitType) {
+        case SplitType.equal:
+          if (includedIds.isEmpty) return state.amount;
+          return state.amount / includedIds.length;
+        case SplitType.exact:
+          return raw;
+        case SplitType.percentage:
+          return state.amount * raw / 100;
+        case SplitType.shares:
+          final totalShares = includedIds.fold<double>(
+              0, (sum, mid) => sum + (state.splits[mid] ?? 0));
+          if (totalShares <= 0) return 0;
+          return state.amount * raw / totalShares;
+        case SplitType.adjustment:
+          final base = includedIds.isEmpty
+              ? state.amount
+              : state.amount / includedIds.length;
+          return base + raw;
+      }
+    }
+
+    // The backend's split_type CHECK constraint only accepts
+    // ('equal', 'unequal', 'percentage', 'shares'). Map exact + adjustment
+    // both to 'unequal' since we send concrete amounts in either case.
+    String backendSplitType(SplitType t) {
+      switch (t) {
+        case SplitType.equal:
+          return 'equal';
+        case SplitType.percentage:
+          return 'percentage';
+        case SplitType.shares:
+          return 'shares';
+        case SplitType.exact:
+        case SplitType.adjustment:
+          return 'unequal';
+      }
+    }
+
+    final participants = includedIds.isEmpty
+        ? [
+            ExpenseParticipant(
+              userId: paidBy.id,
+              name: paidBy.name,
+              amount: state.amount,
+            ),
+          ]
+        : includedIds.map((id) {
+            final member = memberById[id];
+            return ExpenseParticipant(
+              userId: id,
+              name: member?.name ?? id,
+              amount: shareFor(id),
+            );
+          }).toList();
+
+    ref.read(addExpenseProvider.notifier).state =
+        state.copyWith(isLoading: true, error: null);
+
+    try {
+      await ref.read(expensesRepositoryProvider).create(
+            groupId: groupId,
+            description: (state.title == null || state.title!.trim().isEmpty)
+                ? 'Untitled'
+                : state.title!.trim(),
+            amount: state.amount,
+            currency: state.currency,
+            category: (state.category ?? CategoryModel.other).id,
+            paidById: paidBy.id,
+            paidByName: paidBy.name,
+            splitType: backendSplitType(state.splitType),
+            notes: state.notes,
+            expenseDate: state.date,
+            participants: participants,
+          );
+    } catch (e) {
+      if (!mounted) return;
+      ref.read(addExpenseProvider.notifier).state =
+          state.copyWith(isLoading: false, error: e.toString());
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not save expense: $e')),
+      );
+      return;
+    }
+
+    ref.invalidate(dashboardProvider);
+    ref.invalidate(groupDetailProvider(groupId));
+
+    if (!mounted) return;
+    ref.read(addExpenseProvider.notifier).state =
+        AddExpenseState(date: DateTime.now());
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: const Text('✓ Expense saved successfully!'),
+        content: const Text('✓ Expense saved'),
         backgroundColor: AppColors.success,
         duration: const Duration(seconds: 2),
       ),
     );
-    GoRouter.of(context).pop();
+    _closeScreen();
+  }
+
+  void _closeScreen() {
+    final router = GoRouter.of(context);
+    if (router.canPop()) {
+      router.pop();
+    } else {
+      context.go('/home/dashboard');
+    }
   }
 }
