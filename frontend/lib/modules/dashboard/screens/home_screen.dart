@@ -8,6 +8,7 @@ import '../../../components/bottom_navigation_bar.dart';
 import '../../../components/cards/balance_card.dart';
 import '../../../models/models.dart';
 import '../state/dashboard_provider.dart';
+import '../widgets/dashboard_header.dart';
 
 /// Navigation index provider for sidebar/bottom nav
 final selectedNavIndexProvider = StateProvider<int>((ref) => 0);
@@ -52,7 +53,7 @@ class HomeScreen extends ConsumerWidget {
         padding: const EdgeInsets.all(16),
         physics: const BouncingScrollPhysics(),
         children: [
-          _buildHeader(isDark),
+          const DashboardHeader(),
           const SizedBox(height: 24),
           BalanceCard(totalBalance: data.totalBalance),
           const SizedBox(height: 32),
@@ -95,7 +96,7 @@ class HomeScreen extends ConsumerWidget {
               ),
               physics: const BouncingScrollPhysics(),
               children: [
-                _buildHeader(isDark),
+                const DashboardHeader(),
                 const SizedBox(height: 40),
                 Center(
                   child: ConstrainedBox(
@@ -115,25 +116,6 @@ class HomeScreen extends ConsumerWidget {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildHeader(bool isDark) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Welcome Back',
-          style: AppTextStyles.headline2(isDark),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Manage your expenses',
-          style: AppTextStyles.body2(isDark).copyWith(
-            color: AppColors.textSecondary(isDark),
-          ),
-        ),
-      ],
     );
   }
 

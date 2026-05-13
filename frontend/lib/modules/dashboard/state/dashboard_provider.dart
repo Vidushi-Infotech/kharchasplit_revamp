@@ -63,6 +63,9 @@ class DashboardNotifier extends AsyncNotifier<DashboardData> {
 
   Future<void> refresh() async {
     state = const AsyncLoading();
+    // Refresh the underlying groups list too — otherwise build() reuses
+    // the cached value and the carousel stays stale.
+    await ref.read(groupsProvider.notifier).refresh();
     state = await AsyncValue.guard(build);
   }
 }
