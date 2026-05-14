@@ -26,23 +26,16 @@ class GroupDetailScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: AppColors.background(isDark),
-      appBar: AppBar(
-        title: const Text('Group Details'),
-        elevation: 0,
-        backgroundColor: AppColors.surface(isDark),
-        actions: [
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert_rounded),
-            onSelected: (value) {
-              if (value == 'invite') {
-                _showInviteDialog(context, ref);
-              }
-            },
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'invite', child: Text('Invite member')),
-            ],
-          ),
-        ],
+      appBar: _DetailTopBar(
+        isDark: isDark,
+        onClose: () {
+          if (Navigator.of(context).canPop()) {
+            Navigator.of(context).pop();
+          } else {
+            context.go('/home/groups');
+          }
+        },
+        onInvite: () => _showInviteDialog(context, ref),
       ),
       body: detailAsync.when(
         loading: () => const ShimmerList(type: ShimmerListType.group),
@@ -303,74 +296,27 @@ class GroupDetailScreen extends ConsumerWidget {
     );
   }
 
-  // Compact header: <600px - optimized for mobile (tight spacing 16-20px)
+  // Compact header: <600px — hero gradient card + members strip
   Widget _buildCompactHeader(BuildContext context, bool isDark, GroupDetail detail) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-      decoration: BoxDecoration(
-        color: AppColors.surface(isDark),
-        border: Border(
-          bottom: BorderSide(
-            color: AppColors.divider(isDark),
-            width: 1,
-          ),
-        ),
-      ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Group title with emoji
-          Row(
-            children: [
-              Text(
-                detail.group.coverEmoji,
-                style: const TextStyle(fontSize: 28),
+          _HeroCard(detail: detail),
+          const SizedBox(height: 18),
+          Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 8),
+            child: Text(
+              'MEMBERS · ${detail.members.length}',
+              style: AppTextStyles.caption(isDark).copyWith(
+                color: AppColors.textSecondary(isDark),
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.3,
+                fontSize: 11,
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  detail.group.name,
-                  style: AppTextStyles.headline3(isDark),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
+            ),
           ),
-          const SizedBox(height: 16),
-          // Statistics in a compact row
-          Row(
-            children: [
-              Expanded(
-                child: _buildCompactStatistic(
-                  context,
-                  isDark,
-                  'Total',
-                  CurrencyFormatter.format(detail.totalExpense),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildCompactStatistic(
-                  context,
-                  isDark,
-                  'Members',
-                  '${detail.members.length}',
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildCompactStatistic(
-                  context,
-                  isDark,
-                  'Expenses',
-                  '${detail.expenses.length}',
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          // Members list
           _buildMembersList(context, isDark, detail),
         ],
       ),
@@ -715,74 +661,26 @@ class GroupDetailScreen extends ConsumerWidget {
     GroupTab tab,
     WidgetRef ref,
   ) {
-    return Container(
-      color: AppColors.surface(isDark),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 4),
       child: Row(
         children: [
-          Expanded(
-            child: Semantics(
-              button: true,
-              label: 'Expenses tab${tab == GroupTab.expenses ? ' - selected' : ''}',
-              onTap: () => ref.read(groupTabProvider.notifier).state = GroupTab.expenses,
-              child: GestureDetector(
-                onTap: () => ref.read(groupTabProvider.notifier).state = GroupTab.expenses,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  decoration: BoxDecoration(
-                    border: Border(
-                      bottom: BorderSide(
-                        color: tab == GroupTab.expenses ? AppColors.brand : Colors.transparent,
-                        width: 2,
-                      ),
-                    ),
-                  ),
-                  child: Text(
-                    'Expenses',
-                    style: AppTextStyles.body2(isDark).copyWith(
-                      color: tab == GroupTab.expenses
-                          ? AppColors.brand
-                          : AppColors.textSecondary(isDark),
-                      fontWeight:
-                          tab == GroupTab.expenses ? FontWeight.w600 : FontWeight.w500,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ),
-            ),
+          _TabButton(
+            label: 'Expenses',
+            count: ref.watch(groupDetailProvider(groupId)).value?.expenses.length,
+            selected: tab == GroupTab.expenses,
+            isDark: isDark,
+            onTap: () =>
+                ref.read(groupTabProvider.notifier).state = GroupTab.expenses,
           ),
-          Expanded(
-            child: Semantics(
-              button: true,
-              label: 'Balances tab${tab == GroupTab.balances ? ' - selected' : ''}',
-              onTap: () => ref.read(groupTabProvider.notifier).state = GroupTab.balances,
-              child: GestureDetector(
-                onTap: () => ref.read(groupTabProvider.notifier).state = GroupTab.balances,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  decoration: BoxDecoration(
-                    border: Border(
-                      bottom: BorderSide(
-                        color: tab == GroupTab.balances ? AppColors.brand : Colors.transparent,
-                        width: 2,
-                      ),
-                    ),
-                  ),
-                  child: Text(
-                    'Balances',
-                    style: AppTextStyles.body2(isDark).copyWith(
-                      color: tab == GroupTab.balances
-                          ? AppColors.brand
-                          : AppColors.textSecondary(isDark),
-                      fontWeight:
-                          tab == GroupTab.balances ? FontWeight.w600 : FontWeight.w500,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ),
-            ),
+          const SizedBox(width: 22),
+          _TabButton(
+            label: 'Balances',
+            count: ref.watch(groupDetailProvider(groupId)).value?.members.length,
+            selected: tab == GroupTab.balances,
+            isDark: isDark,
+            onTap: () =>
+                ref.read(groupTabProvider.notifier).state = GroupTab.balances,
           ),
         ],
       ),
@@ -908,6 +806,440 @@ class GroupDetailScreen extends ConsumerWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _DetailTopBar extends StatelessWidget implements PreferredSizeWidget {
+  const _DetailTopBar({
+    required this.isDark,
+    required this.onClose,
+    required this.onInvite,
+  });
+
+  final bool isDark;
+  final VoidCallback onClose;
+  final VoidCallback onInvite;
+
+  @override
+  Size get preferredSize => const Size.fromHeight(56);
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.background(isDark),
+      elevation: 0,
+      child: SafeArea(
+        bottom: false,
+        child: SizedBox(
+          height: 56,
+          child: Row(
+            children: [
+              const SizedBox(width: 8),
+              _CircleButton(
+                icon: Icons.arrow_back_rounded,
+                isDark: isDark,
+                onTap: onClose,
+                label: 'Back',
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  'Group',
+                  style: AppTextStyles.body1(isDark).copyWith(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 17,
+                    letterSpacing: -0.2,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Semantics(
+                button: true,
+                label: 'More options',
+                child: Material(
+                  color: Colors.transparent,
+                  shape: const CircleBorder(),
+                  clipBehavior: Clip.antiAlias,
+                  child: PopupMenuButton<String>(
+                    color: AppColors.cardBg(isDark),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(color: AppColors.divider(isDark)),
+                    ),
+                    onSelected: (value) {
+                      if (value == 'invite') onInvite();
+                    },
+                    icon: Container(
+                      width: 40,
+                      height: 40,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: AppColors.cardBg(isDark),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppColors.divider(isDark)),
+                      ),
+                      child: Icon(
+                        Icons.more_vert_rounded,
+                        size: 18,
+                        color: AppColors.textPrimary(isDark),
+                      ),
+                    ),
+                    itemBuilder: (_) => [
+                      PopupMenuItem(
+                        value: 'invite',
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.person_add_rounded,
+                              size: 18,
+                              color: AppColors.textPrimary(isDark),
+                            ),
+                            const SizedBox(width: 10),
+                            const Text('Invite member'),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CircleButton extends StatelessWidget {
+  const _CircleButton({
+    required this.icon,
+    required this.isDark,
+    required this.onTap,
+    required this.label,
+  });
+
+  final IconData icon;
+  final bool isDark;
+  final VoidCallback onTap;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: label,
+      child: Material(
+        color: Colors.transparent,
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          customBorder: const CircleBorder(),
+          child: Container(
+            width: 40,
+            height: 40,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppColors.cardBg(isDark),
+              shape: BoxShape.circle,
+              border: Border.all(color: AppColors.divider(isDark)),
+            ),
+            child: Icon(
+              icon,
+              size: 18,
+              color: AppColors.textPrimary(isDark),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HeroCard extends StatelessWidget {
+  const _HeroCard({required this.detail});
+  final GroupDetail detail;
+
+  static const String _defaultPeopleEmoji = '👥';
+
+  @override
+  Widget build(BuildContext context) {
+    final emoji = detail.group.coverEmoji;
+    final hasCustomEmoji =
+        emoji.isNotEmpty && emoji != _defaultPeopleEmoji;
+    final total = CurrencyFormatter.format(detail.totalExpense, currency: '₹');
+    final memberCount = detail.members.length;
+    final expenseCount = detail.expenses.length;
+
+    return RepaintBoundary(
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [AppColors.tealLight, AppColors.tealDark],
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.tealDark.withValues(alpha: 0.28),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Stack(
+          children: [
+            const Positioned(
+              top: -30,
+              right: -20,
+              child: _Orb(size: 140, opacity: 0.10),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.18),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.24),
+                          ),
+                        ),
+                        child: hasCustomEmoji
+                            ? Text(
+                                emoji,
+                                style: const TextStyle(fontSize: 24),
+                              )
+                            : const Icon(
+                                Icons.group_rounded,
+                                color: Colors.white,
+                                size: 22,
+                              ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'GROUP',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.78),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 1.3,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              detail.group.name,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 20,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: -0.3,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    height: 1,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.white.withValues(alpha: 0),
+                          Colors.white.withValues(alpha: 0.28),
+                          Colors.white.withValues(alpha: 0),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _HeroStat(
+                          label: 'TOTAL SPENT',
+                          value: total,
+                        ),
+                      ),
+                      Container(
+                        width: 1,
+                        height: 28,
+                        color: Colors.white.withValues(alpha: 0.18),
+                      ),
+                      Expanded(
+                        child: _HeroStat(
+                          label: 'MEMBERS',
+                          value: '$memberCount',
+                        ),
+                      ),
+                      Container(
+                        width: 1,
+                        height: 28,
+                        color: Colors.white.withValues(alpha: 0.18),
+                      ),
+                      Expanded(
+                        child: _HeroStat(
+                          label: 'EXPENSES',
+                          value: '$expenseCount',
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Orb extends StatelessWidget {
+  const _Orb({required this.size, required this.opacity});
+  final double size;
+  final double opacity;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.white.withValues(alpha: opacity),
+        ),
+      ),
+    );
+  }
+}
+
+class _HeroStat extends StatelessWidget {
+  const _HeroStat({required this.label, required this.value});
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.72),
+            fontSize: 9,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 1.0,
+          ),
+        ),
+        const SizedBox(height: 4),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.2,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TabButton extends StatelessWidget {
+  const _TabButton({
+    required this.label,
+    required this.selected,
+    required this.isDark,
+    required this.onTap,
+    this.count,
+  });
+
+  final String label;
+  final bool selected;
+  final bool isDark;
+  final VoidCallback onTap;
+  final int? count;
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = selected
+        ? AppColors.textPrimary(isDark)
+        : AppColors.textSecondary(isDark);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(4),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  style: AppTextStyles.body1(isDark).copyWith(
+                    color: fg,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    fontSize: 14,
+                  ),
+                ),
+                if (count != null) ...[
+                  const SizedBox(width: 6),
+                  Text(
+                    '$count',
+                    style: AppTextStyles.caption(isDark).copyWith(
+                      color: AppColors.textSecondary(isDark),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            const SizedBox(height: 5),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOutCubic,
+              height: 2,
+              width: selected ? 24 : 0,
+              decoration: BoxDecoration(
+                color: AppColors.tealDark,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

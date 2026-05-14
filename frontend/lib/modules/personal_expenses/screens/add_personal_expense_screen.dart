@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
-import '../../../components/buttons/primary_button.dart';
 import '../../../components/inputs/app_text_field.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -136,12 +135,13 @@ class _AddPersonalExpenseScreenState
 
     return Scaffold(
       backgroundColor: AppColors.background(isDark),
-      appBar: AppBar(
-        title: const Text('Add Personal Expense'),
-        backgroundColor: AppColors.surface(isDark),
-        elevation: 0,
+      appBar: _TopBar(
+        isDark: isDark,
+        title: 'Add personal expense',
+        onBack: () => Navigator.of(context).pop(),
       ),
       body: SafeArea(
+        bottom: false,
         child: SingleChildScrollView(
           padding: EdgeInsets.symmetric(
               horizontal: screenWidth < 600 ? 20 : 32, vertical: 24),
@@ -222,14 +222,12 @@ class _AddPersonalExpenseScreenState
                       maxLines: 3,
                       minLines: 2,
                     ),
-                    const SizedBox(height: 24),
-                    SizedBox(
-                      width: double.infinity,
-                      child: PrimaryButton(
-                        label: 'Save Expense',
-                        onPressed: _submitting ? null : _handleSave,
-                        isLoading: _submitting,
-                      ),
+                    const SizedBox(height: 28),
+                    _GradientSaveButton(
+                      isDark: isDark,
+                      label: 'Save expense',
+                      loading: _submitting,
+                      onTap: _submitting ? null : _handleSave,
                     ),
                   ],
                 ),
@@ -254,11 +252,15 @@ class _CategoryPicker extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.only(left: 2, bottom: 8),
           child: Text(
-            'Category',
-            style: AppTextStyles.body2(isDark)
-                .copyWith(fontWeight: FontWeight.w600),
+            'CATEGORY',
+            style: AppTextStyles.caption(isDark).copyWith(
+              color: AppColors.textSecondary(isDark),
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.3,
+              fontSize: 11,
+            ),
           ),
         ),
         Wrap(
@@ -461,6 +463,174 @@ class _TimePickerTile extends StatelessWidget {
           ),
         ),
         child: Text(time.format(context)),
+      ),
+    );
+  }
+}
+
+/// Clean top bar matching the rest of the app — back arrow + bold title.
+class _TopBar extends StatelessWidget implements PreferredSizeWidget {
+  const _TopBar({
+    required this.isDark,
+    required this.title,
+    required this.onBack,
+  });
+
+  final bool isDark;
+  final String title;
+  final VoidCallback onBack;
+
+  @override
+  Size get preferredSize => const Size.fromHeight(56);
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.background(isDark),
+      elevation: 0,
+      child: SafeArea(
+        bottom: false,
+        child: SizedBox(
+          height: 56,
+          child: Row(
+            children: [
+              const SizedBox(width: 8),
+              Semantics(
+                button: true,
+                label: 'Back',
+                child: Material(
+                  color: Colors.transparent,
+                  shape: const CircleBorder(),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: onBack,
+                    customBorder: const CircleBorder(),
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: AppColors.cardBg(isDark),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppColors.divider(isDark)),
+                      ),
+                      child: Icon(
+                        Icons.arrow_back_rounded,
+                        size: 18,
+                        color: AppColors.textPrimary(isDark),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  title,
+                  style: AppTextStyles.body1(isDark).copyWith(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 17,
+                    letterSpacing: -0.2,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 16),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GradientSaveButton extends StatelessWidget {
+  const _GradientSaveButton({
+    required this.isDark,
+    required this.label,
+    required this.loading,
+    required this.onTap,
+  });
+
+  final bool isDark;
+  final String label;
+  final bool loading;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onTap != null && !loading;
+    return Semantics(
+      button: true,
+      label: label,
+      enabled: enabled,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: enabled ? onTap : null,
+          borderRadius: BorderRadius.circular(14),
+          child: Ink(
+            height: 54,
+            decoration: BoxDecoration(
+              gradient: enabled
+                  ? const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [AppColors.tealLight, AppColors.tealDark],
+                    )
+                  : null,
+              color: enabled ? null : AppColors.cardBg(isDark),
+              border: enabled
+                  ? null
+                  : Border.all(color: AppColors.divider(isDark)),
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: enabled
+                  ? [
+                      BoxShadow(
+                        color: AppColors.tealDark.withValues(alpha: 0.35),
+                        blurRadius: 14,
+                        offset: const Offset(0, 6),
+                      ),
+                    ]
+                  : null,
+            ),
+            child: loading
+                ? const Center(
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation(Colors.white),
+                      ),
+                    ),
+                  )
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.check_rounded,
+                        size: 18,
+                        color: enabled
+                            ? Colors.white
+                            : AppColors.textSecondary(isDark),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        label,
+                        style: AppTextStyles.body1(isDark).copyWith(
+                          color: enabled
+                              ? Colors.white
+                              : AppColors.textSecondary(isDark),
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                          letterSpacing: -0.1,
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+        ),
       ),
     );
   }

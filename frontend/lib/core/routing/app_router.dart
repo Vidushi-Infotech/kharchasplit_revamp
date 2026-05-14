@@ -100,6 +100,11 @@ final appRouter = GoRouter(
           name: 'activity',
           builder: (context, state) => const ActivityScreen(),
         ),
+        GoRoute(
+          path: '/home/profile',
+          name: 'profile',
+          builder: (context, state) => const ProfileScreen(),
+        ),
       ],
     ),
     GoRoute(
@@ -137,11 +142,6 @@ final appRouter = GoRouter(
       path: '/home/personal/new',
       name: 'add-personal-expense',
       builder: (context, state) => const AddPersonalExpenseScreen(),
-    ),
-    GoRoute(
-      path: '/home/profile',
-      name: 'profile',
-      builder: (context, state) => const ProfileScreen(),
     ),
     GoRoute(
       path: '/home/profile/settings',

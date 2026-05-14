@@ -135,19 +135,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       },
       child: Scaffold(
       backgroundColor: AppColors.background(isDark),
-      appBar: AppBar(
-        title: const Text('Add Expense'),
-        elevation: 0,
-        backgroundColor: AppColors.surface(isDark),
-        leading: Semantics(
-          button: true,
-          label: 'Close',
-          onTap: _closeScreen,
-          child: GestureDetector(
-            onTap: _closeScreen,
-            child: const Icon(Icons.close_rounded),
-          ),
-        ),
+      appBar: _TopBar(
+        title: 'Add expense',
+        onClose: _closeScreen,
+        isDark: isDark,
       ),
       body: ScrollConfiguration(
         behavior: ScrollConfiguration.of(context).copyWith(scrollbars: true),
@@ -191,10 +182,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   ) {
     return Scaffold(
       backgroundColor: AppColors.background(isDark),
-      appBar: AppBar(
-        title: const Text('Add Expense'),
-        elevation: 0,
-        backgroundColor: AppColors.surface(isDark),
+      appBar: _TopBar(
+        title: 'Add expense',
+        onClose: _closeScreen,
+        isDark: isDark,
       ),
       body: ScrollConfiguration(
         behavior: ScrollConfiguration.of(context).copyWith(scrollbars: true),
@@ -242,10 +233,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   ) {
     return Scaffold(
       backgroundColor: AppColors.background(isDark),
-      appBar: AppBar(
-        title: const Text('Add Expense'),
-        elevation: 0,
-        backgroundColor: AppColors.surface(isDark),
+      appBar: _TopBar(
+        title: 'Add expense',
+        onClose: _closeScreen,
+        isDark: isDark,
       ),
       body: ScrollConfiguration(
         behavior: ScrollConfiguration.of(context).copyWith(scrollbars: true),
@@ -351,14 +342,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Semantics(
-          label: 'Amount input field',
-          child: Text(
-            'Amount',
-            style: AppTextStyles.body2(isDark),
-          ),
-        ),
-        const SizedBox(height: 12),
+        _SectionTitle(label: 'AMOUNT', isDark: isDark),
+        const SizedBox(height: 10),
         Semantics(
           button: true,
           label:
@@ -399,8 +384,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('What was this for?', style: AppTextStyles.body2(isDark)),
-        const SizedBox(height: 12),
+        _SectionTitle(label: 'DESCRIPTION', isDark: isDark),
+        const SizedBox(height: 10),
         TextField(
           controller: _titleController,
           decoration: InputDecoration(
@@ -425,11 +410,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Semantics(
-          label: 'Category selector',
-          child: Text('Category', style: AppTextStyles.body2(isDark)),
-        ),
-        const SizedBox(height: 12),
+        _SectionTitle(label: 'CATEGORY', isDark: isDark),
+        const SizedBox(height: 10),
         Semantics(
           button: true,
           label:
@@ -469,8 +451,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Date', style: AppTextStyles.body2(isDark)),
-        const SizedBox(height: 12),
+        _SectionTitle(label: 'DATE', isDark: isDark),
+        const SizedBox(height: 10),
         GestureDetector(
           onTap: () async {
             final picked = await showDatePicker(
@@ -795,8 +777,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Paid By', style: AppTextStyles.body2(isDark)),
-        const SizedBox(height: 12),
+        _SectionTitle(label: 'PAID BY', isDark: isDark),
+        const SizedBox(height: 10),
         Semantics(
           button: true,
           label: 'Select member who paid',
@@ -945,8 +927,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Notes (optional)', style: AppTextStyles.body2(isDark)),
-        const SizedBox(height: 12),
+        _SectionTitle(label: 'NOTES (OPTIONAL)', isDark: isDark),
+        const SizedBox(height: 10),
         TextField(
           controller: _notesController,
           minLines: 2,
@@ -971,42 +953,79 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
 
   // Save button for mobile/tablet
   Widget _buildSaveButton(bool isDark, AddExpenseState state) {
+    final enabled = state.isValid;
     return SafeArea(
       top: false,
       child: Padding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-        left: 16,
-        right: 16,
-        top: 16,
-      ),
-      child: Semantics(
-        button: true,
-        label: 'Save expense button',
-        enabled: state.isValid,
-        onTap: state.isValid ? () => _handleSave() : null,
-        child: SizedBox(
-          width: double.infinity,
-          height: 52,
-          child: ElevatedButton(
-            onPressed: state.isValid ? () => _handleSave() : null,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.brand,
-              disabledBackgroundColor: AppColors.textSecondary(isDark),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            child: Text(
-              'Save Expense',
-              style: AppTextStyles.body2(isDark).copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+          left: 16,
+          right: 16,
+          top: 12,
+        ),
+        child: Semantics(
+          button: true,
+          label: 'Save expense button',
+          enabled: enabled,
+          onTap: enabled ? _handleSave : null,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: enabled ? _handleSave : null,
+              borderRadius: BorderRadius.circular(14),
+              child: Ink(
+                height: 54,
+                decoration: BoxDecoration(
+                  gradient: enabled
+                      ? const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [AppColors.tealLight, AppColors.tealDark],
+                        )
+                      : null,
+                  color: enabled ? null : AppColors.cardBg(isDark),
+                  border: enabled
+                      ? null
+                      : Border.all(color: AppColors.divider(isDark)),
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: enabled
+                      ? [
+                          BoxShadow(
+                            color: AppColors.tealDark.withValues(alpha: 0.35),
+                            blurRadius: 14,
+                            offset: const Offset(0, 6),
+                          ),
+                        ]
+                      : null,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.check_rounded,
+                      size: 18,
+                      color: enabled
+                          ? Colors.white
+                          : AppColors.textSecondary(isDark),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Save expense',
+                      style: AppTextStyles.body1(isDark).copyWith(
+                        color: enabled
+                            ? Colors.white
+                            : AppColors.textSecondary(isDark),
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                        letterSpacing: -0.1,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
         ),
-      ),
       ),
     );
   }
@@ -1192,5 +1211,106 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     } else {
       context.go('/home/dashboard');
     }
+  }
+}
+
+/// Uppercase overline-style label used as a section header in the form.
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle({required this.label, required this.isDark});
+
+  final String label;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 2, bottom: 2),
+      child: Text(
+        label,
+        style: AppTextStyles.caption(isDark).copyWith(
+          color: AppColors.textSecondary(isDark),
+          fontWeight: FontWeight.w700,
+          letterSpacing: 1.3,
+          fontSize: 11,
+        ),
+      ),
+    );
+  }
+}
+
+/// Custom top bar — back arrow + title, no Material elevation, sits flush
+/// against the background for a clean modern feel.
+class _TopBar extends StatelessWidget implements PreferredSizeWidget {
+  const _TopBar({
+    required this.title,
+    required this.onClose,
+    required this.isDark,
+  });
+
+  final String title;
+  final VoidCallback onClose;
+  final bool isDark;
+
+  @override
+  Size get preferredSize => const Size.fromHeight(56);
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.background(isDark),
+      elevation: 0,
+      child: SafeArea(
+        bottom: false,
+        child: SizedBox(
+          height: 56,
+          child: Row(
+            children: [
+              const SizedBox(width: 8),
+              Semantics(
+                button: true,
+                label: 'Close',
+                child: Material(
+                  color: Colors.transparent,
+                  shape: const CircleBorder(),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: onClose,
+                    customBorder: const CircleBorder(),
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: AppColors.cardBg(isDark),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppColors.divider(isDark)),
+                      ),
+                      child: Icon(
+                        Icons.arrow_back_rounded,
+                        size: 18,
+                        color: AppColors.textPrimary(isDark),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  title,
+                  style: AppTextStyles.body1(isDark).copyWith(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 17,
+                    letterSpacing: -0.2,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 16),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

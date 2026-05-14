@@ -4,7 +4,9 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../components/components.dart';
+import '../../../models/models.dart';
 import '../state/dashboard_provider.dart';
+import '../widgets/aurora_background.dart';
 import '../widgets/dashboard_header.dart';
 import '../widgets/group_mini_card.dart';
 import '../widgets/recent_expenses_section.dart';
@@ -21,23 +23,31 @@ class DashboardScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: AppColors.background(isDark),
-      body: SafeArea(
-        bottom: false,
-        child: dashboardAsync.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (err, _) => _DashboardError(
-            message: err.toString(),
-            onRetry: () => ref.read(dashboardProvider.notifier).refresh(),
+      body: Stack(
+        children: [
+          const Positioned.fill(child: AuroraBackground()),
+          SafeArea(
+            bottom: false,
+            child: dashboardAsync.when(
+              loading: () =>
+                  const Center(child: CircularProgressIndicator()),
+              error: (err, _) => _DashboardError(
+                message: err.toString(),
+                onRetry: () =>
+                    ref.read(dashboardProvider.notifier).refresh(),
+              ),
+              data: (data) => RefreshIndicator(
+                onRefresh: () =>
+                    ref.read(dashboardProvider.notifier).refresh(),
+                child: screenWidth < 600
+                    ? _buildCompactLayout(context, isDark, data)
+                    : screenWidth < 1100
+                        ? _buildStandardLayout(context, isDark, data)
+                        : _buildLargeLayout(context, isDark, data),
+              ),
+            ),
           ),
-          data: (data) => RefreshIndicator(
-            onRefresh: () => ref.read(dashboardProvider.notifier).refresh(),
-            child: screenWidth < 600
-                ? _buildCompactLayout(context, isDark, data)
-                : screenWidth < 1100
-                    ? _buildStandardLayout(context, isDark, data)
-                    : _buildLargeLayout(context, isDark, data),
-          ),
-        ),
+        ],
       ),
     );
   }
@@ -48,13 +58,13 @@ class DashboardScreen extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const DashboardHeader(),
+          _buildHeader(context),
           const SizedBox(height: 24),
           _buildBalanceCard(context, isDark, data),
           const SizedBox(height: 32),
           _buildRecentGroupsSection(context, isDark, data),
           const SizedBox(height: 32),
-          _buildRecentExpensesSection(isDark, data),
+          _buildRecentExpensesSection(context, isDark, data),
         ],
       ),
     );
@@ -81,7 +91,7 @@ class DashboardScreen extends ConsumerWidget {
                   ),
                   const SizedBox(width: 24),
                   Expanded(
-                    child: _buildRecentExpensesSection(isDark, data),
+                    child: _buildRecentExpensesSection(context, isDark, data),
                   ),
                 ],
               ),
@@ -118,7 +128,7 @@ class DashboardScreen extends ConsumerWidget {
                   const SizedBox(width: 32),
                   Expanded(
                     flex: 1,
-                    child: _buildRecentExpensesSection(isDark, data),
+                    child: _buildRecentExpensesSection(context, isDark, data),
                   ),
                 ],
               ),
@@ -181,10 +191,36 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildRecentExpensesSection(bool isDark, DashboardData data) {
+  static const int _previewExpenseCount = 5;
+
+  Widget _buildRecentExpensesSection(
+    BuildContext context,
+    bool isDark,
+    DashboardData data,
+  ) {
+    final all = data.recentExpenses;
+    final preview = all.take(_previewExpenseCount).toList();
     return RecentExpensesSection(
-      expenses: data.recentExpenses,
+      expenses: preview,
       groups: data.recentGroups,
+      onSeeAll: all.length > _previewExpenseCount
+          ? () => _openAllExpensesSheet(context, data)
+          : null,
+    );
+  }
+
+  void _openAllExpensesSheet(BuildContext context, DashboardData data) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      // Open from the root navigator so the sheet sits ABOVE the shell's
+      // floating bottom navigation bar.
+      useRootNavigator: true,
+      builder: (_) => _AllExpensesSheet(
+        expenses: data.recentExpenses,
+        groups: data.recentGroups,
+      ),
     );
   }
 }
@@ -249,74 +285,77 @@ class _SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+
+    final titleWidget = Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Expanded(
+        Flexible(
           child: Text(
             title,
-            style: AppTextStyles.headline3(isDark).copyWith(
+            style: AppTextStyles.body1(isDark).copyWith(
               fontWeight: FontWeight.w700,
+              fontSize: 17,
+              letterSpacing: -0.2,
             ),
             overflow: TextOverflow.ellipsis,
           ),
         ),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (onAdd != null)
-              Semantics(
-                button: true,
-                label: addLabel ?? 'Add',
-                child: Material(
-                  color: Colors.transparent,
+        if (onSeeAll != null) ...[
+          const SizedBox(width: 4),
+          Icon(
+            Icons.chevron_right_rounded,
+            size: 20,
+            color: AppColors.textSecondary(isDark),
+          ),
+        ],
+      ],
+    );
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Expanded(
+          child: onSeeAll == null
+              ? titleWidget
+              : Semantics(
+                  button: true,
+                  label: '$title — see all',
                   child: InkWell(
-                    onTap: onAdd,
-                    borderRadius: BorderRadius.circular(10),
-                    child: Container(
-                      width: 32,
-                      height: 32,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: AppColors.tealDark.withValues(alpha: 0.10),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Icon(
-                        Icons.add_rounded,
-                        size: 18,
-                        color: AppColors.tealDark,
-                      ),
+                    onTap: onSeeAll,
+                    borderRadius: BorderRadius.circular(6),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: titleWidget,
                     ),
                   ),
                 ),
-              ),
-            if (onSeeAll != null) ...[
-              const SizedBox(width: 4),
-              Semantics(
-                button: true,
-                label: 'See all',
-                child: TextButton(
-                  onPressed: onSeeAll,
-                  style: TextButton.styleFrom(
-                    minimumSize: Size.zero,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  child: Text(
-                    'See all',
-                    style: AppTextStyles.body2(isDark).copyWith(
-                      color: AppColors.tealDark,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ],
         ),
+        if (onAdd != null)
+          Semantics(
+            button: true,
+            label: addLabel ?? 'Add',
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: onAdd,
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: AppColors.tealDark.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    Icons.add_rounded,
+                    size: 18,
+                    color: AppColors.tealDark,
+                  ),
+                ),
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -388,6 +427,114 @@ class _EmptyGroupsCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Draggable bottom sheet that lists every recent expense, opened from the
+/// home screen's "Recent Expenses >" header.
+class _AllExpensesSheet extends StatelessWidget {
+  const _AllExpensesSheet({required this.expenses, required this.groups});
+
+  final List<ExpenseModel> expenses;
+  final List<GroupModel> groups;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return DraggableScrollableSheet(
+      initialChildSize: 0.85,
+      minChildSize: 0.5,
+      maxChildSize: 0.95,
+      expand: false,
+      builder: (_, scrollController) {
+        return Container(
+          decoration: BoxDecoration(
+            color: AppColors.background(isDark),
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(24),
+            ),
+            border: Border.all(
+              color: AppColors.divider(isDark),
+              width: 1,
+            ),
+          ),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 10, bottom: 6),
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.divider(isDark),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 6, 12, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Recent expenses',
+                        style: AppTextStyles.body1(isDark).copyWith(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 17,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      '${expenses.length} ${expenses.length == 1 ? 'item' : 'items'}',
+                      style: AppTextStyles.caption(isDark).copyWith(
+                        color: AppColors.textSecondary(isDark),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Material(
+                      color: Colors.transparent,
+                      shape: const CircleBorder(),
+                      clipBehavior: Clip.antiAlias,
+                      child: InkWell(
+                        onTap: () => Navigator.of(context).pop(),
+                        customBorder: const CircleBorder(),
+                        child: Container(
+                          width: 34,
+                          height: 34,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: AppColors.cardBg(isDark),
+                            shape: BoxShape.circle,
+                            border:
+                                Border.all(color: AppColors.divider(isDark)),
+                          ),
+                          child: Icon(
+                            Icons.close_rounded,
+                            size: 18,
+                            color: AppColors.textPrimary(isDark),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: SingleChildScrollView(
+                  controller: scrollController,
+                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+                  child: RecentExpensesSection(
+                    expenses: expenses,
+                    groups: groups,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

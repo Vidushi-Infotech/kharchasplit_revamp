@@ -4,7 +4,6 @@ import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'dart:io';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -30,9 +29,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
   late TextEditingController _descriptionController;
   late FocusNode _groupNameFocus;
   GroupCategory _selectedCategory = GroupCategory.other;
-  String _selectedEmoji = '👥';
   XFile? _selectedImageFile;
-  bool _useEmoji = false;
   bool _isProcessing = false;
   String? _processingStatus;
   double _uploadProgress = 0.0;
@@ -158,7 +155,6 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
         if (!mounted) return;
         setState(() {
           _selectedImageFile = pickedFile;
-          _useEmoji = false;
           _isProcessing = false;
           _processingStatus = null;
           _uploadProgress = 0.0;
@@ -178,7 +174,6 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
         if (!mounted) return;
         setState(() {
           _selectedImageFile = pickedFile;
-          _useEmoji = false;
           _isProcessing = false;
           _processingStatus = null;
           _uploadProgress = 0.0;
@@ -442,22 +437,10 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background(isDark),
-      appBar: AppBar(
-        leading: Semantics(
-          button: true,
-          label: 'Go back',
-          child: IconButton(
-            icon: const Icon(Icons.arrow_back_rounded),
-            onPressed: () => context.pop(),
-          ),
-        ),
-        title: Text(
-          'Create Group',
-          style: AppTextStyles.headline3(isDark),
-        ),
-        elevation: 0,
-        backgroundColor: AppColors.cardBg(isDark),
-        foregroundColor: AppColors.textPrimary(isDark),
+      appBar: _TopBar(
+        isDark: isDark,
+        title: 'Create group',
+        onBack: () => context.pop(),
       ),
       body: SafeArea(
         top: false,
@@ -516,32 +499,20 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
         ),
         const SizedBox(height: 32),
 
-        // Group Cover Section
-        Text(
-          'Group Cover',
-          style: AppTextStyles.body1(isDark),
-        ),
-        const SizedBox(height: 12),
+        _SectionTitle(label: 'GROUP COVER', isDark: isDark),
+        const SizedBox(height: 10),
         _buildCoverSelector(isDark),
-        const SizedBox(height: 32),
+        const SizedBox(height: 28),
 
-        // Category Selector
-        Text(
-          'Category',
-          style: AppTextStyles.body1(isDark),
-        ),
-        const SizedBox(height: 12),
+        _SectionTitle(label: 'CATEGORY', isDark: isDark),
+        const SizedBox(height: 10),
         _buildCategorySelector(isDark),
-        const SizedBox(height: 32),
+        const SizedBox(height: 28),
 
-        // Members
-        Text(
-          'Members',
-          style: AppTextStyles.body1(isDark),
-        ),
-        const SizedBox(height: 12),
+        _SectionTitle(label: 'MEMBERS', isDark: isDark),
+        const SizedBox(height: 10),
         _buildMembersSection(isDark),
-        const SizedBox(height: 32),
+        const SizedBox(height: 28),
 
         Semantics(
           label: 'Group description input',
@@ -554,15 +525,52 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
         ),
         const SizedBox(height: 32),
 
-        // Create Button
         Semantics(
           button: true,
           label: 'Create group button',
-          child: SizedBox(
-            width: double.infinity,
-            child: PrimaryButton(
-              label: 'Create Group',
-              onPressed: _createGroup,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: _createGroup,
+              borderRadius: BorderRadius.circular(14),
+              child: Ink(
+                height: 54,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [AppColors.tealLight, AppColors.tealDark],
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.tealDark.withValues(alpha: 0.35),
+                      blurRadius: 14,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.check_rounded,
+                      size: 18,
+                      color: Colors.white,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Create group',
+                      style: AppTextStyles.body1(isDark).copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                        letterSpacing: -0.1,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ),
@@ -614,232 +622,161 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
   }
 
   Widget _buildCoverSelector(bool isDark) {
-    return Column(
-      children: [
-        // Tab selector
-        Row(
-          children: [
-            Expanded(
-              child: Semantics(
-                button: true,
-                label: 'Use image cover',
-                child: GestureDetector(
-                  onTap: () => setState(() => _useEmoji = false),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    decoration: BoxDecoration(
-                      border: Border(
-                        bottom: BorderSide(
-                          color: !_useEmoji ? AppColors.brand : Colors.transparent,
-                          width: 2,
-                        ),
-                      ),
-                    ),
-                    child: Center(
-                      child: Text(
-                        'Image',
-                        style: AppTextStyles.body1(isDark).copyWith(
-                          color: !_useEmoji
-                              ? AppColors.brand
-                              : AppColors.textSecondary(isDark),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Semantics(
-                button: true,
-                label: 'Use emoji cover',
-                child: GestureDetector(
-                  onTap: () => setState(() => _useEmoji = true),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    decoration: BoxDecoration(
-                      border: Border(
-                        bottom: BorderSide(
-                          color: _useEmoji ? AppColors.brand : Colors.transparent,
-                          width: 2,
-                        ),
-                      ),
-                    ),
-                    child: Center(
-                      child: Text(
-                        'Emoji',
-                        style: AppTextStyles.body1(isDark).copyWith(
-                          color: _useEmoji
-                              ? AppColors.brand
-                              : AppColors.textSecondary(isDark),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-
-        // Content based on selection
-        if (_useEmoji)
-          _buildEmojiSelector(isDark)
-        else
-          _buildImagePicker(isDark),
-      ],
-    );
+    return _buildImagePicker(isDark);
   }
 
   Widget _buildImagePicker(bool isDark) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.cardBg(isDark),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: AppColors.divider(isDark),
-          width: 1,
-        ),
-      ),
-      padding: const EdgeInsets.all(24),
-      child: _isProcessing
-          ? Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const CircularProgressIndicator(),
-                const SizedBox(height: 16),
-                Text(
-                  _processingStatus ?? 'Processing image...',
-                  style: AppTextStyles.body2(isDark),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            )
-          : _selectedImageFile != null
-              ? Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: kIsWeb
-                          ? Image.network(
-                              _selectedImageFile!.path,
-                              height: 200,
-                              width: double.infinity,
-                              fit: BoxFit.cover,
-                            )
-                          : Image.file(
-                              File(_selectedImageFile!.path),
-                              height: 200,
-                              width: double.infinity,
-                              fit: BoxFit.cover,
-                            ),
-                    ),
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.greenLight.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.check_circle_rounded,
-                            color: AppColors.greenLight,
-                            size: 16,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Image scanned & compressed',
-                            style: AppTextStyles.caption(isDark).copyWith(
-                              color: AppColors.greenLight,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Semantics(
-                      button: true,
-                      label: 'Change image',
-                      child: TextButton.icon(
-                        onPressed: _pickImage,
-                        icon: const Icon(Icons.edit_rounded),
-                        label: const Text('Change Image'),
-                      ),
-                    ),
-                  ],
-                )
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.image_rounded,
-                      size: 48,
-                      color: AppColors.textSecondary(isDark),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'No image selected',
-                      style: AppTextStyles.body2(isDark).copyWith(
-                        color: AppColors.textSecondary(isDark),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Image will be scanned & compressed to WebP',
-                      style: AppTextStyles.caption(isDark),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 16),
-                    Semantics(
-                      button: true,
-                      label: 'Pick image from gallery',
-                      child: PrimaryButton(
-                        label: 'Pick Image',
-                        onPressed: _pickImage,
-                      ),
-                    ),
-                  ],
-                ),
-    );
+    if (_isProcessing) return _buildPickerProcessing(isDark);
+    if (_selectedImageFile != null) return _buildPickerPreview(isDark);
+    return _buildPickerEmpty(isDark);
   }
 
-  Widget _buildEmojiSelector(bool isDark) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.cardBg(isDark),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: AppColors.divider(isDark),
-          width: 1,
-        ),
-      ),
-      padding: const EdgeInsets.all(8),
-      child: Semantics(
-        label: 'Emoji picker with full emoji set',
-        child: SizedBox(
-          height: 300,
-          child: EmojiPicker(
-            onEmojiSelected: (category, emoji) {
-              setState(() => _selectedEmoji = emoji.emoji);
-            },
-            onBackspacePressed: () {},
-            textEditingController: TextEditingController(),
-            config: const Config(
-              height: 300,
-              checkPlatformCompatibility: true,
+  Widget _buildPickerEmpty(bool isDark) {
+    return Semantics(
+      button: true,
+      label: 'Add cover image',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: _pickImage,
+          borderRadius: BorderRadius.circular(16),
+          child: Ink(
+            height: 168,
+            decoration: BoxDecoration(
+              color: AppColors.cardBg(isDark),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: AppColors.divider(isDark),
+              ),
+            ),
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: AppColors.tealDark.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      Icons.image_outlined,
+                      size: 22,
+                      color: AppColors.tealDark,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Add a cover image',
+                    style: AppTextStyles.body1(isDark).copyWith(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'PNG or JPG · auto-compressed',
+                    style: AppTextStyles.caption(isDark).copyWith(
+                      color: AppColors.textSecondary(isDark),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildPickerProcessing(bool isDark) {
+    return Container(
+      height: 168,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: AppColors.cardBg(isDark),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.divider(isDark)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation(AppColors.tealDark),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            _processingStatus ?? 'Processing image…',
+            style: AppTextStyles.caption(isDark).copyWith(
+              color: AppColors.textSecondary(isDark),
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPickerPreview(bool isDark) {
+    final imageProvider = kIsWeb
+        ? NetworkImage(_selectedImageFile!.path) as ImageProvider
+        : FileImage(File(_selectedImageFile!.path));
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.divider(isDark)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        children: [
+          AspectRatio(
+            aspectRatio: 16 / 9,
+            child: Image(image: imageProvider, fit: BoxFit.cover),
+          ),
+          Positioned(
+            top: 10,
+            right: 10,
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _pickImage,
+                borderRadius: BorderRadius.circular(999),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 7,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.55),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      Icon(Icons.edit_rounded, color: Colors.white, size: 14),
+                      SizedBox(width: 6),
+                      Text(
+                        'Change',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1334,6 +1271,105 @@ class _ContactsError extends StatelessWidget {
               label: const Text('Try again'),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Clean top bar matching the rest of the app — back arrow + bold title.
+class _TopBar extends StatelessWidget implements PreferredSizeWidget {
+  const _TopBar({
+    required this.isDark,
+    required this.title,
+    required this.onBack,
+  });
+
+  final bool isDark;
+  final String title;
+  final VoidCallback onBack;
+
+  @override
+  Size get preferredSize => const Size.fromHeight(56);
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.background(isDark),
+      elevation: 0,
+      child: SafeArea(
+        bottom: false,
+        child: SizedBox(
+          height: 56,
+          child: Row(
+            children: [
+              const SizedBox(width: 8),
+              Semantics(
+                button: true,
+                label: 'Back',
+                child: Material(
+                  color: Colors.transparent,
+                  shape: const CircleBorder(),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: onBack,
+                    customBorder: const CircleBorder(),
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: AppColors.cardBg(isDark),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppColors.divider(isDark)),
+                      ),
+                      child: Icon(
+                        Icons.arrow_back_rounded,
+                        size: 18,
+                        color: AppColors.textPrimary(isDark),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  title,
+                  style: AppTextStyles.body1(isDark).copyWith(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 17,
+                    letterSpacing: -0.2,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 16),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle({required this.label, required this.isDark});
+
+  final String label;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 2, bottom: 2),
+      child: Text(
+        label,
+        style: AppTextStyles.caption(isDark).copyWith(
+          color: AppColors.textSecondary(isDark),
+          fontWeight: FontWeight.w700,
+          letterSpacing: 1.3,
+          fontSize: 11,
         ),
       ),
     );

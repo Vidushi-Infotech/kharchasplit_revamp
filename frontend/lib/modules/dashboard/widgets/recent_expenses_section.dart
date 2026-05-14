@@ -79,42 +79,44 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    final title = Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Expanded(
+        Flexible(
           child: Text(
             'Recent Expenses',
-            style: AppTextStyles.headline3(isDark).copyWith(
+            style: AppTextStyles.body1(isDark).copyWith(
               fontWeight: FontWeight.w700,
+              fontSize: 17,
+              letterSpacing: -0.2,
             ),
             overflow: TextOverflow.ellipsis,
           ),
         ),
-        if (onSeeAll != null)
-          Semantics(
-            button: true,
-            label: 'See all expenses',
-            child: TextButton(
-              onPressed: onSeeAll,
-              style: TextButton.styleFrom(
-                minimumSize: Size.zero,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              child: Text(
-                'See all',
-                style: AppTextStyles.body2(isDark).copyWith(
-                  color: AppColors.tealDark,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
+        if (onSeeAll != null) ...[
+          const SizedBox(width: 4),
+          Icon(
+            Icons.chevron_right_rounded,
+            size: 20,
+            color: AppColors.textSecondary(isDark),
           ),
+        ],
       ],
+    );
+
+    if (onSeeAll == null) return title;
+
+    return Semantics(
+      button: true,
+      label: 'Recent Expenses — see all',
+      child: InkWell(
+        onTap: onSeeAll,
+        borderRadius: BorderRadius.circular(6),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: title,
+        ),
+      ),
     );
   }
 }
