@@ -139,8 +139,6 @@ class _Greeting extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            const SizedBox(width: 8),
-            const Text('👋', style: TextStyle(fontSize: 22)),
           ],
         ),
         const SizedBox(height: 4),

@@ -159,6 +159,68 @@ class AuthNotifier extends Notifier<AuthData> {
     }
   }
 
+  /// PUT /users/:id — updates the current user's name, email, and/or photo.
+  /// Returns true on success and refreshes the local [AuthData.user].
+  Future<bool> updateProfile({
+    String? name,
+    String? email,
+    String? profileImageBase64,
+    String? preferredCurrency,
+  }) async {
+    final user = state.user;
+    if (user == null) {
+      state = state.copyWith(
+        state: AuthState.error,
+        errorMessage: 'Not signed in',
+      );
+      return false;
+    }
+    final payload = <String, dynamic>{};
+    if (name != null) payload['name'] = name.trim();
+    if (email != null) payload['email'] = email.trim();
+    if (profileImageBase64 != null) {
+      payload['profileImageBase64'] = profileImageBase64;
+    }
+    if (preferredCurrency != null) {
+      payload['preferredCurrency'] = preferredCurrency;
+    }
+    if (payload.isEmpty) return true;
+
+    state = state.copyWith(state: AuthState.loading, clearError: true);
+    try {
+      final res = await _apiClient.dio.put(
+        '/users/${user.id}',
+        data: payload,
+      );
+      final body = res.data;
+      final data = body is Map ? body['data'] : null;
+      if (data is Map<String, dynamic>) {
+        await _apiClient.tokens.saveUser(data);
+      }
+      final updated = data is Map<String, dynamic>
+          ? UserModel.fromJson(data)
+          : user.copyWith(
+              name: (payload['name'] as String?) ?? user.name,
+              email: (payload['email'] as String?) ?? user.email,
+              preferredCurrency:
+                  (payload['preferredCurrency'] as String?) ??
+                      user.preferredCurrency,
+            );
+      state = state.copyWith(
+        state: AuthState.success,
+        user: updated,
+        successMessage: 'Profile updated',
+      );
+      return true;
+    } catch (e) {
+      state = state.copyWith(
+        state: AuthState.error,
+        errorMessage: _readableError(e),
+      );
+      return false;
+    }
+  }
+
   Future<void> logout() async {
     final refresh = await _apiClient.tokens.readRefreshToken();
     if (refresh != null) {
@@ -166,6 +228,46 @@ class AuthNotifier extends Notifier<AuthData> {
     }
     await _apiClient.tokens.clear();
     state = const AuthData();
+  }
+
+  /// Permanently deletes the user's account on the backend, then clears
+  /// local tokens and auth state. Throws on backend failure so the caller
+  /// can show an error.
+  Future<void> deleteAccount() async {
+    final user = state.user;
+    if (user == null) {
+      throw StateError('Not signed in');
+    }
+    final res = await _apiClient.dio.delete('/users/${user.id}');
+    final body = res.data;
+    if (body is Map && body['success'] != true) {
+      throw Exception(body['error']?.toString() ?? 'Account deletion failed');
+    }
+    await _apiClient.tokens.clear();
+    state = const AuthData();
+  }
+
+  /// Revokes every active session for this account on every device,
+  /// clears local tokens, and resets auth state. Returns the number of
+  /// sessions that were ended (including this one).
+  Future<int> signOutEverywhere() async {
+    int revoked = 0;
+    try {
+      // Calling DELETE /auth/sessions without `keepRefreshToken` revokes ALL.
+      final res = await _apiClient.dio.delete('/auth/sessions');
+      final body = res.data;
+      if (body is Map &&
+          body['data'] is Map &&
+          (body['data'] as Map)['revokedCount'] is int) {
+        revoked = (body['data'] as Map)['revokedCount'] as int;
+      }
+    } catch (_) {
+      // Best-effort: even if the server call fails we still clear locally so
+      // the user is signed out on this device.
+    }
+    await _apiClient.tokens.clear();
+    state = const AuthData();
+    return revoked;
   }
 
   void clearMessages() {

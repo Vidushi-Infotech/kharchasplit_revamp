@@ -5,6 +5,29 @@ import Group from '../models/Group.js';
 import User from '../models/User.js';
 
 /**
+ * Pull device metadata for a refresh-token row out of the request body
+ * (`device`) and headers. Caps each string to keep DB rows small.
+ */
+function extractDeviceInfo(req) {
+  const d = (req.body && typeof req.body.device === 'object' && req.body.device) || {};
+  const cap = (val, max) =>
+    typeof val === 'string' && val.length > 0 ? val.slice(0, max) : null;
+  const ip =
+    (req.headers['x-forwarded-for'] || '').toString().split(',')[0].trim() ||
+    req.ip ||
+    req.connection?.remoteAddress ||
+    null;
+  return {
+    deviceName: cap(d.name, 255),
+    platform: cap(d.platform, 50),
+    osVersion: cap(d.osVersion, 80),
+    appVersion: cap(d.appVersion, 40),
+    ipAddress: cap(ip, 64),
+    userAgent: cap(req.headers['user-agent'], 1024),
+  };
+}
+
+/**
  * Register new user
  * POST /api/v1/auth/register
  */
@@ -232,9 +255,24 @@ const verifyOTP = async (req, res, next) => {
     const refreshExpiresAt = new Date();
     refreshExpiresAt.setDate(refreshExpiresAt.getDate() + 30);
 
+    const device = extractDeviceInfo(req);
     await query(
-      'INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)',
-      [user.id, refreshToken, refreshExpiresAt]
+      `INSERT INTO refresh_tokens
+        (user_id, token, expires_at,
+         device_name, platform, os_version, app_version, ip_address, user_agent,
+         last_used_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())`,
+      [
+        user.id,
+        refreshToken,
+        refreshExpiresAt,
+        device.deviceName,
+        device.platform,
+        device.osVersion,
+        device.appVersion,
+        device.ipAddress,
+        device.userAgent,
+      ]
     );
 
     res.json({
@@ -299,6 +337,12 @@ const refreshAccessToken = async (req, res, next) => {
         error: 'Refresh token not found or expired',
       });
     }
+
+    // Bump last_used_at so the Active Sessions list stays accurate.
+    await query(
+      'UPDATE refresh_tokens SET last_used_at = NOW() WHERE token = $1',
+      [refreshToken]
+    );
 
     // Generate new access token
     const accessToken = generateAccessToken(decoded.userId);
@@ -374,9 +418,24 @@ const simpleLogin = async (req, res, next) => {
     const refreshExpiresAt = new Date();
     refreshExpiresAt.setDate(refreshExpiresAt.getDate() + 30);
 
+    const device = extractDeviceInfo(req);
     await query(
-      'INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)',
-      [user.id, refreshToken, refreshExpiresAt]
+      `INSERT INTO refresh_tokens
+        (user_id, token, expires_at,
+         device_name, platform, os_version, app_version, ip_address, user_agent,
+         last_used_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())`,
+      [
+        user.id,
+        refreshToken,
+        refreshExpiresAt,
+        device.deviceName,
+        device.platform,
+        device.osVersion,
+        device.appVersion,
+        device.ipAddress,
+        device.userAgent,
+      ]
     );
 
     res.json({
@@ -401,6 +460,103 @@ const simpleLogin = async (req, res, next) => {
   }
 };
 
+/**
+ * List all active sessions (refresh tokens) for the authenticated user.
+ * GET /api/v1/auth/sessions
+ *
+ * Optional header `X-Current-Refresh-Token` lets the client mark which
+ * row is its own session. We never return the raw token in the payload.
+ */
+const listSessions = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const currentToken = req.headers['x-current-refresh-token'] || null;
+
+    const result = await query(
+      `SELECT id, token, expires_at, created_at,
+              device_name, platform, os_version, app_version,
+              ip_address, last_used_at
+       FROM refresh_tokens
+       WHERE user_id = $1 AND expires_at > NOW()
+       ORDER BY COALESCE(last_used_at, created_at) DESC`,
+      [userId]
+    );
+
+    const sessions = result.rows.map((row) => ({
+      id: row.id,
+      createdAt: row.created_at,
+      expiresAt: row.expires_at,
+      lastUsedAt: row.last_used_at,
+      deviceName: row.device_name,
+      platform: row.platform,
+      osVersion: row.os_version,
+      appVersion: row.app_version,
+      ipAddress: row.ip_address,
+      isCurrent: currentToken !== null && row.token === currentToken,
+    }));
+
+    res.json({ success: true, data: sessions });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Revoke a single session by id.
+ * DELETE /api/v1/auth/sessions/:id
+ */
+const revokeSession = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { id } = req.params;
+    const result = await query(
+      'DELETE FROM refresh_tokens WHERE id = $1 AND user_id = $2 RETURNING id',
+      [id, userId]
+    );
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Session not found',
+      });
+    }
+    res.json({ success: true, message: 'Session revoked' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Revoke all sessions for the user. If the request body contains
+ * `keepRefreshToken`, that one row is preserved (so the current device
+ * stays signed in).
+ * DELETE /api/v1/auth/sessions
+ */
+const revokeAllSessions = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const keepToken = req.body?.keepRefreshToken || null;
+    let result;
+    if (keepToken) {
+      result = await query(
+        'DELETE FROM refresh_tokens WHERE user_id = $1 AND token != $2 RETURNING id',
+        [userId, keepToken]
+      );
+    } else {
+      result = await query(
+        'DELETE FROM refresh_tokens WHERE user_id = $1 RETURNING id',
+        [userId]
+      );
+    }
+    res.json({
+      success: true,
+      message: 'Other sessions signed out',
+      data: { revokedCount: result.rowCount },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export default {
   register,
   sendOTP,
@@ -408,4 +564,7 @@ export default {
   refreshAccessToken,
   logout,
   simpleLogin,
+  listSessions,
+  revokeSession,
+  revokeAllSessions,
 };

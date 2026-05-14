@@ -21,6 +21,8 @@ router.get('/by-phone/:phoneNumber', authenticate, userController.getUserByPhone
 
 router.get('/:id/dashboard', authenticate, userController.getDashboard);
 
+router.get('/:id/export', authenticate, userController.exportUserData);
+
 router.get('/:id', authenticate, userController.getUser);
 
 router.put(

@@ -1,6 +1,7 @@
 import express from 'express';
 import { body } from 'express-validator';
 import { validate } from '../middleware/validation.js';
+import { authenticate } from '../middleware/auth.js';
 import authController from '../controllers/authController.js';
 
 const router = express.Router();
@@ -102,5 +103,27 @@ router.post(
   validate,
   authController.simpleLogin
 );
+
+/**
+ * @route   GET /api/v1/auth/sessions
+ * @desc    List all active sessions (refresh tokens) for the current user
+ * @access  Private
+ */
+router.get('/sessions', authenticate, authController.listSessions);
+
+/**
+ * @route   DELETE /api/v1/auth/sessions/:id
+ * @desc    Revoke a single session by id
+ * @access  Private
+ */
+router.delete('/sessions/:id', authenticate, authController.revokeSession);
+
+/**
+ * @route   DELETE /api/v1/auth/sessions
+ * @desc    Revoke ALL sessions for the user except the one matching the
+ *          provided refresh token in the body (if any)
+ * @access  Private
+ */
+router.delete('/sessions', authenticate, authController.revokeAllSessions);
 
 export default router;

@@ -455,6 +455,160 @@ const getDashboard = async (req, res, next) => {
   }
 };
 
+/**
+ * GET /api/v1/users/:id/export
+ * Returns the user's data as a single JSON blob — profile, groups, expenses,
+ * personal expenses, and settlements. Lets the client save a copy locally.
+ */
+const exportUserData = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    if (req.user.id !== id) {
+      return res.status(403).json({
+        success: false,
+        error: 'You can only export your own data',
+      });
+    }
+
+    const profileRes = await query(
+      `SELECT id, phone_number, name, email, profile_image_base64,
+              preferred_currency, created_at, updated_at
+       FROM users WHERE id = $1 AND deleted_at IS NULL`,
+      [id]
+    );
+    if (profileRes.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+    const u = profileRes.rows[0];
+    const profile = {
+      id: u.id,
+      phoneNumber: u.phone_number,
+      name: u.name,
+      email: u.email,
+      preferredCurrency: u.preferred_currency,
+      hasProfilePhoto: !!u.profile_image_base64,
+      createdAt: u.created_at,
+      updatedAt: u.updated_at,
+    };
+
+    const groupsRes = await query(
+      `SELECT g.id, g.name, g.description, g.currency, g.created_at,
+              gm.role, gm.joined_at
+       FROM groups g
+       JOIN group_members gm ON gm.group_id = g.id
+       WHERE gm.user_id = $1 AND g.deleted_at IS NULL
+       ORDER BY gm.joined_at DESC`,
+      [id]
+    );
+    const groups = groupsRes.rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      description: r.description,
+      currency: r.currency,
+      role: r.role,
+      joinedAt: r.joined_at,
+      groupCreatedAt: r.created_at,
+    }));
+
+    const expensesRes = await query(
+      `SELECT e.id, e.group_id, e.description, e.amount, e.currency, e.category,
+              e.paid_by, e.split_type, e.notes, e.expense_date, e.created_at,
+              es.amount AS my_share, es.percentage AS my_percentage,
+              es.shares AS my_shares
+       FROM expenses e
+       LEFT JOIN expense_splits es ON es.expense_id = e.id AND es.user_id = $1
+       JOIN group_members gm ON gm.group_id = e.group_id AND gm.user_id = $1
+       WHERE e.deleted_at IS NULL
+       ORDER BY e.expense_date DESC
+       LIMIT 5000`,
+      [id]
+    );
+    const expenses = expensesRes.rows.map((r) => ({
+      id: r.id,
+      groupId: r.group_id,
+      description: r.description,
+      amount: r.amount,
+      currency: r.currency,
+      category: r.category,
+      paidBy: r.paid_by,
+      paidByMe: r.paid_by === id,
+      splitType: r.split_type,
+      myShare: r.my_share,
+      myPercentage: r.my_percentage,
+      myShares: r.my_shares,
+      notes: r.notes,
+      expenseDate: r.expense_date,
+      createdAt: r.created_at,
+    }));
+
+    const personalRes = await query(
+      `SELECT id, description, amount, currency, category, expense_date,
+              notes, created_at
+       FROM personal_expenses
+       WHERE user_id = $1 AND is_deleted = FALSE
+       ORDER BY expense_date DESC
+       LIMIT 5000`,
+      [id]
+    );
+    const personalExpenses = personalRes.rows.map((r) => ({
+      id: r.id,
+      title: r.description,
+      amount: r.amount,
+      currency: r.currency,
+      category: r.category,
+      expenseDate: r.expense_date,
+      notes: r.notes,
+      createdAt: r.created_at,
+    }));
+
+    let settlements = [];
+    try {
+      const settlementsRes = await query(
+        `SELECT id, group_id, amount, currency, payer_id, payee_id, notes,
+                created_at
+         FROM settlements
+         WHERE (payer_id = $1 OR payee_id = $1)
+         ORDER BY created_at DESC
+         LIMIT 5000`,
+        [id]
+      );
+      settlements = settlementsRes.rows.map((r) => ({
+        id: r.id,
+        groupId: r.group_id,
+        amount: r.amount,
+        currency: r.currency,
+        payerId: r.payer_id,
+        payeeId: r.payee_id,
+        direction: r.payer_id === id ? 'paid' : 'received',
+        notes: r.notes,
+        createdAt: r.created_at,
+      }));
+    } catch (_) {
+      // settlements table may not exist in all environments — skip silently
+    }
+
+    const payload = {
+      exportVersion: 1,
+      exportedAt: new Date().toISOString(),
+      profile,
+      counts: {
+        groups: groups.length,
+        expenses: expenses.length,
+        personalExpenses: personalExpenses.length,
+        settlements: settlements.length,
+      },
+      groups,
+      expenses,
+      personalExpenses,
+      settlements,
+    };
+
+    res.json({ success: true, data: payload });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export default {
   getUser,
   getUserByPhone,
@@ -465,4 +619,5 @@ export default {
   updateFcmToken,
   removeFcmToken,
   getDashboard,
+  exportUserData,
 };

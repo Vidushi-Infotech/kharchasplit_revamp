@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'app_colors.dart';
 
 /// Complete Material 3 theme system with dark and light variants
@@ -22,6 +23,11 @@ class AppTheme {
         foregroundColor: AppColors.lightTextPrimary,
         elevation: 0,
         centerTitle: true,
+        systemOverlayStyle: SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.dark,
+          statusBarBrightness: Brightness.light,
+        ),
       ),
 
       // Input Fields
@@ -116,6 +122,11 @@ class AppTheme {
         foregroundColor: AppColors.darkTextPrimary,
         elevation: 0,
         centerTitle: true,
+        systemOverlayStyle: SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.light,
+          statusBarBrightness: Brightness.dark,
+        ),
       ),
 
       // Input Fields

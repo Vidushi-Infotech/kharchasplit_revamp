@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/network/api_client.dart';
+import '../../core/services/device_info_service.dart';
 
 class AuthException implements Exception {
   AuthException(this.message, {this.statusCode});
@@ -56,18 +57,27 @@ class AuthRepository {
     required String phoneNumber,
     required String otp,
   }) async {
+    final device = await DeviceInfoService.describe();
     final res = await _client.dio.post(
       '/auth/verify-otp',
-      data: {'phoneNumber': phoneNumber, 'otp': otp},
+      data: {
+        'phoneNumber': phoneNumber,
+        'otp': otp,
+        if (device.isNotEmpty) 'device': device,
+      },
     );
     final data = _ensureSuccess(res);
     return _tokensFromData(data);
   }
 
   Future<AuthTokens> simpleLogin(String phoneNumber) async {
+    final device = await DeviceInfoService.describe();
     final res = await _client.dio.post(
       '/auth/simple-login',
-      data: {'phoneNumber': phoneNumber},
+      data: {
+        'phoneNumber': phoneNumber,
+        if (device.isNotEmpty) 'device': device,
+      },
     );
     final data = _ensureSuccess(res);
     return _tokensFromData(data);

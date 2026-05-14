@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../components/avatar/avatar_widget.dart';
 import '../../../core/theme/app_colors.dart';
@@ -68,17 +70,17 @@ class _Body extends ConsumerWidget {
             _MenuItemData(
               icon: Icons.person_outline_rounded,
               label: 'Edit profile',
-              onTap: () {},
+              onTap: () => context.pushNamed('edit-profile'),
             ),
             _MenuItemData(
               icon: Icons.notifications_none_rounded,
               label: 'Notifications',
-              onTap: () {},
+              onTap: () => context.pushNamed('notification-settings'),
             ),
             _MenuItemData(
               icon: Icons.lock_outline_rounded,
               label: 'Security',
-              onTap: () {},
+              onTap: () => context.pushNamed('security'),
             ),
           ],
         ),
@@ -89,16 +91,33 @@ class _Body extends ConsumerWidget {
           isDark: isDark,
           items: [
             _MenuItemData(
-              icon: Icons.currency_rupee_rounded,
+              icon: Icons.currency_exchange_rounded,
               label: 'Default currency',
-              trailing: 'INR ₹',
-              onTap: () {},
-            ),
-            _MenuItemData(
-              icon: Icons.language_rounded,
-              label: 'Language',
-              trailing: 'English',
-              onTap: () {},
+              trailing: _CurrencyPicker.labelFor(
+                user?.preferredCurrency ?? 'INR',
+              ),
+              onTap: () => _CurrencyPicker.show(
+                context,
+                current: user?.preferredCurrency ?? 'INR',
+                onSelected: (code) async {
+                  final messenger = ScaffoldMessenger.of(context);
+                  final ok = await ref
+                      .read(authProvider.notifier)
+                      .updateProfile(preferredCurrency: code);
+                  if (!context.mounted) return;
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        ok
+                            ? 'Default currency updated to ${_CurrencyPicker.labelFor(code)}'
+                            : 'Could not update currency',
+                      ),
+                      backgroundColor: ok ? null : AppColors.warning,
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                },
+              ),
             ),
           ],
         ),
@@ -111,17 +130,17 @@ class _Body extends ConsumerWidget {
             _MenuItemData(
               icon: Icons.help_outline_rounded,
               label: 'Help & Support',
-              onTap: () {},
+              onTap: () => _HelpSupportSheet.show(context),
             ),
             _MenuItemData(
               icon: Icons.privacy_tip_outlined,
               label: 'Privacy policy',
-              onTap: () {},
+              onTap: () => context.pushNamed('privacy-policy'),
             ),
             _MenuItemData(
               icon: Icons.description_outlined,
               label: 'Terms of service',
-              onTap: () {},
+              onTap: () => context.pushNamed('terms'),
             ),
           ],
         ),
@@ -144,31 +163,157 @@ class _Body extends ConsumerWidget {
   }
 
   Future<void> _confirmLogout(BuildContext context, WidgetRef ref) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showModalBottomSheet<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Log out?'),
-        content: const Text("You'll need to sign in again to use the app."),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.warning,
-            ),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Log out'),
-          ),
-        ],
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const _LogoutSheet(),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('Signing out…'),
+        behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: 4),
       ),
     );
-    if (confirmed != true) return;
-    if (!context.mounted) return;
-    await ref.read(authProvider.notifier).logout();
-    if (!context.mounted) return;
-    context.go('/login');
+    try {
+      await ref.read(authProvider.notifier).logout();
+      if (!context.mounted) return;
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Signed out'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      context.go('/login');
+    } catch (e) {
+      // logout() is best-effort and clears local state regardless,
+      // but surface anything unexpected so the user knows what happened.
+      if (!context.mounted) return;
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Sign out hit a snag: $e'),
+          backgroundColor: AppColors.warning,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      context.go('/login');
+    }
+  }
+}
+
+/// Confirmation bottom sheet for logout — replaces the old AlertDialog so
+/// it matches the rest of the app's destructive flows (Delete account,
+/// Sign out everywhere).
+class _LogoutSheet extends StatelessWidget {
+  const _LogoutSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return SafeArea(
+      top: false,
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.background(isDark),
+          borderRadius:
+              const BorderRadius.vertical(top: Radius.circular(24)),
+          border: Border.all(color: AppColors.divider(isDark)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 14),
+                decoration: BoxDecoration(
+                  color: AppColors.divider(isDark),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            Center(
+              child: Container(
+                width: 56,
+                height: 56,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.warning.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(
+                  Icons.logout_rounded,
+                  size: 28,
+                  color: AppColors.warning,
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              'Log out?',
+              textAlign: TextAlign.center,
+              style: AppTextStyles.headline3(isDark).copyWith(
+                fontWeight: FontWeight.w700,
+                fontSize: 18,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              "You'll need to sign in again on this device to use the app.",
+              textAlign: TextAlign.center,
+              style: AppTextStyles.body2(isDark).copyWith(
+                color: AppColors.textSecondary(isDark),
+                height: 1.45,
+              ),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.of(context).pop(false),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.textPrimary(isDark),
+                      side: BorderSide(color: AppColors.divider(isDark)),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    child: const Text('Cancel'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () => Navigator.of(context).pop(true),
+                    icon: const Icon(Icons.logout_rounded, size: 16),
+                    label: const Text('Log out'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.warning,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -465,6 +610,536 @@ class _LogoutButton extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CurrencyOption {
+  const _CurrencyOption(this.code, this.symbol, this.name);
+  final String code;
+  final String symbol;
+  final String name;
+}
+
+class _CurrencyPicker {
+  _CurrencyPicker._();
+
+  /// Currencies KharchaSplit ships with. Easy to extend later.
+  static const List<_CurrencyOption> options = [
+    _CurrencyOption('INR', '₹', 'Indian Rupee'),
+    _CurrencyOption('USD', '\$', 'US Dollar'),
+    _CurrencyOption('EUR', '€', 'Euro'),
+    _CurrencyOption('GBP', '£', 'British Pound'),
+    _CurrencyOption('AED', 'د.إ', 'UAE Dirham'),
+    _CurrencyOption('SGD', 'S\$', 'Singapore Dollar'),
+    _CurrencyOption('AUD', 'A\$', 'Australian Dollar'),
+    _CurrencyOption('CAD', 'C\$', 'Canadian Dollar'),
+    _CurrencyOption('JPY', '¥', 'Japanese Yen'),
+  ];
+
+  static String labelFor(String code) {
+    final opt = options.firstWhere(
+      (o) => o.code == code,
+      orElse: () => _CurrencyOption(code, '', code),
+    );
+    return opt.symbol.isEmpty ? opt.code : '${opt.code} ${opt.symbol}';
+  }
+
+  static void show(
+    BuildContext context, {
+    required String current,
+    required ValueChanged<String> onSelected,
+  }) {
+    showModalBottomSheet<void>(
+      context: context,
+      useRootNavigator: true,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (sheetContext) => _CurrencyPickerSheet(
+        current: current,
+        onSelected: (code) {
+          Navigator.of(sheetContext).pop();
+          onSelected(code);
+        },
+      ),
+    );
+  }
+}
+
+class _CurrencyPickerSheet extends StatelessWidget {
+  const _CurrencyPickerSheet({
+    required this.current,
+    required this.onSelected,
+  });
+
+  final String current;
+  final ValueChanged<String> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return DraggableScrollableSheet(
+      initialChildSize: 0.65,
+      minChildSize: 0.4,
+      maxChildSize: 0.9,
+      expand: false,
+      builder: (_, scrollController) {
+        return Container(
+          decoration: BoxDecoration(
+            color: AppColors.background(isDark),
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(24),
+            ),
+            border: Border.all(color: AppColors.divider(isDark)),
+          ),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 10, bottom: 6),
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.divider(isDark),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 6, 12, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Default currency',
+                        style: AppTextStyles.body1(isDark).copyWith(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 17,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                    ),
+                    Material(
+                      color: Colors.transparent,
+                      shape: const CircleBorder(),
+                      clipBehavior: Clip.antiAlias,
+                      child: InkWell(
+                        onTap: () => Navigator.of(context).pop(),
+                        customBorder: const CircleBorder(),
+                        child: Container(
+                          width: 34,
+                          height: 34,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: AppColors.cardBg(isDark),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: AppColors.divider(isDark),
+                            ),
+                          ),
+                          child: Icon(
+                            Icons.close_rounded,
+                            size: 18,
+                            color: AppColors.textPrimary(isDark),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                child: Text(
+                  'Used as the default for new groups and personal expenses.',
+                  style: AppTextStyles.caption(isDark).copyWith(
+                    color: AppColors.textSecondary(isDark),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: ListView.builder(
+                  controller: scrollController,
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+                  itemCount: _CurrencyPicker.options.length,
+                  itemBuilder: (context, index) {
+                    final opt = _CurrencyPicker.options[index];
+                    final selected = opt.code == current;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: _CurrencyRow(
+                        option: opt,
+                        isSelected: selected,
+                        isDark: isDark,
+                        onTap: () => onSelected(opt.code),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _CurrencyRow extends StatelessWidget {
+  const _CurrencyRow({
+    required this.option,
+    required this.isSelected,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  final _CurrencyOption option;
+  final bool isSelected;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? AppColors.tealDark.withValues(alpha: 0.10)
+                : AppColors.cardBg(isDark),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isSelected
+                  ? AppColors.tealDark.withValues(alpha: 0.40)
+                  : AppColors.divider(isDark),
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? AppColors.tealDark.withValues(alpha: 0.18)
+                      : AppColors.surface(isDark),
+                  borderRadius: BorderRadius.circular(11),
+                  border: Border.all(
+                    color: AppColors.divider(isDark).withValues(alpha: 0.6),
+                  ),
+                ),
+                child: Text(
+                  option.symbol.isEmpty ? option.code[0] : option.symbol,
+                  style: AppTextStyles.body1(isDark).copyWith(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 16,
+                    color: isSelected
+                        ? AppColors.tealDark
+                        : AppColors.textPrimary(isDark),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      option.code,
+                      style: AppTextStyles.body1(isDark).copyWith(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      option.name,
+                      style: AppTextStyles.caption(isDark).copyWith(
+                        color: AppColors.textSecondary(isDark),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (isSelected)
+                Icon(
+                  Icons.check_circle_rounded,
+                  size: 20,
+                  color: AppColors.tealDark,
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HelpSupportSheet extends StatelessWidget {
+  const _HelpSupportSheet();
+
+  static const String supportEmail = 'support@kharchasplit.com';
+
+  static void show(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      useRootNavigator: true,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => const _HelpSupportSheet(),
+    );
+  }
+
+  Future<void> _emailUs(BuildContext context) async {
+    final uri = Uri(
+      scheme: 'mailto',
+      path: supportEmail,
+      queryParameters: {'subject': 'KharchaSplit support'},
+    );
+    final opened =
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!context.mounted) return;
+    if (!opened) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No email app available. Copied the address instead.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      await Clipboard.setData(const ClipboardData(text: supportEmail));
+    }
+  }
+
+  Future<void> _copy(BuildContext context) async {
+    await Clipboard.setData(const ClipboardData(text: supportEmail));
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Support email copied'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return SafeArea(
+      top: false,
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.background(isDark),
+          borderRadius:
+              const BorderRadius.vertical(top: Radius.circular(24)),
+          border: Border.all(color: AppColors.divider(isDark)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 14),
+                decoration: BoxDecoration(
+                  color: AppColors.divider(isDark),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            Center(
+              child: Container(
+                width: 56,
+                height: 56,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.tealDark.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(
+                  Icons.support_agent_rounded,
+                  size: 28,
+                  color: AppColors.tealDark,
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              'Need help?',
+              textAlign: TextAlign.center,
+              style: AppTextStyles.headline3(isDark).copyWith(
+                fontWeight: FontWeight.w700,
+                fontSize: 18,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              "Reach out and we'll get back as soon as we can.",
+              textAlign: TextAlign.center,
+              style: AppTextStyles.body2(isDark).copyWith(
+                color: AppColors.textSecondary(isDark),
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 18),
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              decoration: BoxDecoration(
+                color: AppColors.cardBg(isDark),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.divider(isDark)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: AppColors.surface(isDark),
+                      borderRadius: BorderRadius.circular(11),
+                      border: Border.all(
+                        color:
+                            AppColors.divider(isDark).withValues(alpha: 0.6),
+                      ),
+                    ),
+                    child: Icon(
+                      Icons.mail_outline_rounded,
+                      size: 18,
+                      color: AppColors.textPrimary(isDark),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'EMAIL US',
+                          style: AppTextStyles.caption(isDark).copyWith(
+                            color: AppColors.textSecondary(isDark),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          supportEmail,
+                          style: AppTextStyles.body1(isDark).copyWith(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                            letterSpacing: -0.2,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _copy(context),
+                    icon: const Icon(Icons.copy_rounded, size: 16),
+                    label: const Text('Copy'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.textPrimary(isDark),
+                      side: BorderSide(color: AppColors.divider(isDark)),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _GradientButton(
+                    label: 'Send email',
+                    icon: Icons.send_rounded,
+                    onTap: () => _emailUs(context),
+                    isDark: isDark,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GradientButton extends StatelessWidget {
+  const _GradientButton({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+    required this.isDark,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Ink(
+          height: 48,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [AppColors.tealLight, AppColors.tealDark],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.tealDark.withValues(alpha: 0.28),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 16, color: Colors.white),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: AppTextStyles.body1(isDark).copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                  letterSpacing: -0.1,
+                ),
+              ),
+            ],
           ),
         ),
       ),

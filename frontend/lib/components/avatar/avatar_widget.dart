@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../core/theme/app_colors.dart';
@@ -56,7 +57,7 @@ class AvatarWidget extends StatelessWidget {
                   : null,
             ),
             child: imageUrl != null && imageUrl!.isNotEmpty
-                ? _buildNetworkImage()
+                ? _buildImage(isDark)
                 : _buildInitialAvatar(isDark),
           ),
           // Online indicator
@@ -82,16 +83,41 @@ class AvatarWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildNetworkImage() {
+  Widget _buildImage(bool isDark) {
+    final raw = imageUrl!;
+    // Backend stores profile photos as a raw base64 string in the same
+    // field as URLs — detect which one we got.
+    if (raw.startsWith('http://') || raw.startsWith('https://')) {
+      return _buildNetworkImage(raw, isDark);
+    }
+    final memoryProvider = _decodeBase64(raw);
+    if (memoryProvider == null) return _buildInitialAvatar(isDark);
     return CircleAvatar(
       radius: radius,
-      backgroundImage: CachedNetworkImageProvider(imageUrl!),
+      backgroundColor: _getBackgroundColor(name),
+      backgroundImage: memoryProvider,
+    );
+  }
+
+  MemoryImage? _decodeBase64(String input) {
+    try {
+      final cleaned = input.contains(',') ? input.split(',').last : input;
+      return MemoryImage(base64Decode(cleaned));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Widget _buildNetworkImage(String url, bool isDark) {
+    return CircleAvatar(
+      radius: radius,
+      backgroundImage: CachedNetworkImageProvider(url),
       backgroundColor: Colors.grey[300],
       onBackgroundImageError: (exception, stackTrace) {
         // Fallback to initials on error
       },
       child: CachedNetworkImage(
-        imageUrl: imageUrl!,
+        imageUrl: url,
         imageBuilder: (context, imageProvider) => Container(
           decoration: BoxDecoration(
             shape: BoxShape.circle,
@@ -101,8 +127,8 @@ class AvatarWidget extends StatelessWidget {
             ),
           ),
         ),
-        placeholder: (context, url) => _buildInitialAvatar(true),
-        errorWidget: (context, url, error) => _buildInitialAvatar(true),
+        placeholder: (context, _) => _buildInitialAvatar(isDark),
+        errorWidget: (context, _, __) => _buildInitialAvatar(isDark),
       ),
     );
   }

@@ -7,6 +7,7 @@ class UserModel extends Equatable {
   final String email;
   final String phone;
   final String? avatarUrl;
+  final String preferredCurrency;
   final double totalOwed;
   final double totalOwing;
   final DateTime createdAt;
@@ -17,6 +18,7 @@ class UserModel extends Equatable {
     required this.email,
     required this.phone,
     this.avatarUrl,
+    this.preferredCurrency = 'INR',
     this.totalOwed = 0,
     this.totalOwing = 0,
     required this.createdAt,
@@ -34,6 +36,9 @@ class UserModel extends Equatable {
           json['profileImage'] ??
           json['avatar_url'] ??
           json['avatarUrl']) as String?,
+      preferredCurrency: (json['preferredCurrency'] ??
+              json['preferred_currency'] ??
+              'INR') as String,
       totalOwed: (json['totalOwed'] as num?)?.toDouble() ?? 0,
       totalOwing: (json['totalOwing'] as num?)?.toDouble() ?? 0,
       createdAt: created is String ? DateTime.parse(created) : DateTime.now(),
@@ -46,6 +51,7 @@ class UserModel extends Equatable {
     String? email,
     String? phone,
     String? avatarUrl,
+    String? preferredCurrency,
     double? totalOwed,
     double? totalOwing,
     DateTime? createdAt,
@@ -56,6 +62,7 @@ class UserModel extends Equatable {
       email: email ?? this.email,
       phone: phone ?? this.phone,
       avatarUrl: avatarUrl ?? this.avatarUrl,
+      preferredCurrency: preferredCurrency ?? this.preferredCurrency,
       totalOwed: totalOwed ?? this.totalOwed,
       totalOwing: totalOwing ?? this.totalOwing,
       createdAt: createdAt ?? this.createdAt,
@@ -69,6 +76,7 @@ class UserModel extends Equatable {
         email,
         phone,
         avatarUrl,
+        preferredCurrency,
         totalOwed,
         totalOwing,
         createdAt,

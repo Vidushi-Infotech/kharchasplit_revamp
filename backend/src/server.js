@@ -21,6 +21,7 @@ import personalExpenseRoutes from './routes/personalExpenseRoutes.js';
 import syncRoutes from './routes/syncRoutes.js';
 import activityRoutes from './routes/activityRoutes.js';
 import inviteRoutes from './routes/inviteRoutes.js';
+import policiesRoutes from './routes/policiesRoutes.js';
 
 dotenv.config();
 
@@ -85,6 +86,7 @@ app.use(`/api/${API_VERSION}/personal-expenses`, personalExpenseRoutes);
 app.use(`/api/${API_VERSION}/sync`, syncRoutes);
 app.use(`/api/${API_VERSION}/activities`, activityRoutes);
 app.use(`/api/${API_VERSION}/invites`, inviteRoutes);
+app.use(`/api/${API_VERSION}/policies`, policiesRoutes);
 
 // 404 handler
 app.use(notFound);

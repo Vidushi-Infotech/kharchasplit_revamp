@@ -16,6 +16,11 @@ import '../../modules/friends/screens/friends_screen.dart';
 import '../../modules/friends/screens/friend_detail_screen.dart';
 import '../../modules/activity/screens/activity_screen.dart';
 import '../../modules/profile/screens/profile_screen.dart';
+import '../../modules/profile/screens/edit_profile_screen.dart';
+import '../../modules/profile/screens/notifications_settings_screen.dart';
+import '../../modules/profile/screens/security_screen.dart';
+import '../../modules/profile/screens/active_sessions_screen.dart';
+import '../../modules/profile/screens/policy_screen.dart';
 import '../../modules/expenses/screens/add_expense_screen.dart';
 import '../../modules/expenses/screens/expense_detail_screen.dart';
 import '../../modules/personal_expenses/screens/personal_expenses_screen.dart';
@@ -142,6 +147,42 @@ final appRouter = GoRouter(
       path: '/home/personal/new',
       name: 'add-personal-expense',
       builder: (context, state) => const AddPersonalExpenseScreen(),
+    ),
+    GoRoute(
+      path: '/home/profile/edit',
+      name: 'edit-profile',
+      builder: (context, state) => const EditProfileScreen(),
+    ),
+    GoRoute(
+      path: '/home/profile/notifications',
+      name: 'notification-settings',
+      builder: (context, state) => const NotificationsSettingsScreen(),
+    ),
+    GoRoute(
+      path: '/home/profile/security',
+      name: 'security',
+      builder: (context, state) => const SecurityScreen(),
+    ),
+    GoRoute(
+      path: '/home/profile/security/sessions',
+      name: 'active-sessions',
+      builder: (context, state) => const ActiveSessionsScreen(),
+    ),
+    GoRoute(
+      path: '/home/profile/privacy',
+      name: 'privacy-policy',
+      builder: (context, state) => const PolicyScreen(
+        kind: 'privacy',
+        fallbackTitle: 'Privacy Policy',
+      ),
+    ),
+    GoRoute(
+      path: '/home/profile/terms',
+      name: 'terms',
+      builder: (context, state) => const PolicyScreen(
+        kind: 'terms',
+        fallbackTitle: 'Terms of Service',
+      ),
     ),
     GoRoute(
       path: '/home/profile/settings',
