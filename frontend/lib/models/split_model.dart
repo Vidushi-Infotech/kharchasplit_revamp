@@ -8,6 +8,7 @@ class SplitModel extends Equatable {
   final double owedShare;
   final double paidShare;
   final double percentage;
+  final double shares;
   final bool isSettled;
 
   const SplitModel({
@@ -17,6 +18,7 @@ class SplitModel extends Equatable {
     required this.owedShare,
     this.paidShare = 0,
     this.percentage = 0,
+    this.shares = 0,
     this.isSettled = false,
   });
 
@@ -29,6 +31,7 @@ class SplitModel extends Equatable {
       owedShare: _parseAmount(json['owedShare'] ?? json['amount']),
       paidShare: _parseAmount(json['paidShare']),
       percentage: _parseAmount(json['percentage']),
+      shares: _parseAmount(json['shares']),
       isSettled: (json['isSettled'] ?? json['is_settled'] ?? false) as bool,
     );
   }
@@ -47,6 +50,7 @@ class SplitModel extends Equatable {
     double? owedShare,
     double? paidShare,
     double? percentage,
+    double? shares,
     bool? isSettled,
   }) {
     return SplitModel(
@@ -56,6 +60,7 @@ class SplitModel extends Equatable {
       owedShare: owedShare ?? this.owedShare,
       paidShare: paidShare ?? this.paidShare,
       percentage: percentage ?? this.percentage,
+      shares: shares ?? this.shares,
       isSettled: isSettled ?? this.isSettled,
     );
   }
@@ -71,6 +76,7 @@ class SplitModel extends Equatable {
         owedShare,
         paidShare,
         percentage,
+        shares,
         isSettled,
       ];
 }

@@ -63,9 +63,9 @@ class _SplitSelectorWidgetState extends State<SplitSelectorWidget> {
               itemBuilder: (context, index) {
                 final splitTypes = [
                   SplitType.equal,
+                  SplitType.exact,
                   SplitType.percentage,
                   SplitType.shares,
-                  SplitType.adjustment,
                 ];
                 final type = splitTypes[index];
                 return Padding(
@@ -173,12 +173,6 @@ class _SplitSelectorWidgetState extends State<SplitSelectorWidget> {
           icon: Icons.pie_chart_outline,
           label: 'By Shares',
           description: 'Weight-based',
-        );
-      case SplitType.adjustment:
-        return _SplitCardData(
-          icon: Icons.tune,
-          label: 'Adjustment',
-          description: 'Equal + offset',
         );
     }
   }

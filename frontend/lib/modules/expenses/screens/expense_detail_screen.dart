@@ -8,10 +8,24 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/date_formatter.dart';
 import '../../../data/expenses/expenses_repository.dart';
+import '../../../models/models.dart';
 import '../../auth/state/auth_provider.dart';
 import '../../dashboard/state/dashboard_provider.dart';
 import '../../groups/state/group_detail_provider.dart';
 import '../state/expense_detail_provider.dart';
+
+String _splitTypeLabel(SplitType t) {
+  switch (t) {
+    case SplitType.equal:
+      return 'Equal share';
+    case SplitType.exact:
+      return 'Exact amounts';
+    case SplitType.percentage:
+      return 'By percentage';
+    case SplitType.shares:
+      return 'By shares';
+  }
+}
 
 class ExpenseDetailScreen extends ConsumerWidget {
   final String expenseId;
@@ -75,7 +89,8 @@ class ExpenseDetailScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 22),
                   _SectionLabel(
-                    label: 'SPLIT AMONG · ${expense.splits.length}',
+                    label:
+                        'SPLIT AMONG · ${expense.splits.length} · ${_splitTypeLabel(expense.splitType).toUpperCase()}',
                     isDark: isDark,
                   ),
                   const SizedBox(height: 8),
@@ -83,6 +98,8 @@ class ExpenseDetailScreen extends ConsumerWidget {
                     splits: expense.splits,
                     currency: expense.currency,
                     isDark: isDark,
+                    splitType: expense.splitType,
+                    totalAmount: expense.amount,
                   ),
                   if (expense.notes != null &&
                       (expense.notes as String).isNotEmpty) ...[
@@ -550,20 +567,41 @@ class _PersonCard extends StatelessWidget {
   }
 }
 
-class _SplitsCard extends StatelessWidget {
+class _SplitsCard extends StatefulWidget {
   const _SplitsCard({
     required this.splits,
     required this.currency,
     required this.isDark,
+    required this.splitType,
+    required this.totalAmount,
   });
 
-  final List<dynamic> splits;
+  final List<SplitModel> splits;
   final String currency;
   final bool isDark;
+  final SplitType splitType;
+  final double totalAmount;
+
+  @override
+  State<_SplitsCard> createState() => _SplitsCardState();
+}
+
+class _SplitsCardState extends State<_SplitsCard> {
+  bool _expanded = false;
+
+  bool get _hasWorking =>
+      widget.splitType == SplitType.percentage ||
+      widget.splitType == SplitType.shares;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final isDark = widget.isDark;
+
+    final totalShares = widget.splitType == SplitType.shares
+        ? widget.splits.fold<double>(0, (s, e) => s + e.shares)
+        : 0.0;
+
+    final card = Container(
       decoration: BoxDecoration(
         color: AppColors.cardBg(isDark),
         borderRadius: BorderRadius.circular(14),
@@ -571,13 +609,17 @@ class _SplitsCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          for (int i = 0; i < splits.length; i++) ...[
+          for (int i = 0; i < widget.splits.length; i++) ...[
             _SplitRow(
-              split: splits[i],
-              currency: currency,
+              split: widget.splits[i],
+              currency: widget.currency,
               isDark: isDark,
+              splitType: widget.splitType,
+              totalAmount: widget.totalAmount,
+              totalShares: totalShares,
+              showWorking: _expanded,
             ),
-            if (i < splits.length - 1)
+            if (i < widget.splits.length - 1)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 14),
                 child: Divider(
@@ -587,7 +629,48 @@ class _SplitsCard extends StatelessWidget {
                 ),
               ),
           ],
+          if (_hasWorking) ...[
+            Divider(
+              height: 1,
+              thickness: 1,
+              color: AppColors.divider(isDark).withValues(alpha: 0.6),
+            ),
+            Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              child: Row(
+                children: [
+                  Icon(
+                    _expanded
+                        ? Icons.keyboard_arrow_up_rounded
+                        : Icons.keyboard_arrow_down_rounded,
+                    size: 18,
+                    color: AppColors.textSecondary(isDark),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    _expanded ? 'Hide working' : 'Show working',
+                    style: AppTextStyles.caption(isDark).copyWith(
+                      color: AppColors.textSecondary(isDark),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
+      ),
+    );
+
+    if (!_hasWorking) return card;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () => setState(() => _expanded = !_expanded),
+        child: card,
       ),
     );
   }
@@ -598,49 +681,138 @@ class _SplitRow extends StatelessWidget {
     required this.split,
     required this.currency,
     required this.isDark,
+    required this.splitType,
+    required this.totalAmount,
+    required this.totalShares,
+    required this.showWorking,
   });
 
-  final dynamic split;
+  final SplitModel split;
   final String currency;
   final bool isDark;
+  final SplitType splitType;
+  final double totalAmount;
+  final double totalShares;
+  final bool showWorking;
+
+  String _amount(double v) => NumberFormat.currency(
+        locale: 'en_IN',
+        symbol: currency,
+        decimalDigits: 0,
+      ).format(v);
+
+  /// Resolve percentage to display: prefer the value stored at create time,
+  /// otherwise derive it from the resolved amount (works for legacy rows
+  /// where the DB column is NULL).
+  double? _resolvedPercentage() {
+    if (split.percentage > 0) return split.percentage;
+    if (totalAmount > 0 && split.owedShare >= 0) {
+      return split.owedShare / totalAmount * 100;
+    }
+    return null;
+  }
+
+  String _trim(double v) =>
+      v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(2);
+
+  String? _inputChip() {
+    switch (splitType) {
+      case SplitType.percentage:
+        final p = _resolvedPercentage();
+        if (p == null) return null;
+        return '${_trim(p)}%';
+      case SplitType.shares:
+        if (split.shares <= 0) return null;
+        return '${_trim(split.shares)} ${split.shares == 1 ? 'share' : 'shares'}';
+      case SplitType.equal:
+      case SplitType.exact:
+        return null;
+    }
+  }
+
+  String? _workingLine() {
+    switch (splitType) {
+      case SplitType.percentage:
+        final p = _resolvedPercentage();
+        if (p == null) return null;
+        return '${_trim(p)}%  ×  ${_amount(totalAmount)}  =  ${_amount(split.owedShare)}';
+      case SplitType.shares:
+        if (split.shares <= 0 || totalShares <= 0) return null;
+        return '${_trim(split.shares)} / ${_trim(totalShares)}  ×  ${_amount(totalAmount)}  =  ${_amount(split.owedShare)}';
+      case SplitType.equal:
+      case SplitType.exact:
+        return null;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final formatted = NumberFormat.currency(
-      locale: 'en_IN',
-      symbol: currency,
-      decimalDigits: 0,
-    ).format(split.owedShare as num);
+    final formatted = _amount(split.owedShare);
+    final chip = _inputChip();
+    final working = showWorking ? _workingLine() : null;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          AvatarWidget(
-            name: split.userName as String,
-            imageUrl: split.userAvatarUrl as String?,
-            radius: 16,
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: AvatarWidget(
+              name: split.userName,
+              imageUrl: split.userAvatarUrl,
+              radius: 16,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(
-              split.userName as String,
-              style: AppTextStyles.body1(isDark).copyWith(
-                fontWeight: FontWeight.w600,
-                fontSize: 14,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  split.userName,
+                  style: AppTextStyles.body1(isDark).copyWith(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (working != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    working,
+                    style: AppTextStyles.caption(isDark).copyWith(
+                      color: AppColors.textSecondary(isDark),
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
           const SizedBox(width: 10),
-          Text(
-            formatted,
-            style: AppTextStyles.body1(isDark).copyWith(
-              fontWeight: FontWeight.w700,
-              fontSize: 14,
-              letterSpacing: -0.2,
-            ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                formatted,
+                style: AppTextStyles.body1(isDark).copyWith(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                  letterSpacing: -0.2,
+                ),
+              ),
+              if (chip != null) ...[
+                const SizedBox(height: 2),
+                Text(
+                  chip,
+                  style: AppTextStyles.caption(isDark).copyWith(
+                    color: AppColors.textSecondary(isDark),
+                  ),
+                ),
+              ],
+            ],
           ),
         ],
       ),

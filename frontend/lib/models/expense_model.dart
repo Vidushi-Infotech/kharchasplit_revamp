@@ -9,7 +9,6 @@ enum SplitType {
   exact,
   percentage,
   shares,
-  adjustment,
 }
 
 /// Expense model representing a single expense
@@ -119,8 +118,6 @@ class ExpenseModel extends Equatable {
         return SplitType.percentage;
       case 'shares':
         return SplitType.shares;
-      case 'adjustment':
-        return SplitType.adjustment;
       default:
         return SplitType.equal;
     }

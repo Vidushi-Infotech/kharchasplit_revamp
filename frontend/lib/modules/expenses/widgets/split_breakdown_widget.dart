@@ -70,8 +70,6 @@ class _SplitBreakdownWidgetState extends State<SplitBreakdownWidget> {
         return '0';
       case SplitType.shares:
         return '1';
-      case SplitType.adjustment:
-        return '0.00';
       default:
         return '';
     }
@@ -156,14 +154,6 @@ class _SplitBreakdownWidgetState extends State<SplitBreakdownWidget> {
           return (label: '✓ Valid', color: AppColors.success);
         } else {
           return (label: 'No shares set', color: AppColors.warning);
-        }
-      case SplitType.adjustment:
-        if (includedSum.abs() < 0.01) {
-          return (label: '✓ Balanced (±0)', color: AppColors.success);
-        } else if (includedSum > 0) {
-          return (label: '+₹${includedSum.toStringAsFixed(2)} over', color: AppColors.warning);
-        } else {
-          return (label: '-₹${(-includedSum).toStringAsFixed(2)} under', color: AppColors.warning);
         }
       default:
         return (label: '✓ Balanced', color: AppColors.success);
