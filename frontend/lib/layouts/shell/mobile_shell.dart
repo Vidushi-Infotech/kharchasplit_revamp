@@ -14,10 +14,38 @@ class MobileShell extends ConsumerWidget {
     required this.child,
   }) : super(key: key);
 
+  /// Map a route location to the index of the bottom-nav tab it belongs to.
+  /// Returns null when the location isn't owned by a tab (e.g. deep links
+  /// like /home/groups/:groupId) — in that case we keep the last-tapped
+  /// index.
+  int? _indexFromLocation(String location) {
+    if (location.startsWith('/home/dashboard')) return 0;
+    if (location.startsWith('/home/groups')) return 1;
+    if (location.startsWith('/home/create-group') ||
+        location.startsWith('/add-expense')) {
+      return 2;
+    }
+    if (location.startsWith('/home/personal')) return 3;
+    if (location.startsWith('/home/profile')) return 4;
+    return null;
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final selectedIndex = ref.watch(selectedNavIndexProvider);
-    final unreadCount = ref.watch(unreadActivityCountProvider);
+    // Derive the active tab from the current route so it stays in sync
+    // when other widgets navigate (e.g. Home → "See all" → Groups).
+    final routerState = GoRouterState.of(context);
+    final routeIndex = _indexFromLocation(routerState.uri.path);
+    final stickyIndex = ref.watch(selectedNavIndexProvider);
+    final selectedIndex = routeIndex ?? stickyIndex;
+
+    // Keep the provider in sync so other readers (e.g. PopScope below) see
+    // the same index. Defer to next frame to avoid setState-during-build.
+    if (routeIndex != null && routeIndex != stickyIndex) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(selectedNavIndexProvider.notifier).state = routeIndex;
+      });
+    }
 
     return PopScope(
       canPop: false,
@@ -60,10 +88,9 @@ class MobileShell extends ConsumerWidget {
               icon: Icons.account_balance_wallet_rounded,
               label: 'Personal',
             ),
-            FloatingNavItem(
-              icon: Icons.notifications_rounded,
-              label: 'Activity',
-              badgeCount: unreadCount,
+            const FloatingNavItem(
+              icon: Icons.person_outline_rounded,
+              label: 'Profile',
             ),
           ],
         ),
@@ -86,7 +113,7 @@ class MobileShell extends ConsumerWidget {
         context.go('/home/personal');
         break;
       case 4:
-        context.go('/home/activity');
+        context.go('/home/profile');
         break;
     }
   }

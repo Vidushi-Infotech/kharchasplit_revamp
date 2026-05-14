@@ -17,7 +17,6 @@ class TabletShell extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final selectedIndex = ref.watch(selectedNavIndexProvider);
-    final unreadCount = ref.watch(unreadActivityCountProvider);
 
     return Scaffold(
       body: Row(
@@ -86,18 +85,10 @@ class TabletShell extends ConsumerWidget {
                 selectedIcon: Icon(Icons.account_balance_wallet_rounded),
                 label: Text('Personal'),
               ),
-              NavigationRailDestination(
-                icon: Badge(
-                  isLabelVisible: unreadCount > 0,
-                  label: Text('$unreadCount'),
-                  child: const Icon(Icons.notifications_rounded),
-                ),
-                selectedIcon: Badge(
-                  isLabelVisible: unreadCount > 0,
-                  label: Text('$unreadCount'),
-                  child: const Icon(Icons.notifications_rounded),
-                ),
-                label: const Text('Activity'),
+              const NavigationRailDestination(
+                icon: Icon(Icons.person_outline_rounded),
+                selectedIcon: Icon(Icons.person_rounded),
+                label: Text('Profile'),
               ),
             ],
           ),
@@ -123,7 +114,7 @@ class TabletShell extends ConsumerWidget {
         context.go('/home/personal');
         break;
       case 4:
-        context.go('/home/activity');
+        context.go('/home/profile');
         break;
     }
   }

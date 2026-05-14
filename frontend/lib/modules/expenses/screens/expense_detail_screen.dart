@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
+
+import '../../../components/components.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/date_formatter.dart';
-import '../../../components/components.dart';
 import '../state/expense_detail_provider.dart';
 
 class ExpenseDetailScreen extends ConsumerWidget {
   final String expenseId;
 
-  const ExpenseDetailScreen({Key? key, required this.expenseId}) : super(key: key);
+  const ExpenseDetailScreen({super.key, required this.expenseId});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -20,288 +22,575 @@ class ExpenseDetailScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: AppColors.background(isDark),
-      appBar: AppBar(
-        title: const Text('Expense'),
-        elevation: 0,
-        backgroundColor: AppColors.surface(isDark),
-        actions: [
-          PopupMenuButton(
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                child: Row(
-                  children: [
-                    Icon(Icons.edit_rounded, size: 18),
-                    SizedBox(width: 12),
-                    Text('Edit'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                child: Row(
-                  children: [
-                    Icon(Icons.delete_outline_rounded, size: 18, color: Colors.red),
-                    SizedBox(width: 12),
-                    Text('Delete', style: TextStyle(color: Colors.red)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ],
+      appBar: _TopBar(
+        isDark: isDark,
+        onBack: () => context.pop(),
       ),
       body: SafeArea(
-        top: false,
+        bottom: false,
         child: expenseAsync.when(
-          loading: () => Center(
-            child: ShimmerList(itemCount: 3),
-          ),
+          loading: () => const Center(child: ShimmerList(itemCount: 3)),
           error: (error, _) => ErrorStateWidget(
             title: 'Failed to load expense',
             message: 'Unable to fetch expense details. Please try again.',
-            onRetry: () {
-              // Trigger refresh
-            },
+            onRetry: () {},
           ),
-          data: (expense) => screenWidth < 600
-              ? _buildCompactLayout(isDark, expense)
-              : _buildWideLayout(isDark, expense),
+          data: (expense) => Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: screenWidth < 1100 ? 720 : 900,
+              ),
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
+                children: [
+                  _Hero(expense: expense, isDark: isDark),
+                  const SizedBox(height: 22),
+                  _SectionLabel(label: 'PAID BY', isDark: isDark),
+                  const SizedBox(height: 8),
+                  _PersonCard(
+                    name: expense.paidBy.name,
+                    imageUrl: expense.paidBy.avatarUrl,
+                    amount: expense.amount,
+                    currency: expense.currency,
+                    accent: AppColors.success,
+                    isDark: isDark,
+                  ),
+                  const SizedBox(height: 22),
+                  _SectionLabel(
+                    label: 'SPLIT AMONG · ${expense.splits.length}',
+                    isDark: isDark,
+                  ),
+                  const SizedBox(height: 8),
+                  _SplitsCard(
+                    splits: expense.splits,
+                    currency: expense.currency,
+                    isDark: isDark,
+                  ),
+                  if (expense.notes != null &&
+                      (expense.notes as String).isNotEmpty) ...[
+                    const SizedBox(height: 22),
+                    _SectionLabel(label: 'NOTES', isDark: isDark),
+                    const SizedBox(height: 8),
+                    _NotesCard(notes: expense.notes!, isDark: isDark),
+                  ],
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );
   }
+}
 
-  Widget _buildCompactLayout(bool isDark, dynamic expense) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+class _TopBar extends StatelessWidget implements PreferredSizeWidget {
+  const _TopBar({required this.isDark, required this.onBack});
+
+  final bool isDark;
+  final VoidCallback onBack;
+
+  @override
+  Size get preferredSize => const Size.fromHeight(56);
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.background(isDark),
+      elevation: 0,
+      child: SafeArea(
+        bottom: false,
+        child: SizedBox(
+          height: 56,
+          child: Row(
+            children: [
+              const SizedBox(width: 8),
+              _CircleIcon(
+                icon: Icons.arrow_back_rounded,
+                isDark: isDark,
+                onTap: onBack,
+                label: 'Back',
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  'Expense',
+                  style: AppTextStyles.body1(isDark).copyWith(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 17,
+                    letterSpacing: -0.2,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Semantics(
+                button: true,
+                label: 'More options',
+                child: PopupMenuButton<String>(
+                  color: AppColors.cardBg(isDark),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: BorderSide(color: AppColors.divider(isDark)),
+                  ),
+                  icon: Container(
+                    width: 40,
+                    height: 40,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: AppColors.cardBg(isDark),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppColors.divider(isDark)),
+                    ),
+                    child: Icon(
+                      Icons.more_vert_rounded,
+                      size: 18,
+                      color: AppColors.textPrimary(isDark),
+                    ),
+                  ),
+                  itemBuilder: (_) => [
+                    PopupMenuItem(
+                      value: 'edit',
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.edit_rounded,
+                            size: 18,
+                            color: AppColors.textPrimary(isDark),
+                          ),
+                          const SizedBox(width: 10),
+                          const Text('Edit'),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.delete_outline_rounded,
+                            size: 18,
+                            color: AppColors.warning,
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            'Delete',
+                            style: TextStyle(color: AppColors.warning),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CircleIcon extends StatelessWidget {
+  const _CircleIcon({
+    required this.icon,
+    required this.isDark,
+    required this.onTap,
+    required this.label,
+  });
+
+  final IconData icon;
+  final bool isDark;
+  final VoidCallback onTap;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: label,
+      child: Material(
+        color: Colors.transparent,
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          customBorder: const CircleBorder(),
+          child: Container(
+            width: 40,
+            height: 40,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppColors.cardBg(isDark),
+              shape: BoxShape.circle,
+              border: Border.all(color: AppColors.divider(isDark)),
+            ),
+            child: Icon(
+              icon,
+              size: 18,
+              color: AppColors.textPrimary(isDark),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Hero extends StatelessWidget {
+  const _Hero({required this.expense, required this.isDark});
+
+  final dynamic expense;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    final formatted = NumberFormat.currency(
+      locale: 'en_IN',
+      symbol: expense.currency as String,
+      decimalDigits: 0,
+    ).format(expense.amount as num);
+
+    return RepaintBoundary(
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [AppColors.tealLight, AppColors.tealDark],
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.tealDark.withValues(alpha: 0.28),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Stack(
+          children: [
+            const Positioned(
+              top: -30,
+              right: -20,
+              child: _Orb(size: 140, opacity: 0.10),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.18),
+                          borderRadius: BorderRadius.circular(13),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.24),
+                          ),
+                        ),
+                        child: Icon(
+                          expense.category.icon as IconData,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'EXPENSE',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.78),
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 1.3,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    formatted,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 34,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.6,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    expense.title as String,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -0.2,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${expense.category.name as String} · ${DateFormatter.fullDateTime(expense.date as DateTime)}',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.78),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Orb extends StatelessWidget {
+  const _Orb({required this.size, required this.opacity});
+  final double size;
+  final double opacity;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.white.withValues(alpha: opacity),
+        ),
+      ),
+    );
+  }
+}
+
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel({required this.label, required this.isDark});
+  final String label;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4),
+      child: Text(
+        label,
+        style: AppTextStyles.caption(isDark).copyWith(
+          color: AppColors.textSecondary(isDark),
+          fontWeight: FontWeight.w700,
+          letterSpacing: 1.3,
+          fontSize: 11,
+        ),
+      ),
+    );
+  }
+}
+
+class _PersonCard extends StatelessWidget {
+  const _PersonCard({
+    required this.name,
+    required this.imageUrl,
+    required this.amount,
+    required this.currency,
+    required this.accent,
+    required this.isDark,
+  });
+
+  final String name;
+  final String? imageUrl;
+  final double amount;
+  final String currency;
+  final Color accent;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    final formatted = NumberFormat.currency(
+      locale: 'en_IN',
+      symbol: currency,
+      decimalDigits: 0,
+    ).format(amount);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.cardBg(isDark),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.divider(isDark)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Row(
         children: [
-          _buildHeader(isDark, expense),
-          const SizedBox(height: 24),
-          _buildPaidBySection(isDark, expense),
-          const SizedBox(height: 24),
-          _buildSplitSection(isDark, expense),
-          if (expense.notes != null && expense.notes!.isNotEmpty) ...[
-            const SizedBox(height: 24),
-            _buildNotesSection(isDark, expense),
+          AvatarWidget(name: name, imageUrl: imageUrl, radius: 18),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  name,
+                  style: AppTextStyles.body1(isDark).copyWith(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'paid the full amount',
+                  style: AppTextStyles.caption(isDark).copyWith(
+                    color: AppColors.textSecondary(isDark),
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            '+$formatted',
+            style: AppTextStyles.body1(isDark).copyWith(
+              color: accent,
+              fontWeight: FontWeight.w700,
+              fontSize: 14,
+              letterSpacing: -0.2,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SplitsCard extends StatelessWidget {
+  const _SplitsCard({
+    required this.splits,
+    required this.currency,
+    required this.isDark,
+  });
+
+  final List<dynamic> splits;
+  final String currency;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.cardBg(isDark),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.divider(isDark)),
+      ),
+      child: Column(
+        children: [
+          for (int i = 0; i < splits.length; i++) ...[
+            _SplitRow(
+              split: splits[i],
+              currency: currency,
+              isDark: isDark,
+            ),
+            if (i < splits.length - 1)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                child: Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: AppColors.divider(isDark).withValues(alpha: 0.6),
+                ),
+              ),
           ],
         ],
       ),
     );
   }
+}
 
-  Widget _buildWideLayout(bool isDark, dynamic expense) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 800),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildHeader(isDark, expense),
-              const SizedBox(height: 32),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: _buildPaidBySection(isDark, expense),
-                  ),
-                  const SizedBox(width: 32),
-                  Expanded(
-                    child: _buildSplitSection(isDark, expense),
-                  ),
-                ],
-              ),
-              if (expense.notes != null && expense.notes!.isNotEmpty) ...[
-                const SizedBox(height: 32),
-                _buildNotesSection(isDark, expense),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+class _SplitRow extends StatelessWidget {
+  const _SplitRow({
+    required this.split,
+    required this.currency,
+    required this.isDark,
+  });
 
-  Widget _buildHeader(bool isDark, dynamic expense) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppColors.cardBg(isDark),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.divider(isDark)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+  final dynamic split;
+  final String currency;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    final formatted = NumberFormat.currency(
+      locale: 'en_IN',
+      symbol: currency,
+      decimalDigits: 0,
+    ).format(split.owedShare as num);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Row(
         children: [
-          Row(
-            children: [
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: AppColors.tealDark.withValues(alpha: 0.2),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  expense.category.icon,
-                  color: AppColors.tealDark,
-                  size: 28,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      expense.title,
-                      style: AppTextStyles.headline3(isDark),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      DateFormatter.fullDateTime(expense.date),
-                      style: AppTextStyles.caption(isDark).copyWith(
-                        color: AppColors.textSecondary(isDark),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+          AvatarWidget(
+            name: split.userName as String,
+            imageUrl: split.userAvatarUrl as String?,
+            radius: 16,
           ),
-          const SizedBox(height: 16),
-          CurrencyText(
-            expense.amount,
-            currency: expense.currency,
-            textStyle: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              split.userName as String,
+              style: AppTextStyles.body1(isDark).copyWith(
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            formatted,
+            style: AppTextStyles.body1(isDark).copyWith(
+              fontWeight: FontWeight.w700,
+              fontSize: 14,
+              letterSpacing: -0.2,
+            ),
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildPaidBySection(bool isDark, dynamic expense) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Paid By', style: AppTextStyles.headline3(isDark)),
-        const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: AppColors.cardBg(isDark),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.divider(isDark)),
-          ),
-          child: Row(
-            children: [
-              AvatarWidget(
-                name: expense.paidBy.name,
-                imageUrl: expense.paidBy.avatarUrl,
-                radius: 20,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      expense.paidBy.name,
-                      style: AppTextStyles.body1(isDark),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'paid',
-                      style: AppTextStyles.caption(isDark).copyWith(
-                        color: AppColors.textSecondary(isDark),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              CurrencyText(
-                expense.amount,
-                currency: expense.currency,
-                textStyle: AppTextStyles.body1(isDark).copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
+class _NotesCard extends StatelessWidget {
+  const _NotesCard({required this.notes, required this.isDark});
+  final String notes;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.cardBg(isDark),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.divider(isDark)),
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Text(
+        notes,
+        style: AppTextStyles.body2(isDark).copyWith(
+          color: AppColors.textPrimary(isDark),
+          height: 1.45,
         ),
-      ],
-    );
-  }
-
-  Widget _buildSplitSection(bool isDark, dynamic expense) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Split Among', style: AppTextStyles.headline3(isDark)),
-        const SizedBox(height: 12),
-        ...expense.splits.map((split) {
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.cardBg(isDark),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.divider(isDark)),
-              ),
-              child: Row(
-                children: [
-                  AvatarWidget(
-                    name: split.userName,
-                    imageUrl: split.userAvatarUrl,
-                    radius: 18,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      split.userName,
-                      style: AppTextStyles.body2(isDark),
-                    ),
-                  ),
-                  CurrencyText(
-                    split.owedShare,
-                    currency: expense.currency,
-                    textStyle: AppTextStyles.body2(isDark).copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }),
-      ],
-    );
-  }
-
-  Widget _buildNotesSection(bool isDark, dynamic expense) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Notes', style: AppTextStyles.headline3(isDark)),
-        const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: AppColors.cardBg(isDark),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.divider(isDark)),
-          ),
-          child: Text(
-            expense.notes ?? '',
-            style: AppTextStyles.body2(isDark).copyWith(
-              color: AppColors.textSecondary(isDark),
-            ),
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
