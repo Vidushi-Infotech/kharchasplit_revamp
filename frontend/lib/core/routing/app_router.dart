@@ -177,7 +177,11 @@ final appRouter = GoRouter(
       name: 'settle',
       builder: (context, state) {
         final userId = state.pathParameters['userId']!;
-        return SettleScreen(recipientUserId: userId);
+        final groupId = state.uri.queryParameters['groupId'];
+        return SettleScreen(
+          recipientUserId: userId,
+          initialGroupId: groupId,
+        );
       },
     ),
     GoRoute(

@@ -29,21 +29,37 @@ const getGroups = async (req, res, next) => {
     const membersByGroup = await Group.getMembersByGroupIds(groupIds);
 
     // Net balance for the requesting user in each of these groups, in one query.
-    // Positive = others owe me; negative = I owe others.
+    // Positive = others owe me; negative = I owe others. Combines expense
+    // contributions and settlement contributions so myBalance reflects
+    // settled debts.
     const balancesByGroup = {};
     if (groupIds.length > 0) {
       const placeholders = groupIds.map((_, i) => `$${i + 2}`).join(', ');
       const balanceResult = await query(
-        `SELECT e.group_id,
-                COALESCE(SUM(CASE
-                  WHEN e.paid_by = $1 AND es.user_id != $1 THEN es.amount
-                  WHEN e.paid_by != $1 AND es.user_id = $1 THEN -es.amount
-                  ELSE 0
-                END), 0) AS net
-         FROM expenses e
-         JOIN expense_splits es ON es.expense_id = e.id
-         WHERE e.deleted_at IS NULL AND e.group_id IN (${placeholders})
-         GROUP BY e.group_id`,
+        `SELECT group_id, COALESCE(SUM(contribution), 0) AS net FROM (
+           SELECT e.group_id,
+                  SUM(CASE
+                    WHEN e.paid_by = $1 AND es.user_id != $1 THEN es.amount
+                    WHEN e.paid_by != $1 AND es.user_id = $1 THEN -es.amount
+                    ELSE 0
+                  END) AS contribution
+           FROM expenses e
+           JOIN expense_splits es ON es.expense_id = e.id
+           WHERE e.deleted_at IS NULL AND e.group_id IN (${placeholders})
+           GROUP BY e.group_id
+           UNION ALL
+           SELECT s.group_id,
+                  SUM(CASE
+                    WHEN s.from_user_id = $1 THEN s.amount
+                    WHEN s.to_user_id   = $1 THEN -s.amount
+                    ELSE 0
+                  END) AS contribution
+           FROM settlements s
+           WHERE (s.status IS NULL OR s.status NOT IN ('failed', 'cancelled'))
+             AND s.group_id IN (${placeholders})
+           GROUP BY s.group_id
+         ) all_contributions
+         GROUP BY group_id`,
         [userId, ...groupIds]
       );
       for (const row of balanceResult.rows) {

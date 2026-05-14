@@ -511,8 +511,15 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       splitType: state.splitType,
       amount: state.amount,
       onSplitTypeChanged: (type) {
+        // When leaving Equal, reset per-member values to 0 so the
+        // equal-split amount (e.g. 1200) doesn't get reinterpreted as a
+        // percentage / share / exact amount.
+        Map<String, double> nextSplits = state.splits;
+        if (type != state.splitType && type != SplitType.equal) {
+          nextSplits = {for (final id in state.splits.keys) id: 0};
+        }
         ref.read(addExpenseProvider.notifier).state =
-            state.copyWith(splitType: type);
+            state.copyWith(splitType: type, splits: nextSplits);
       },
     );
   }

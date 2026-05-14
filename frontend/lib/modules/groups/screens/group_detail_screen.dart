@@ -6,6 +6,7 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../components/components.dart';
 import '../../../data/groups/groups_repository.dart';
+import '../../auth/state/auth_provider.dart';
 import '../state/group_detail_provider.dart';
 import '../state/groups_provider.dart';
 
@@ -835,39 +836,39 @@ class GroupDetailScreen extends ConsumerWidget {
     final horizontalPadding = isCompact ? 16.0 : 24.0;
     final verticalSpacing = isCompact ? 8.0 : 12.0;
 
-    return ListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: sortedBalances.length,
-      itemBuilder: (context, index) {
-        final entry = sortedBalances[index];
-        final member = detail.members.firstWhere((m) => m.id == entry.key);
-        final balance = entry.value;
-        final isNegative = balance < 0;
+    return Consumer(builder: (context, ref, _) {
+      final myId = ref.watch(authProvider).user?.id;
 
-        return Padding(
-          padding: EdgeInsets.only(
-            left: horizontalPadding,
-            right: horizontalPadding,
-            bottom: verticalSpacing,
-          ),
-          child: Semantics(
-            label: '${member.name} ${isNegative ? 'is owed' : 'owes'} ₹${balance.abs()}',
+      return ListView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: sortedBalances.length,
+        itemBuilder: (context, index) {
+          final entry = sortedBalances[index];
+          final member =
+              detail.members.firstWhere((m) => m.id == entry.key);
+          final balance = entry.value;
+          final isMe = member.id == myId;
+          final isOwed = balance > 0; // they're owed money (others owe them)
+
+          return Padding(
+            padding: EdgeInsets.only(
+              left: horizontalPadding,
+              right: horizontalPadding,
+              bottom: verticalSpacing,
+            ),
             child: Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: AppColors.surface(isDark),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: AppColors.divider(isDark),
-                  width: 1,
-                ),
+                border: Border.all(color: AppColors.divider(isDark), width: 1),
               ),
               child: Row(
                 children: [
                   AvatarWidget(
                     imageUrl: member.avatarUrl,
-                    name: member.name,
+                    name: isMe ? 'You' : member.name,
                     radius: 24,
                   ),
                   const SizedBox(width: 16),
@@ -876,38 +877,71 @@ class GroupDetailScreen extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          member.name,
-                          style: AppTextStyles.body2(isDark),
+                          isMe ? 'You' : member.name,
+                          style: AppTextStyles.body2(isDark)
+                              .copyWith(fontWeight: FontWeight.w600),
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          isNegative ? 'is owed' : 'owes you',
+                          balance.abs() < 0.01
+                              ? 'Settled up'
+                              : isOwed
+                                  ? 'is owed'
+                                  : 'owes',
                           style: AppTextStyles.caption(isDark),
                         ),
                       ],
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: (isNegative ? AppColors.success : AppColors.warning)
-                          .withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      CurrencyFormatter.format(balance.abs()),
-                      style: AppTextStyles.body2(isDark).copyWith(
-                        color: isNegative ? AppColors.success : AppColors.warning,
-                        fontWeight: FontWeight.w600,
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: balance.abs() < 0.01
+                              ? AppColors.textSecondary(isDark)
+                                  .withValues(alpha: 0.1)
+                              : (isOwed ? AppColors.success : AppColors.warning)
+                                  .withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          CurrencyFormatter.format(balance.abs()),
+                          style: AppTextStyles.body2(isDark).copyWith(
+                            color: balance.abs() < 0.01
+                                ? AppColors.textSecondary(isDark)
+                                : (isOwed
+                                    ? AppColors.success
+                                    : AppColors.warning),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ),
-                    ),
+                      if (!isMe && balance.abs() >= 0.01) ...[
+                        const SizedBox(height: 6),
+                        TextButton(
+                          onPressed: () => context.push(
+                            '/settle/${member.id}?groupId=$groupId',
+                          ),
+                          style: TextButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 0),
+                            minimumSize: const Size(0, 28),
+                          ),
+                          child: const Text('Settle Up'),
+                        ),
+                      ],
+                    ],
                   ),
                 ],
               ),
             ),
-          ),
-        );
-      },
-    );
+          );
+        },
+      );
+    });
   }
 }

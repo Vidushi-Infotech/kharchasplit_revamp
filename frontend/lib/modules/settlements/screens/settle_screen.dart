@@ -16,10 +16,17 @@ import '../../groups/state/group_detail_provider.dart';
 import '../../groups/state/groups_provider.dart';
 
 class SettleScreen extends ConsumerStatefulWidget {
-  const SettleScreen({super.key, required this.recipientUserId});
+  const SettleScreen({
+    super.key,
+    required this.recipientUserId,
+    this.initialGroupId,
+  });
 
   /// User ID of the person being paid.
   final String recipientUserId;
+
+  /// Optional group to pre-select (e.g. when entering from group detail).
+  final String? initialGroupId;
 
   @override
   ConsumerState<SettleScreen> createState() => _SettleScreenState();
@@ -32,6 +39,7 @@ class _SettleScreenState extends ConsumerState<SettleScreen> {
 
   GroupModel? _selectedGroup;
   bool _submitting = false;
+  bool _initialGroupApplied = false;
 
   @override
   void dispose() {
@@ -90,6 +98,22 @@ class _SettleScreenState extends ConsumerState<SettleScreen> {
             (g) => g.members.any((m) => m.id == widget.recipientUserId))
         .toList();
     final me = ref.watch(authProvider).user;
+
+    // Apply initialGroupId once, after groups have loaded.
+    if (!_initialGroupApplied && widget.initialGroupId != null) {
+      final preselect = shared
+          .where((g) => g.id == widget.initialGroupId)
+          .cast<GroupModel?>()
+          .firstWhere((g) => true, orElse: () => null);
+      if (preselect != null) {
+        _initialGroupApplied = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _selectedGroup == null) {
+            setState(() => _selectedGroup = preselect);
+          }
+        });
+      }
+    }
 
     final recipient = _findRecipient(groups, widget.recipientUserId);
 

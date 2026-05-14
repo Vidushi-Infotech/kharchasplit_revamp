@@ -39,6 +39,25 @@ class GroupService {
       }
     }
 
+    // Apply settlements: when A pays B ₹X, B's positive balance shrinks by X
+    // and A's negative balance shrinks (becomes less negative) by X.
+    // Includes pending + completed settlements; excludes 'failed'/'cancelled'.
+    const settlementsResult = await query(
+      `SELECT from_user_id, to_user_id, amount
+       FROM settlements
+       WHERE group_id = $1
+         AND (status IS NULL OR status NOT IN ('failed', 'cancelled'))`,
+      [groupId]
+    );
+
+    for (const row of settlementsResult.rows) {
+      const from = row.from_user_id;
+      const to = row.to_user_id;
+      const amount = +row.amount;
+      netBalance.set(to, (netBalance.get(to) || 0) - amount);
+      netBalance.set(from, (netBalance.get(from) || 0) + amount);
+    }
+
     // Simplify debts using greedy algorithm — O(n log n)
     const creditors = []; // positive balance = owed money
     const debtors = [];   // negative balance = owes money

@@ -97,8 +97,10 @@ const createSettlement = async (req, res, next) => {
       notes,
     });
 
-    // Invalidate settlement list cache
+    // Invalidate settlement list cache + balance cache (settlements affect
+    // the simplified-debt math).
     cache.invalidate(`group:${groupId}:settlements`);
+    cache.invalidate(`group:${groupId}:balances`);
 
     // Log activity - use group currency as default instead of USD
     const settlementCurrency = currency || group.currency || 'INR';
