@@ -111,6 +111,23 @@ class GroupsRepository {
     _ensureSuccess(res);
   }
 
+  /// Leave a group (remove yourself). Backend rejects with 409 if you have
+  /// any unsettled balance with another member.
+  Future<void> leave({required String groupId, required String userId}) async {
+    final res = await _client.dio.delete('/groups/$groupId/members/$userId');
+    _ensureSuccess(res);
+  }
+
+  /// Admin-only: remove another member from the group. Same endpoint as
+  /// [leave]; the backend enforces admin access when targeting someone else.
+  Future<void> removeMember({
+    required String groupId,
+    required String userId,
+  }) async {
+    final res = await _client.dio.delete('/groups/$groupId/members/$userId');
+    _ensureSuccess(res);
+  }
+
   /// Invite someone to a group by phone number. The backend transparently
   /// adds registered users directly and creates a placeholder + pending
   /// invite for non-registered ones.

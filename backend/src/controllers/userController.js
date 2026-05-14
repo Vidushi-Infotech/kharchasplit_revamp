@@ -378,7 +378,8 @@ const getDashboard = async (req, res, next) => {
                     ELSE 0
                   END) AS contribution
            FROM settlements s
-           WHERE (s.status IS NULL OR s.status NOT IN ('failed', 'cancelled'))
+           WHERE s.deleted_at IS NULL
+             AND (s.status IS NULL OR s.status NOT IN ('failed', 'cancelled'))
              AND s.group_id IN (
                SELECT group_id FROM group_members
                WHERE user_id = $1 AND deleted_at IS NULL

@@ -21,6 +21,7 @@ class GroupModel extends Equatable {
   final String currency;
   final DateTime createdAt;
   final GroupCategory category;
+  final String? createdBy;
 
   const GroupModel({
     required this.id,
@@ -32,6 +33,7 @@ class GroupModel extends Equatable {
     this.currency = '₹',
     required this.createdAt,
     this.category = GroupCategory.other,
+    this.createdBy,
   });
 
   factory GroupModel.fromJson(Map<String, dynamic> json) {
@@ -54,6 +56,7 @@ class GroupModel extends Equatable {
       createdAt:
           created is String ? DateTime.parse(created) : DateTime.now(),
       category: GroupCategory.other,
+      createdBy: (json['createdBy'] ?? json['created_by']) as String?,
     );
   }
 
@@ -67,6 +70,7 @@ class GroupModel extends Equatable {
     String? currency,
     DateTime? createdAt,
     GroupCategory? category,
+    String? createdBy,
   }) {
     return GroupModel(
       id: id ?? this.id,
@@ -78,6 +82,7 @@ class GroupModel extends Equatable {
       currency: currency ?? this.currency,
       createdAt: createdAt ?? this.createdAt,
       category: category ?? this.category,
+      createdBy: createdBy ?? this.createdBy,
     );
   }
 
@@ -111,5 +116,6 @@ class GroupModel extends Equatable {
         currency,
         createdAt,
         category,
+        createdBy,
       ];
 }

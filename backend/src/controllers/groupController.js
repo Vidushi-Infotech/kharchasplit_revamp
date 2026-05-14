@@ -55,7 +55,8 @@ const getGroups = async (req, res, next) => {
                     ELSE 0
                   END) AS contribution
            FROM settlements s
-           WHERE (s.status IS NULL OR s.status NOT IN ('failed', 'cancelled'))
+           WHERE s.deleted_at IS NULL
+             AND (s.status IS NULL OR s.status NOT IN ('failed', 'cancelled'))
              AND s.group_id IN (${placeholders})
            GROUP BY s.group_id
          ) all_contributions
@@ -276,6 +277,15 @@ const deleteGroup = async (req, res, next) => {
       return res.status(404).json({
         success: false,
         error: 'Group not found',
+      });
+    }
+
+    // Block delete unless every pair is settled.
+    const outstanding = await GroupService.calculateBalances(id);
+    if (outstanding && outstanding.length > 0) {
+      return res.status(409).json({
+        success: false,
+        error: 'Cannot delete group with unsettled balances. Settle all dues first.',
       });
     }
 
@@ -733,6 +743,16 @@ const removeGroupMember = async (req, res, next) => {
     } else {
       // For leaving, just verify user is a member
       await GroupService.validateGroupAccess(id, req.user.id);
+
+      // Block leave unless all pairwise debts with other members are settled.
+      const pair = await GroupService.getUserPairwiseDebts(id, req.user.id);
+      const unsettled = [...pair.values()].some(v => Math.abs(v) > 0.005);
+      if (unsettled) {
+        return res.status(409).json({
+          success: false,
+          error: 'You must settle all balances before leaving the group.',
+        });
+      }
     }
 
     // Fetch group and members in parallel (was 2 sequential queries)

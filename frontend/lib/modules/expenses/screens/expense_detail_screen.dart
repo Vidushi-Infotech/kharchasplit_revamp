@@ -7,6 +7,10 @@ import '../../../components/components.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/date_formatter.dart';
+import '../../../data/expenses/expenses_repository.dart';
+import '../../auth/state/auth_provider.dart';
+import '../../dashboard/state/dashboard_provider.dart';
+import '../../groups/state/group_detail_provider.dart';
 import '../state/expense_detail_provider.dart';
 
 class ExpenseDetailScreen extends ConsumerWidget {
@@ -19,12 +23,26 @@ class ExpenseDetailScreen extends ConsumerWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final screenWidth = MediaQuery.of(context).size.width;
     final expenseAsync = ref.watch(expenseDetailProvider(expenseId));
+    final myId = ref.watch(authProvider).user?.id;
+    final canDelete = expenseAsync.value != null &&
+        myId != null &&
+        expenseAsync.value!.paidBy.id == myId;
 
     return Scaffold(
       backgroundColor: AppColors.background(isDark),
       appBar: _TopBar(
         isDark: isDark,
+        canDelete: canDelete,
         onBack: () => context.pop(),
+        onMenuSelected: (value) async {
+          if (value == 'delete') {
+            await _confirmAndDelete(context, ref);
+          } else if (value == 'edit') {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Edit expense — coming soon')),
+            );
+          }
+        },
       ),
       body: SafeArea(
         bottom: false,
@@ -81,13 +99,71 @@ class ExpenseDetailScreen extends ConsumerWidget {
       ),
     );
   }
+
+  Future<void> _confirmAndDelete(BuildContext context, WidgetRef ref) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(Icons.warning_amber_rounded, color: Colors.orange),
+        title: const Text('Delete this expense?'),
+        content: const Text(
+            'This will remove the expense from the group. Balances will '
+            'recalculate for everyone. This can\'t be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    // Capture groupId BEFORE the expense is gone — we need it to invalidate
+    // the right group detail provider after the delete succeeds.
+    final cachedExpense =
+        ref.read(expenseDetailProvider(expenseId)).value;
+    final groupId = cachedExpense?.groupId;
+
+    try {
+      await ref.read(expensesRepositoryProvider).delete(expenseId);
+      ref.invalidate(dashboardProvider);
+      if (groupId != null) {
+        ref.invalidate(groupDetailProvider(groupId));
+      }
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Expense deleted')),
+      );
+      context.pop();
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not delete: $e')),
+      );
+    }
+  }
 }
 
 class _TopBar extends StatelessWidget implements PreferredSizeWidget {
-  const _TopBar({required this.isDark, required this.onBack});
+  const _TopBar({
+    required this.isDark,
+    required this.onBack,
+    required this.onMenuSelected,
+    required this.canDelete,
+  });
 
   final bool isDark;
   final VoidCallback onBack;
+  final ValueChanged<String> onMenuSelected;
+
+  /// Hides the Delete item when the current user didn't add this expense.
+  final bool canDelete;
 
   @override
   Size get preferredSize => const Size.fromHeight(56);
@@ -126,6 +202,7 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
                 button: true,
                 label: 'More options',
                 child: PopupMenuButton<String>(
+                  onSelected: onMenuSelected,
                   color: AppColors.cardBg(isDark),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -161,23 +238,24 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
                         ],
                       ),
                     ),
-                    PopupMenuItem(
-                      value: 'delete',
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.delete_outline_rounded,
-                            size: 18,
-                            color: AppColors.warning,
-                          ),
-                          const SizedBox(width: 10),
-                          Text(
-                            'Delete',
-                            style: TextStyle(color: AppColors.warning),
-                          ),
-                        ],
+                    if (canDelete)
+                      PopupMenuItem(
+                        value: 'delete',
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.delete_outline_rounded,
+                              size: 18,
+                              color: AppColors.warning,
+                            ),
+                            const SizedBox(width: 10),
+                            Text(
+                              'Delete',
+                              style: TextStyle(color: AppColors.warning),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
                   ],
                 ),
               ),

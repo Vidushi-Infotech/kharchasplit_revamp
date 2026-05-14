@@ -20,6 +20,7 @@ class SettleScreen extends ConsumerStatefulWidget {
     super.key,
     required this.recipientUserId,
     this.initialGroupId,
+    this.initialAmount,
   });
 
   /// User ID of the person being paid.
@@ -27,6 +28,10 @@ class SettleScreen extends ConsumerStatefulWidget {
 
   /// Optional group to pre-select (e.g. when entering from group detail).
   final String? initialGroupId;
+
+  /// Optional amount to pre-fill (e.g. recipient's balance from group detail).
+  /// User can edit before submitting.
+  final double? initialAmount;
 
   @override
   ConsumerState<SettleScreen> createState() => _SettleScreenState();
@@ -40,6 +45,14 @@ class _SettleScreenState extends ConsumerState<SettleScreen> {
   GroupModel? _selectedGroup;
   bool _submitting = false;
   bool _initialGroupApplied = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialAmount != null && widget.initialAmount! > 0) {
+      _amountController.text = widget.initialAmount!.toStringAsFixed(2);
+    }
+  }
 
   @override
   void dispose() {

@@ -1,105 +1,86 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/utils/date_formatter.dart';
 import '../../models/models.dart';
+import '../../modules/auth/state/auth_provider.dart';
 import '../text/currency_text.dart';
 
 /// Card widget for displaying a single expense
-class ExpenseCard extends StatelessWidget {
+class ExpenseCard extends ConsumerWidget {
   final ExpenseModel expense;
   final VoidCallback? onTap;
   final VoidCallback? onDelete;
   final bool showGroup;
 
   const ExpenseCard({
-    Key? key,
+    super.key,
     required this.expense,
     this.onTap,
     this.onDelete,
     this.showGroup = false,
-  }) : super(key: key);
+  });
 
-  /// Get user's share in this expense
-  double _getUserShare() {
-    try {
-      return expense.splits.firstWhere((s) => true).owedShare;
-    } catch (e) {
-      return 0;
+  // Per-user view of this expense:
+  //   iPaid       : current user is the payer
+  //   myShare     : amount the current user owes for this expense (0 if not in splits)
+  //   othersOwe   : amount others owe the current user (only if iPaid)
+  ({bool iPaid, double myShare, double othersOwe}) _myView(String? meId) {
+    if (meId == null || meId.isEmpty) {
+      return (iPaid: false, myShare: 0, othersOwe: 0);
     }
-  }
-
-  /// Get badge text based on expense status
-  String _getBadgeText() {
-    if (expense.isSettled) {
-      return 'Settled';
-    } else if (expense.paidBy.id == 'currentUserId') {
-      // You paid
-      final othersOwe = _getUserShare() == 0
-          ? expense.amount
-          : expense.amount - _getUserShare();
-      return 'You paid';
-    } else {
-      // You owe
-      return 'You owe';
+    final iPaid = expense.paidBy.id == meId;
+    double myShare = 0;
+    for (final s in expense.splits) {
+      if (s.userId == meId) {
+        myShare = s.owedShare;
+        break;
+      }
     }
-  }
-
-  Color _getBadgeColor() {
-    if (expense.isSettled) {
-      return AppColors.greyLight;
-    } else if (expense.paidBy.id == 'currentUserId') {
-      return AppColors.greenLight;
-    } else {
-      return AppColors.warningOrange;
-    }
+    final othersOwe = iPaid ? (expense.amount - myShare) : 0.0;
+    return (iPaid: iPaid, myShare: myShare, othersOwe: othersOwe);
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final meId = ref.watch(authProvider).user?.id;
+    final view = _myView(meId);
 
-    return GestureDetector(
-      onTap: onTap,
-      child: Dismissible(
-        key: Key(expense.id),
-        direction: DismissDirection.endToStart,
-        confirmDismiss: (_) async {
-          return await showDialog<bool>(
-                context: context,
-                builder: (ctx) => AlertDialog(
-                  title: const Text('Delete expense?'),
-                  content: Text(
-                    'Are you sure you want to delete "${expense.title}"? This cannot be undone.',
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.of(ctx).pop(false),
-                      child: const Text('Cancel'),
-                    ),
-                    TextButton(
-                      style: TextButton.styleFrom(
-                        foregroundColor: AppColors.errorText(isDark),
-                      ),
-                      onPressed: () => Navigator.of(ctx).pop(true),
-                      child: const Text('Delete'),
-                    ),
-                  ],
-                ),
-              ) ??
-              false;
-        },
-        onDismissed: (_) => onDelete?.call(),
-        background: Container(
-          alignment: Alignment.centerRight,
-          padding: const EdgeInsets.only(right: 20),
-          decoration: BoxDecoration(
-            color: AppColors.errorText(isDark),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: const Icon(Icons.delete_outline_rounded, color: Colors.white),
-        ),
-        child: RepaintBoundary(
+    // Compute the headline amount + badge based on this user's relation to
+    // the expense.
+    late final String badgeText;
+    late final Color badgeColor;
+    late final double headlineAmount;
+    if (expense.isSettled) {
+      badgeText = 'Settled';
+      badgeColor = AppColors.greyLight;
+      headlineAmount = view.myShare;
+    } else if (view.iPaid && view.othersOwe > 0.005) {
+      badgeText = 'You are owed';
+      badgeColor = AppColors.success;
+      headlineAmount = view.othersOwe;
+    } else if (view.iPaid) {
+      // Paid but everything is for me, or all splits are 0 → no debt either way.
+      badgeText = 'You paid';
+      badgeColor = AppColors.greyLight;
+      headlineAmount = expense.amount;
+    } else if (view.myShare > 0.005) {
+      badgeText = 'You owe';
+      badgeColor = AppColors.warningOrange;
+      headlineAmount = view.myShare;
+    } else {
+      // Not involved in this expense (e.g. excluded from splits).
+      badgeText = 'Not involved';
+      badgeColor = AppColors.greyLight;
+      headlineAmount = expense.amount;
+    }
+
+    // Only the person who added (paid for) the expense can swipe to delete it.
+    final canDelete = view.iPaid && onDelete != null;
+
+    final card = RepaintBoundary(
           child: Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -174,7 +155,7 @@ class ExpenseCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     CurrencyText(
-                      _getUserShare(),
+                      headlineAmount,
                       currency: expense.currency,
                       textStyle: AppTextStyles.body1(isDark).copyWith(
                         fontWeight: FontWeight.w700,
@@ -187,13 +168,13 @@ class ExpenseCard extends StatelessWidget {
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: _getBadgeColor().withValues(alpha: 0.2),
+                        color: badgeColor.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(
-                        _getBadgeText(),
+                        badgeText,
                         style: AppTextStyles.caption(isDark).copyWith(
-                          color: _getBadgeColor(),
+                          color: badgeColor,
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
                         ),
@@ -204,9 +185,54 @@ class ExpenseCard extends StatelessWidget {
               ],
             ),
           ),
-        ),
-      ),
-    );
+        );
+
+    final wrapped = canDelete
+        ? Dismissible(
+            key: Key(expense.id),
+            direction: DismissDirection.endToStart,
+            confirmDismiss: (_) async {
+              return await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('Delete expense?'),
+                      content: Text(
+                        'Are you sure you want to delete "${expense.title}"? '
+                        'This cannot be undone.',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.of(ctx).pop(false),
+                          child: const Text('Cancel'),
+                        ),
+                        TextButton(
+                          style: TextButton.styleFrom(
+                            foregroundColor: AppColors.errorText(isDark),
+                          ),
+                          onPressed: () => Navigator.of(ctx).pop(true),
+                          child: const Text('Delete'),
+                        ),
+                      ],
+                    ),
+                  ) ??
+                  false;
+            },
+            onDismissed: (_) => onDelete?.call(),
+            background: Container(
+              alignment: Alignment.centerRight,
+              padding: const EdgeInsets.only(right: 20),
+              decoration: BoxDecoration(
+                color: AppColors.errorText(isDark),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.delete_outline_rounded,
+                  color: Colors.white),
+            ),
+            child: card,
+          )
+        : card;
+
+    return GestureDetector(onTap: onTap, child: wrapped);
   }
 
   /// Parse hex color string to Color

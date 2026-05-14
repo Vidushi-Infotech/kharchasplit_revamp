@@ -781,6 +781,21 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   }
 
   Widget _buildMemberSection(bool isDark, AddExpenseState state, List<UserModel> groupMembers) {
+    final me = ref.watch(authProvider).user;
+    // Resolve display payer: explicit pick > the current user (default).
+    final UserModel? payer = state.paidBy ??
+        groupMembers
+            .where((m) => me != null && m.id == me.id)
+            .cast<UserModel?>()
+            .firstWhere((_) => true, orElse: () => null);
+    final isMe = me != null && payer != null && payer.id == me.id;
+    final displayName = payer == null
+        ? 'Me'
+        : (isMe ? '${payer.name} (Me)' : payer.name);
+    final initial = (payer?.name.isNotEmpty ?? false)
+        ? payer!.name[0].toUpperCase()
+        : 'M';
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -805,7 +820,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                     radius: 16,
                     backgroundColor: AppColors.brand.withValues(alpha: 0.2),
                     child: Text(
-                      (state.expenseFor?.name ?? 'M')[0].toUpperCase(),
+                      initial,
                       style: TextStyle(
                         color: AppColors.brand,
                         fontWeight: FontWeight.w600,
@@ -816,7 +831,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      state.expenseFor?.name ?? 'Me',
+                      displayName,
                       style: AppTextStyles.body2(isDark),
                     ),
                   ),
@@ -854,28 +869,37 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
             Expanded(
               child: ListView(
                 children: [
-                  _buildMemberListItem(
-                    isDark,
-                    'Me',
-                    'M',
-                    isSelected: state.expenseFor == null,
-                    onTap: () {
-                      ref.read(addExpenseProvider.notifier).state =
-                          state.copyWith(expenseFor: null);
-                      Navigator.pop(context);
-                    },
-                  ),
-                  ...groupMembers.map((member) => _buildMemberListItem(
-                    isDark,
-                    member.name,
-                    member.name.split(' ').map((e) => e[0]).join().toUpperCase(),
-                    isSelected: state.expenseFor?.id == member.id,
-                    onTap: () {
-                      ref.read(addExpenseProvider.notifier).state =
-                          state.copyWith(expenseFor: member);
-                      Navigator.pop(context);
-                    },
-                  )),
+                  // One row per group member. The current user gets tagged
+                  // with "(Me)" instead of being a separate redundant entry.
+                  ...() {
+                    final me = ref.read(authProvider).user;
+                    return groupMembers.map((member) {
+                      final isMe = me != null && member.id == me.id;
+                      final label = isMe ? '${member.name} (Me)' : member.name;
+                      final initials = member.name
+                          .split(' ')
+                          .where((p) => p.isNotEmpty)
+                          .map((p) => p[0])
+                          .join()
+                          .toUpperCase();
+                      // Selected when explicit pick matches, OR when nothing
+                      // is picked yet and this is the current user (default).
+                      final selected = state.paidBy == null
+                          ? isMe
+                          : state.paidBy!.id == member.id;
+                      return _buildMemberListItem(
+                        isDark,
+                        label,
+                        initials,
+                        isSelected: selected,
+                        onTap: () {
+                          ref.read(addExpenseProvider.notifier).state =
+                              state.copyWith(paidBy: member);
+                          Navigator.pop(context);
+                        },
+                      );
+                    });
+                  }(),
                 ],
               ),
             ),
