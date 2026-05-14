@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import '../core/utils/currency_formatter.dart';
 import 'user_model.dart';
 
 /// Group category enum
@@ -52,7 +53,8 @@ class GroupModel extends Equatable {
       members: members,
       totalExpenses: (json['totalExpenses'] as num?)?.toDouble() ?? 0,
       myBalance: (json['myBalance'] as num?)?.toDouble() ?? 0,
-      currency: (json['currency'] as String?) ?? 'INR',
+      currency: CurrencyFormatter.symbolFor(
+          (json['currency'] as String?) ?? 'INR'),
       createdAt:
           created is String ? DateTime.parse(created) : DateTime.now(),
       category: GroupCategory.other,

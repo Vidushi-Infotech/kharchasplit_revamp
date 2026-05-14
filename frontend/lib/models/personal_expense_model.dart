@@ -1,5 +1,6 @@
 import 'package:equatable/equatable.dart';
 
+import '../core/utils/currency_formatter.dart';
 import 'category_model.dart';
 
 /// A personal (non-shared) expense — owned by one user, no splits, no group.
@@ -45,7 +46,8 @@ class PersonalExpenseModel extends Equatable {
       userId: (json['userId'] ?? json['user_id'] ?? '') as String,
       title: (json['description'] ?? json['title'] ?? '') as String,
       amount: _parseAmount(json['amount']),
-      currency: (json['currency'] as String?) ?? 'INR',
+      currency: CurrencyFormatter.symbolFor(
+          (json['currency'] as String?) ?? 'INR'),
       category: category,
       expenseDate:
           dateRaw is String ? DateTime.parse(dateRaw) : DateTime.now(),

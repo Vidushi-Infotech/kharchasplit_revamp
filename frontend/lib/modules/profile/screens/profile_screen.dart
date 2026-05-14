@@ -96,7 +96,7 @@ class _Body extends ConsumerWidget {
             _MenuItemData(
               icon: Icons.currency_rupee_rounded,
               label: 'Default currency',
-              trailing: 'INR ₹',
+              trailing: '₹',
               onTap: () {},
             ),
             _MenuItemData(

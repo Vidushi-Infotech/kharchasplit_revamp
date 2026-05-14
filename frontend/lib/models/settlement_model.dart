@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import '../core/utils/currency_formatter.dart';
 import 'user_model.dart';
 
 /// Settlement method enum
@@ -70,7 +71,8 @@ class SettlementModel extends Equatable {
       amount: (json['amount'] is num)
           ? (json['amount'] as num).toDouble()
           : double.tryParse(json['amount']?.toString() ?? '') ?? 0,
-      currency: (json['currency'] as String?) ?? 'INR',
+      currency: CurrencyFormatter.symbolFor(
+          (json['currency'] as String?) ?? 'INR'),
       method: SettlementMethod.cash,
       date: settledAt is String ? DateTime.parse(settledAt) : DateTime.now(),
       note: json['notes'] as String?,

@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import '../core/utils/currency_formatter.dart';
 import 'category_model.dart';
 import 'split_model.dart';
 import 'user_model.dart';
@@ -86,7 +87,8 @@ class ExpenseModel extends Equatable {
       id: json['id'] as String,
       title: (json['description'] ?? json['title'] ?? '') as String,
       amount: _parseAmount(json['amount']),
-      currency: (json['currency'] as String?) ?? 'INR',
+      currency: CurrencyFormatter.symbolFor(
+          (json['currency'] as String?) ?? 'INR'),
       category: category,
       paidBy: paidBy,
       splits: splits,
