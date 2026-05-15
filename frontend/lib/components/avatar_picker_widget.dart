@@ -30,6 +30,7 @@ class _AvatarPickerWidgetState extends State<AvatarPickerWidget> {
       final pickedFile = await _imagePicker.pickImage(source: source);
       if (pickedFile != null) {
         widget.onImageSelected(File(pickedFile.path));
+        if (!mounted) return;
         Navigator.pop(context);
       }
     } catch (e) {

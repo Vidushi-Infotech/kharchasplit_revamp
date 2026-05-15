@@ -18,10 +18,13 @@ class AddExpenseState {
   final bool isLoading;
   final String? error;
 
-  // Invoice scanning fields
+  // Invoice / receipt fields
   final String? invoiceImagePath;
   final bool isScanning;
   final bool invoiceScanned;
+  /// Base64-encoded receipt image, posted to the backend as `receiptBase64`
+  /// and rendered on the expense detail screen as proof.
+  final String? receiptBase64;
 
   const AddExpenseState({
     this.title,
@@ -41,6 +44,7 @@ class AddExpenseState {
     this.invoiceImagePath,
     this.isScanning = false,
     this.invoiceScanned = false,
+    this.receiptBase64,
   });
 
   AddExpenseState copyWith({
@@ -61,6 +65,7 @@ class AddExpenseState {
     String? invoiceImagePath,
     bool? isScanning,
     bool? invoiceScanned,
+    String? receiptBase64,
   }) {
     return AddExpenseState(
       title: title ?? this.title,
@@ -80,11 +85,16 @@ class AddExpenseState {
       invoiceImagePath: invoiceImagePath ?? this.invoiceImagePath,
       isScanning: isScanning ?? this.isScanning,
       invoiceScanned: invoiceScanned ?? this.invoiceScanned,
+      receiptBase64: receiptBase64 ?? this.receiptBase64,
     );
   }
 
   bool get isValid {
-    // Basic validation (title is optional, defaults to "Untitled" on save)
+    // Title is required so the expense list / detail / activity feed all
+    // show a meaningful label. We require ≥1 non-whitespace character.
+    if (title == null || title!.trim().isEmpty) {
+      return false;
+    }
     if (amount <= 0) {
       return false;
     }

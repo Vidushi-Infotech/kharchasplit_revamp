@@ -1,3 +1,4 @@
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -573,9 +574,13 @@ class _SplitBreakdownWidgetState extends State<SplitBreakdownWidget> {
                     _localIncludedMembers.length == 2) {
                   final entered = double.tryParse(value) ?? 0;
                   final clamped = entered.clamp(0, 100).toDouble();
+                  // The other-of-two should always exist when length==2, but
+                  // a stale set during a rebuild could leave us empty — guard
+                  // with firstWhereOrNull rather than crash.
                   final otherId = _localIncludedMembers
-                      .firstWhere((id) => id != member.id);
-                  final otherController = _controllers[otherId];
+                      .firstWhereOrNull((id) => id != member.id);
+                  final otherController =
+                      otherId == null ? null : _controllers[otherId];
                   if (otherController != null) {
                     final remaining = (100 - clamped);
                     final formatted = remaining == remaining.toInt()

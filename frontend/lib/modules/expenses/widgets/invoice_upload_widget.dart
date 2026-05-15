@@ -8,16 +8,10 @@ import '../../../core/theme/app_text_styles.dart';
 
 class InvoiceUploadWidget extends StatefulWidget {
   final Function(String, File) onImageSelected;
-  final VoidCallback onProcessing;
-  final VoidCallback onComplete;
-  final bool isLoading;
 
   const InvoiceUploadWidget({
     Key? key,
     required this.onImageSelected,
-    required this.onProcessing,
-    required this.onComplete,
-    this.isLoading = false,
   }) : super(key: key);
 
   @override
@@ -32,7 +26,14 @@ class _InvoiceUploadWidgetState extends State<InvoiceUploadWidget> {
 
   Future<void> _pickImage(ImageSource source) async {
     try {
-      final XFile? pickedFile = await _picker.pickImage(source: source);
+      // Compress at capture time — receipts only need legibility, not full
+      // sensor resolution. Keeps the base64 payload well under the backend's
+      // request-body limit.
+      final XFile? pickedFile = await _picker.pickImage(
+        source: source,
+        imageQuality: 60,
+        maxWidth: 1600,
+      );
       if (pickedFile != null) {
         // For web, read image as bytes; for mobile, use File
         if (kIsWeb) {
@@ -49,7 +50,6 @@ class _InvoiceUploadWidgetState extends State<InvoiceUploadWidget> {
           });
         }
         widget.onImageSelected(pickedFile.path, File(pickedFile.path));
-        widget.onProcessing();
       }
     } catch (e) {
       if (mounted) {
@@ -72,7 +72,7 @@ class _InvoiceUploadWidgetState extends State<InvoiceUploadWidget> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Invoice/Receipt (Optional)',
+          'Receipt (Optional)',
           style: AppTextStyles.body2(isDark),
         ),
         const SizedBox(height: 12),
@@ -114,51 +114,21 @@ class _InvoiceUploadWidgetState extends State<InvoiceUploadWidget> {
           ),
         ),
         const SizedBox(height: 12),
-        if (widget.isLoading)
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppColors.successLight(isDark),
-              borderRadius: BorderRadius.circular(8),
+        SizedBox(
+          width: double.infinity,
+          height: 40,
+          child: OutlinedButton(
+            onPressed: () => setState(() {
+              _selectedImage = null;
+              _selectedImageBytes = null;
+              _imagePath = null;
+            }),
+            style: OutlinedButton.styleFrom(
+              side: BorderSide(color: AppColors.warning),
             ),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      AppColors.success,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'Scanning invoice...',
-                  style: AppTextStyles.caption(isDark).copyWith(
-                    color: AppColors.success,
-                  ),
-                ),
-              ],
-            ),
-          )
-        else
-          SizedBox(
-            width: double.infinity,
-            height: 40,
-            child: OutlinedButton(
-              onPressed: () => setState(() {
-                _selectedImage = null;
-                _selectedImageBytes = null;
-                _imagePath = null;
-              }),
-              style: OutlinedButton.styleFrom(
-                side: BorderSide(color: AppColors.warning),
-              ),
-              child: const Text('Remove Image'),
-            ),
+            child: const Text('Remove image'),
           ),
+        ),
       ],
     );
   }
@@ -239,7 +209,7 @@ class _InvoiceUploadWidgetState extends State<InvoiceUploadWidget> {
               ),
               const SizedBox(height: 12),
               Text(
-                'Upload to auto-detect amount, category & date',
+                'Attach a photo of the bill as proof',
                 style: AppTextStyles.caption(isDark).copyWith(
                   color: AppColors.textSecondary(isDark),
                   fontSize: 12,

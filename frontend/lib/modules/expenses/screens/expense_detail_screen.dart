@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -101,6 +104,16 @@ class ExpenseDetailScreen extends ConsumerWidget {
                     splitType: expense.splitType,
                     totalAmount: expense.amount,
                   ),
+                  if (expense.receiptBase64 != null &&
+                      expense.receiptBase64!.isNotEmpty) ...[
+                    const SizedBox(height: 22),
+                    _SectionLabel(label: 'RECEIPT', isDark: isDark),
+                    const SizedBox(height: 8),
+                    _ReceiptCard(
+                      base64Data: expense.receiptBase64!,
+                      isDark: isDark,
+                    ),
+                  ],
                   if (expense.notes != null &&
                       (expense.notes as String).isNotEmpty) ...[
                     const SizedBox(height: 22),
@@ -815,6 +828,155 @@ class _SplitRow extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ReceiptCard extends StatefulWidget {
+  const _ReceiptCard({required this.base64Data, required this.isDark});
+
+  final String base64Data;
+  final bool isDark;
+
+  @override
+  State<_ReceiptCard> createState() => _ReceiptCardState();
+}
+
+class _ReceiptCardState extends State<_ReceiptCard> {
+  /// Cached decoded bytes — base64-decoding a multi-MB receipt every build
+  /// (which happened on every theme tick / parent rebuild) burns CPU and
+  /// drops frames. Done once here, refreshed only if the source string
+  /// changes (rare — receipts are immutable per expense).
+  Uint8List? _bytes;
+  String? _decodedFor;
+
+  void _decode() {
+    if (_decodedFor == widget.base64Data) return;
+    _decodedFor = widget.base64Data;
+    try {
+      final cleaned = widget.base64Data.contains(',')
+          ? widget.base64Data.split(',').last
+          : widget.base64Data;
+      _bytes = base64Decode(cleaned);
+    } catch (_) {
+      _bytes = null;
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _decode();
+  }
+
+  @override
+  void didUpdateWidget(_ReceiptCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.base64Data != widget.base64Data) {
+      _decode();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = widget.isDark;
+    final bytes = _bytes;
+    final canShow = bytes != null;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: canShow ? () => _showFullScreen(context, bytes!) : null,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          decoration: BoxDecoration(
+            color: AppColors.cardBg(isDark),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.divider(isDark)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.brand.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  Icons.receipt_long_rounded,
+                  size: 18,
+                  color: AppColors.brand,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      canShow ? 'View receipt' : 'Receipt unavailable',
+                      style: AppTextStyles.body1(isDark).copyWith(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      canShow
+                          ? 'Tap to open the bill image'
+                          : "Couldn't decode the saved image",
+                      style: AppTextStyles.caption(isDark).copyWith(
+                        color: AppColors.textSecondary(isDark),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (canShow)
+                Icon(
+                  Icons.chevron_right_rounded,
+                  color: AppColors.textSecondary(isDark),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showFullScreen(BuildContext context, Uint8List bytes) {
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        opaque: false,
+        barrierColor: Colors.black.withValues(alpha: 0.85),
+        pageBuilder: (_, __, ___) => Scaffold(
+          backgroundColor: Colors.transparent,
+          body: SafeArea(
+            child: Stack(
+              children: [
+                Center(
+                  child: InteractiveViewer(
+                    minScale: 0.8,
+                    maxScale: 5,
+                    child: Image.memory(bytes, fit: BoxFit.contain),
+                  ),
+                ),
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: IconButton(
+                    icon: const Icon(Icons.close_rounded, color: Colors.white),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

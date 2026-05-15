@@ -1,9 +1,21 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Permissions actually used:
+         READ_CONTACTS    : flutter_contacts (Add member from device contacts)
+         CAMERA           : image_picker (capture a receipt photo)
+         INTERNET         : Dio HTTP calls (auto-added by Flutter Gradle)
+         POST_NOTIFICATIONS: Android 13+ notification permission for FCM -->
     <uses-permission android:name="android.permission.READ_CONTACTS"/>
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-feature android:name="android.hardware.camera" android:required="false"/>
     <application
-        android:label="kharchasplit"
+        android:label="KharchaSplit"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="false"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:usesCleartextTraffic="false">
         <activity
             android:name=".MainActivity"
             android:exported="true"

@@ -65,4 +65,9 @@ router.put('/:id/archive', authenticate, groupController.archiveGroup);
 router.put('/:id/unarchive', authenticate, groupController.unarchiveGroup);
 router.put('/:id/complete', authenticate, groupController.completeGroup);
 
+// Send a "you owe me" push reminder to another member of the group.
+// Backend gates: caller is in group, target owes caller > 0, and 6-hour
+// soft rate limit per (caller, target, group) tuple.
+router.post('/:id/remind/:userId', authenticate, groupController.remindForBalance);
+
 export default router;

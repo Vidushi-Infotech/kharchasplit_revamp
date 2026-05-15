@@ -203,6 +203,59 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
   expires_at TIMESTAMP NOT NULL,
   created_at TIMESTAMP DEFAULT NOW()
 );
+
+-- =====================================================
+-- Push notification stack
+-- (mirrors migrations/010_add_notifications.sql + 011_add_notifications_inbox.sql,
+--  inlined here so the idempotent boot path creates them on a fresh DB)
+-- =====================================================
+
+-- Per-user notification preferences. Server consults these before every
+-- send so user-level toggles are honored across every device.
+CREATE TABLE IF NOT EXISTS notification_prefs (
+  user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  push_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  email_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+  new_expense BOOLEAN NOT NULL DEFAULT TRUE,
+  group_invite BOOLEAN NOT NULL DEFAULT TRUE,
+  payment_received BOOLEAN NOT NULL DEFAULT TRUE,
+  settlement_reminder BOOLEAN NOT NULL DEFAULT TRUE,
+  comment_mention BOOLEAN NOT NULL DEFAULT TRUE,
+  weekly_summary BOOLEAN NOT NULL DEFAULT FALSE,
+  product_updates BOOLEAN NOT NULL DEFAULT FALSE,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Multi-device FCM tokens. UNIQUE(fcm_token) makes the ON CONFLICT upsert
+-- in NotificationService.registerDevice work; the legacy users.fcm_token
+-- column stays as a backfill/transitional fallback.
+CREATE TABLE IF NOT EXISTS user_devices (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  fcm_token TEXT NOT NULL,
+  platform VARCHAR(20),
+  device_name VARCHAR(255),
+  os_version VARCHAR(80),
+  app_version VARCHAR(40),
+  last_seen_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (fcm_token)
+);
+
+-- In-app notification inbox — one row per delivered notification so the
+-- app can render a persistent feed even after the OS push has been
+-- dismissed.
+CREATE TABLE IF NOT EXISTS notifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  type VARCHAR(50) NOT NULL,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL,
+  data JSONB NOT NULL DEFAULT '{}'::jsonb,
+  is_read BOOLEAN NOT NULL DEFAULT FALSE,
+  read_at TIMESTAMP,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 `;
 
 // =====================================================
@@ -270,6 +323,16 @@ const columnAdditions = [
   { table: 'group_invites', column: 'invite_code', type: 'VARCHAR(50)' },
   { table: 'group_invites', column: 'expires_at', type: 'TIMESTAMP' },
   { table: 'group_invites', column: 'responded_at', type: 'TIMESTAMP' },
+
+  // Refresh tokens — device fingerprint + last-used tracking (added later;
+  // backwards-compatible with rows inserted before these columns existed).
+  { table: 'refresh_tokens', column: 'device_name', type: 'VARCHAR(255)' },
+  { table: 'refresh_tokens', column: 'platform', type: 'VARCHAR(50)' },
+  { table: 'refresh_tokens', column: 'os_version', type: 'VARCHAR(50)' },
+  { table: 'refresh_tokens', column: 'app_version', type: 'VARCHAR(50)' },
+  { table: 'refresh_tokens', column: 'ip_address', type: 'VARCHAR(64)' },
+  { table: 'refresh_tokens', column: 'user_agent', type: 'TEXT' },
+  { table: 'refresh_tokens', column: 'last_used_at', type: 'TIMESTAMP' },
 ];
 
 // =====================================================
@@ -354,6 +417,20 @@ CREATE INDEX IF NOT EXISTS idx_otps_phone_verify ON otps(phone_number, verified,
 -- =====================================================
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_lookup ON refresh_tokens(token, expires_at);
+
+-- =====================================================
+-- USER_DEVICES: per-user lookup + last-seen sweep
+-- =====================================================
+CREATE INDEX IF NOT EXISTS idx_user_devices_user_id ON user_devices(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_devices_last_seen ON user_devices(last_seen_at);
+
+-- =====================================================
+-- NOTIFICATIONS: list (per user, newest first) + unread count
+-- =====================================================
+CREATE INDEX IF NOT EXISTS idx_notifications_user_created
+  ON notifications(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_unread
+  ON notifications(user_id) WHERE is_read = FALSE;
 `;
 
 // =====================================================

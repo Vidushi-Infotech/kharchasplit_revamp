@@ -24,7 +24,7 @@ class ExpenseModel extends Equatable {
   final String? groupId;
   final DateTime date;
   final String? notes;
-  final String? receiptImageUrl;
+  final String? receiptBase64;
   final SplitType splitType;
   final bool isSettled;
   final DateTime createdAt;
@@ -40,7 +40,7 @@ class ExpenseModel extends Equatable {
     this.groupId,
     required this.date,
     this.notes,
-    this.receiptImageUrl,
+    this.receiptBase64,
     this.splitType = SplitType.equal,
     this.isSettled = false,
     required this.createdAt,
@@ -95,7 +95,8 @@ class ExpenseModel extends Equatable {
       groupId: (json['groupId'] ?? json['group_id']) as String?,
       date: dateRaw is String ? DateTime.parse(dateRaw) : DateTime.now(),
       notes: json['notes'] as String?,
-      receiptImageUrl: json['receiptImageUrl'] as String?,
+      receiptBase64:
+          (json['receiptBase64'] ?? json['receipt_base64']) as String?,
       splitType: _parseSplitType(
           (json['splitType'] ?? json['split_type']) as String?),
       isSettled: (json['isSettled'] as bool?) ?? false,
@@ -136,7 +137,7 @@ class ExpenseModel extends Equatable {
     String? groupId,
     DateTime? date,
     String? notes,
-    String? receiptImageUrl,
+    String? receiptBase64,
     SplitType? splitType,
     bool? isSettled,
     DateTime? createdAt,
@@ -152,7 +153,7 @@ class ExpenseModel extends Equatable {
       groupId: groupId ?? this.groupId,
       date: date ?? this.date,
       notes: notes ?? this.notes,
-      receiptImageUrl: receiptImageUrl ?? this.receiptImageUrl,
+      receiptBase64: receiptBase64 ?? this.receiptBase64,
       splitType: splitType ?? this.splitType,
       isSettled: isSettled ?? this.isSettled,
       createdAt: createdAt ?? this.createdAt,
@@ -177,7 +178,7 @@ class ExpenseModel extends Equatable {
         groupId,
         date,
         notes,
-        receiptImageUrl,
+        receiptBase64,
         splitType,
         isSettled,
         createdAt,

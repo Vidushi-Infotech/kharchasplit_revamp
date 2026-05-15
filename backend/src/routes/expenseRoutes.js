@@ -2,6 +2,7 @@ import express from 'express';
 import { body  } from 'express-validator';
 import { authenticate  } from '../middleware/auth.js';
 import { validate  } from '../middleware/validation.js';
+import { expenseCreateRateLimit } from '../middleware/rateLimits.js';
 import expenseController from '../controllers/expenseController.js';
 
 const router = express.Router();
@@ -12,6 +13,10 @@ router.get('/:id', authenticate, expenseController.getExpense);
 router.post(
   '/',
   authenticate,
+  // Per-user limit (60/min) sits AFTER authenticate so the key generator
+  // can read req.user.id; before validate so a malformed payload still
+  // costs a slot.
+  expenseCreateRateLimit,
   [
     body('groupId').notEmpty().withMessage('groupId is required'),
     body('description').trim().isLength({ min: 1, max: 500 }).withMessage('description must be 1-500 chars'),

@@ -201,10 +201,15 @@ const verifyOTP = async (req, res, next) => {
   try {
     const { phoneNumber, otp } = req.body;
 
-    // Dev-only master OTP: skip DB check when NODE_ENV != production.
-    // SMS delivery is a TODO stub, so without this every dev login would be blocked.
+    // Dev-only master OTP. Two-key gate so a single misconfigured NODE_ENV
+    // can't accidentally enable account-takeover-as-a-service in prod:
+    //   1. NODE_ENV must NOT be 'production'
+    //   2. ALLOW_DEV_OTP must be the literal string 'true'
+    // Set both only on local / staging machines.
     const isDevMasterOtp =
-      process.env.NODE_ENV !== 'production' && otp === '123456';
+      process.env.NODE_ENV !== 'production' &&
+      process.env.ALLOW_DEV_OTP === 'true' &&
+      otp === '123456';
 
     let otpRow = null;
     if (!isDevMasterOtp) {
@@ -381,10 +386,15 @@ const logout = async (req, res, next) => {
 };
 
 /**
- * Simple login with just phone number (no OTP)
+ * Simple login with just phone number (no OTP) — DEV-ONLY.
+ * Returns 404 in production so the route appears not to exist.
  * POST /api/v1/auth/simple-login
  */
 const simpleLogin = async (req, res, next) => {
+  // Hard gate: never reachable in production.
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(404).json({ success: false, error: 'Not found' });
+  }
   try {
     const { phoneNumber } = req.body;
 

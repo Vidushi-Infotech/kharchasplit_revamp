@@ -24,19 +24,22 @@ class OnboardingData {
 /// Onboarding slides configuration
 const List<OnboardingData> onboardingSlides = [
   OnboardingData(
-    icon: Icons.group_rounded,
-    title: 'Split with Anyone',
-    subtitle: 'Add friends, create groups, and split expenses instantly — no awkward conversations.',
+    icon: Icons.group_add_rounded,
+    title: 'Invite Anyone',
+    subtitle:
+        'Pull members straight from your contacts. We WhatsApp the ones not on KharchaSplit yet.',
   ),
   OnboardingData(
-    icon: Icons.receipt_long_rounded,
-    title: 'Track Every Rupee',
-    subtitle: 'Know exactly who owes what. Real-time balance updates across all your groups.',
+    icon: Icons.tune_rounded,
+    title: 'Split Your Way',
+    subtitle:
+        'Equally, unequally, by % or shares. Scan an invoice and the amount fills itself.',
   ),
   OnboardingData(
-    icon: Icons.check_circle_rounded,
-    title: 'Settle in Seconds',
-    subtitle: 'One tap settlement with UPI, GPay, or cash. Clean history, zero confusion.',
+    icon: Icons.task_alt_rounded,
+    title: 'Settle Without Doubt',
+    subtitle:
+        'See exactly who you owe. Tap Settle Up — both sides confirm. Pair history stays clean.',
   ),
 ];
 
@@ -85,9 +88,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     await ref
                         .read(onboardingPageProvider.notifier)
                         .completeOnboarding();
-                    if (mounted) {
-                      context.go('/login');
-                    }
+                    if (!context.mounted) return;
+                    context.go('/login');
                   },
                   child: Text(
                     'Skip Tour',
@@ -136,9 +138,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                               await ref
                                   .read(onboardingPageProvider.notifier)
                                   .completeOnboarding();
-                              if (mounted) {
-                                context.go('/login');
-                              }
+                              if (!context.mounted) return;
+                              context.go('/login');
                             },
                           ),
                         )

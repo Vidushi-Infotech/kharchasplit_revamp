@@ -28,17 +28,16 @@ class _AmountInputWidgetState extends State<AmountInputWidget> {
     _controller = TextEditingController(
       text: widget.amount > 0 ? widget.amount.toInt().toString() : '',
     );
-    _controller.addListener(_handleTextChanged);
-    // Position cursor at end of text to prevent auto-selection
+    // No controller listener: previously we did `setState({})` on every
+    // keystroke just to flip `showCursor`. That fired a rebuild of this
+    // widget AND the parent (via onChanged → provider write), so each char
+    // triggered two full passes of the 1300-line add-expense tree. Cursor
+    // is always-on now; the per-keystroke rebuild is gone.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _controller.selection = TextSelection.fromPosition(
         TextPosition(offset: _controller.text.length),
       );
     });
-  }
-
-  void _handleTextChanged() {
-    if (mounted) setState(() {});
   }
 
   @override
@@ -56,7 +55,6 @@ class _AmountInputWidgetState extends State<AmountInputWidget> {
 
   @override
   void dispose() {
-    _controller.removeListener(_handleTextChanged);
     _controller.dispose();
     super.dispose();
   }
@@ -85,7 +83,6 @@ class _AmountInputWidgetState extends State<AmountInputWidget> {
             Expanded(
               child: TextField(
                 controller: _controller,
-                showCursor: _controller.text.isNotEmpty,
                 keyboardType: TextInputType.number,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 textAlign: TextAlign.center,

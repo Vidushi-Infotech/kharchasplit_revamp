@@ -9,6 +9,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../components/components.dart';
 import '../../../models/models.dart';
+import '../../../core/services/app_logger.dart';
 import '../../../core/services/image_processor_service.dart';
 import '../../../data/contacts/device_contacts_provider.dart';
 import '../../../data/groups/groups_repository.dart';
@@ -99,26 +100,6 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
         }
 
         if (!mounted) return;
-        setState(() => _processingStatus = 'Scanning for threats...');
-
-        // Step 2: Scan for malware
-        final scanResult =
-            await ImageProcessorService.scanImageForMalware(pickedFile.path);
-        if (!scanResult.isSafe) {
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Security warning: ${scanResult.details} (${scanResult.threatCount} threats detected)',
-              ),
-              backgroundColor: Colors.red,
-            ),
-          );
-          setState(() => _isProcessing = false);
-          return;
-        }
-
-        if (!mounted) return;
         setState(() => _processingStatus = 'Compressing image...');
 
         // Step 3: Compress image to WebP
@@ -135,9 +116,9 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
               originalSize,
               compressedBytes.length,
             );
-          } catch (e) {
-            // Skip compression calculation if it fails
-            print('Warning: Could not calculate compression - $e');
+          } catch (e, st) {
+            AppLogger.warn('Could not calculate compression',
+                tag: 'create_group', error: e, stackTrace: st);
           }
         }
 
@@ -157,8 +138,9 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
           validation.dimensionsDisplay,
           compressionPercent,
         );
-      } catch (processingError) {
-        print('Processing error: $processingError');
+      } catch (processingError, st) {
+        AppLogger.error('Image processing error',
+            tag: 'create_group', error: processingError, stackTrace: st);
         // On web or any error, still allow image to be used
         if (!mounted) return;
         setState(() {
@@ -202,21 +184,21 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
         builder: (context, setState) {
           Future.microtask(() async {
             final success = await _uploadImage();
-            if (success && mounted) {
-              // Close dialog after upload completes
-              Navigator.of(dialogContext).pop();
-
-              // Show success notification
-              ScaffoldMessenger.of(this.context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    'Image uploaded! Compressed $dimensions by $compressionPercent%',
-                  ),
-                  backgroundColor: Colors.green,
-                  duration: const Duration(seconds: 3),
+            if (!success || !mounted) return;
+            // Both contexts (dialog + outer) need their own mounted check
+            // because the dialog may be torn down before this completes.
+            if (!dialogContext.mounted) return;
+            Navigator.of(dialogContext).pop();
+            if (!context.mounted) return;
+            ScaffoldMessenger.of(this.context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Image uploaded! Compressed $dimensions by $compressionPercent%',
                 ),
-              );
-            }
+                backgroundColor: Colors.green,
+                duration: const Duration(seconds: 3),
+              ),
+            );
           });
 
           return Dialog(
@@ -351,8 +333,9 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
       }
 
       return true;
-    } catch (e) {
-      print('Upload error: $e');
+    } catch (e, st) {
+      AppLogger.error('Upload error',
+          tag: 'create_group', error: e, stackTrace: st);
       return false;
     }
   }

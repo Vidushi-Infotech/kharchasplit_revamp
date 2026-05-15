@@ -66,17 +66,32 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
-	<!-- Allow plaintext HTTP to localhost so adb-reverse / iOS-sim host can hit the dev backend. -->
-	<key>NSAppTransportSecurity</key>
-	<dict>
-		<key>NSAllowsLocalNetworking</key>
-		<true/>
-	</dict>
+	<!-- ATS is left at iOS defaults (HTTPS only) for production safety.
+	     If you need local dev against http://localhost, TEMPORARILY add
+	     the block below back, then REMOVE before any release / TestFlight
+	     / App Store build:
+	         <key>NSAppTransportSecurity</key>
+	         <dict>
+	             <key>NSAllowsLocalNetworking</key>
+	             <true/>
+	         </dict>
+	     -->
 	<!-- Required so iOS lets the app receive remote notifications while in background. -->
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>
 		<string>fetch</string>
 	</array>
+	<!-- ============================================================
+	     Permission usage descriptions (App Store rejects without these)
+	     ============================================================ -->
+	<key>NSContactsUsageDescription</key>
+	<string>KharchaSplit uses your contacts so you can add members to a group without typing phone numbers.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>KharchaSplit uses the camera so you can photograph a bill or receipt as proof of an expense.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>KharchaSplit reads from your photo library so you can attach a receipt image to an expense.</string>
+	<key>NSPhotoLibraryAddOnlyUsageDescription</key>
+	<string>KharchaSplit saves exported expense reports back to your photo library.</string>
 </dict>
 </plist>

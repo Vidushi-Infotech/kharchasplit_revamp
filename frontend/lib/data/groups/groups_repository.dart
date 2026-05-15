@@ -128,6 +128,18 @@ class GroupsRepository {
     _ensureSuccess(res);
   }
 
+  /// Send a "you owe me" push reminder to another member of the group.
+  /// Backend rejects with 400 if the target doesn't actually owe the
+  /// caller money, and 429 if a reminder for the same pair was sent in
+  /// the last 6 hours.
+  Future<void> sendReminder({
+    required String groupId,
+    required String userId,
+  }) async {
+    final res = await _client.dio.post('/groups/$groupId/remind/$userId');
+    _ensureSuccess(res);
+  }
+
   /// Invite someone to a group by phone number. The backend transparently
   /// adds registered users directly and creates a placeholder + pending
   /// invite for non-registered ones.

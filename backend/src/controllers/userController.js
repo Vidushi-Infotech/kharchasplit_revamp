@@ -350,8 +350,23 @@ const getDashboard = async (req, res, next) => {
     // Positive amount = others owe me, negative = I owe others.
     // Combines expenses (someone paying for someone else) AND settlements
     // (a payment that reduces the underlying debt).
+    // The user's "active" group set: membership row alive AND group itself
+    // not soft-deleted. Aligning this with Group.findByUserId so the
+    // dashboard summary cards match the sum of per-group myBalance values
+    // shown in the "You're owed" / "You owe" detail screens. (Without the
+    // groups.deleted_at filter, leftover expenses in soft-deleted groups
+    // still counted into the dashboard total but vanished from the
+    // breakdown — root cause of the ₹X mismatch.)
     const balancesResult = await query(
-      `SELECT COALESCE(SUM(GREATEST(net, 0)), 0) AS you_are_owed,
+      `WITH active_groups AS (
+         SELECT g.id AS group_id
+         FROM groups g
+         JOIN group_members gm ON gm.group_id = g.id
+         WHERE gm.user_id = $1
+           AND gm.deleted_at IS NULL
+           AND g.deleted_at IS NULL
+       )
+       SELECT COALESCE(SUM(GREATEST(net, 0)), 0) AS you_are_owed,
               COALESCE(SUM(GREATEST(-net, 0)), 0) AS you_owe,
               COALESCE(SUM(net), 0) AS total
        FROM (
@@ -365,10 +380,7 @@ const getDashboard = async (req, res, next) => {
            FROM expenses e
            JOIN expense_splits es ON es.expense_id = e.id
            WHERE e.deleted_at IS NULL
-             AND e.group_id IN (
-               SELECT group_id FROM group_members
-               WHERE user_id = $1 AND deleted_at IS NULL
-             )
+             AND e.group_id IN (SELECT group_id FROM active_groups)
            GROUP BY e.group_id
            UNION ALL
            SELECT s.group_id,
@@ -380,10 +392,7 @@ const getDashboard = async (req, res, next) => {
            FROM settlements s
            WHERE s.deleted_at IS NULL
              AND (s.status IS NULL OR s.status NOT IN ('failed', 'cancelled'))
-             AND s.group_id IN (
-               SELECT group_id FROM group_members
-               WHERE user_id = $1 AND deleted_at IS NULL
-             )
+             AND s.group_id IN (SELECT group_id FROM active_groups)
            GROUP BY s.group_id
          ) all_contributions
          GROUP BY group_id

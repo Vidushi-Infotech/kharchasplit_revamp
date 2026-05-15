@@ -1,3 +1,4 @@
+import 'package:collection/collection.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../data/personal_expenses/personal_expenses_repository.dart';
@@ -51,10 +52,7 @@ class PersonalExpensesNotifier
   Future<void> deleteExpense(String id) async {
     // Look up amount before deleting so we know how much to refund.
     final items = state.value ?? const <PersonalExpenseModel>[];
-    final target = items.where((e) => e.id == id).cast<PersonalExpenseModel?>().firstWhere(
-          (e) => true,
-          orElse: () => null,
-        );
+    final target = items.firstWhereOrNull((e) => e.id == id);
     await ref.read(personalExpensesRepositoryProvider).delete(id);
     state = state.whenData(
         (items) => items.where((e) => e.id != id).toList());
