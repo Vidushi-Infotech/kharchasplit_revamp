@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../auth/state/auth_provider.dart';
+import '../../notifications/state/notifications_inbox_provider.dart';
 import '../state/dashboard_provider.dart';
 
 class DashboardHeader extends ConsumerWidget {
@@ -49,6 +50,7 @@ class DashboardHeader extends ConsumerWidget {
             _NotificationButton(
               isDark: isDark,
               onTap: onNotificationsTap,
+              unreadCount: ref.watch(unreadNotificationsCountProvider),
             ),
           ],
         ),
@@ -154,15 +156,25 @@ class _Greeting extends StatelessWidget {
 }
 
 class _NotificationButton extends StatelessWidget {
-  const _NotificationButton({required this.isDark, this.onTap});
+  const _NotificationButton({
+    required this.isDark,
+    this.onTap,
+    this.unreadCount = 0,
+  });
 
   final bool isDark;
   final VoidCallback? onTap;
+  final int unreadCount;
 
   @override
   Widget build(BuildContext context) {
+    final hasUnread = unreadCount > 0;
+    final label = hasUnread
+        ? 'Notifications, $unreadCount unread'
+        : 'Notifications';
+
     return Semantics(
-      label: 'Notifications',
+      label: label,
       button: true,
       child: Material(
         color: Colors.transparent,
@@ -177,10 +189,48 @@ class _NotificationButton extends StatelessWidget {
               borderRadius: BorderRadius.circular(14),
               border: Border.all(color: AppColors.divider(isDark)),
             ),
-            child: Icon(
-              Icons.notifications_outlined,
-              size: 20,
-              color: AppColors.textPrimary(isDark),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Icon(
+                  Icons.notifications_outlined,
+                  size: 20,
+                  color: AppColors.textPrimary(isDark),
+                ),
+                if (hasUnread)
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      constraints: const BoxConstraints(
+                        minWidth: 16,
+                        minHeight: 16,
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 1,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.warning,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: AppColors.cardBg(isDark),
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Text(
+                        unreadCount > 9 ? '9+' : '$unreadCount',
+                        textAlign: TextAlign.center,
+                        style: AppTextStyles.caption(isDark).copyWith(
+                          color: Colors.white,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                          height: 1.0,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
         ),

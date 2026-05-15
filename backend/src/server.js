@@ -8,6 +8,7 @@ import rateLimit from 'express-rate-limit';
 
 import { testConnection, pool, getPoolMetrics } from './config/database.js';
 import { initializeDatabase } from './config/initDatabase.js';
+import { initFirebase } from './config/firebaseAdmin.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
 import { cache } from './services/cacheService.js';
 
@@ -113,6 +114,9 @@ const startServer = async () => {
       console.error('Failed to initialize database schema. Exiting...');
       process.exit(1);
     }
+
+    // Initialize Firebase Admin (push notifications). Non-fatal if missing.
+    initFirebase();
 
     server = app.listen(PORT, () => {
       console.log('');

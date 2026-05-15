@@ -2,6 +2,7 @@ import Expense from '../models/Expense.js';
 import Group from '../models/Group.js';
 import GroupService from '../services/groupService.js';
 import ActivityService from '../services/activityService.js';
+import { NotificationService } from '../services/notificationService.js';
 import { cache } from '../services/cacheService.js';
 
 /**
@@ -139,6 +140,22 @@ const createExpense = async (req, res, next) => {
       amount,
       currency || 'USD'
     );
+
+    // Push notify other group members (excluding the payer).
+    // Wrapped in try/catch so a notification failure never breaks the
+    // expense create response.
+    try {
+      await NotificationService.notifyExpenseAdded(
+        groupId,
+        expense,
+        paidByName || 'Someone',
+        group.name,
+        currency || group.currency || 'INR',
+        req.user.id,
+      );
+    } catch (notifError) {
+      console.error('[ExpenseController] notify failed:', notifError);
+    }
 
     res.status(201).json({
       success: true,

@@ -15,6 +15,7 @@ import '../../modules/groups/screens/create_group_screen.dart';
 import '../../modules/friends/screens/friends_screen.dart';
 import '../../modules/friends/screens/friend_detail_screen.dart';
 import '../../modules/activity/screens/activity_screen.dart';
+import '../../modules/notifications/screens/notifications_inbox_screen.dart';
 import '../../modules/profile/screens/profile_screen.dart';
 import '../../modules/profile/screens/edit_profile_screen.dart';
 import '../../modules/profile/screens/notifications_settings_screen.dart';
@@ -112,6 +113,11 @@ final appRouter = GoRouter(
           builder: (context, state) => const ProfileScreen(),
         ),
       ],
+    ),
+    GoRoute(
+      path: '/home/notifications',
+      name: 'notifications-inbox',
+      builder: (context, state) => const NotificationsInboxScreen(),
     ),
     GoRoute(
       path: '/home/owed-to-me',

@@ -1,4 +1,4 @@
-package com.example.kharchasplit
+package com.kharchasplit
 
 import io.flutter.embedding.android.FlutterActivity
 

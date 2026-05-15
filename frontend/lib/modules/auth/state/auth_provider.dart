@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_client.dart';
+import '../../../core/services/push_service.dart';
 import '../../../data/auth/auth_repository.dart';
 import '../../../models/user_model.dart';
 
@@ -149,6 +152,14 @@ class AuthNotifier extends Notifier<AuthData> {
       await _apiClient.tokens.saveUser(result.user);
       final user = UserModel.fromJson(result.user);
       state = AuthData(state: AuthState.success, user: user);
+      // Register this device's FCM token with the backend so push works.
+      // Fire-and-forget so signin completes immediately.
+      if (PushService.isSupportedPlatform) {
+        unawaited(PushService.instance.registerWithBackend(
+          dio: _apiClient.dio,
+          userId: user.id,
+        ));
+      }
       return true;
     } catch (e) {
       state = state.copyWith(
@@ -222,6 +233,17 @@ class AuthNotifier extends Notifier<AuthData> {
   }
 
   Future<void> logout() async {
+    // Unregister this device's FCM token before clearing auth so the
+    // server stops sending to a logged-out device.
+    final user = state.user;
+    if (user != null && PushService.isSupportedPlatform) {
+      try {
+        await PushService.instance.unregisterFromBackend(
+          dio: _apiClient.dio,
+          userId: user.id,
+        );
+      } catch (_) {/* don't block logout on unregister failure */}
+    }
     final refresh = await _apiClient.tokens.readRefreshToken();
     if (refresh != null) {
       await _repo.logout(refresh);

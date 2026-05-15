@@ -74,6 +74,11 @@ class _Body extends ConsumerWidget {
               onTap: () => context.pushNamed('edit-profile'),
             ),
             _MenuItemData(
+              icon: Icons.timeline_rounded,
+              label: 'Activity',
+              onTap: () => context.pushNamed('activity'),
+            ),
+            _MenuItemData(
               icon: Icons.notifications_none_rounded,
               label: 'Notifications',
               onTap: () => context.pushNamed('notification-settings'),

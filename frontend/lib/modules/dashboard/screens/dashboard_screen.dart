@@ -141,6 +141,7 @@ class DashboardScreen extends ConsumerWidget {
 
   DashboardHeader _buildHeader(BuildContext context) {
     return DashboardHeader(
+      onNotificationsTap: () => context.pushNamed('notifications-inbox'),
       onOwedTap: () => context.pushNamed('owed-to-me'),
       onOweTap: () => context.pushNamed('i-owe'),
     );

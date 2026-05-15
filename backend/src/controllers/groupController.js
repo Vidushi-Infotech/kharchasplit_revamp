@@ -370,6 +370,23 @@ const addGroupMember = async (req, res, next) => {
     // Log activity
     await ActivityService.logMemberAdded(id, req.user.id, group.name, name);
 
+    // Push notify the newly-added user that they've been invited.
+    // Only fires when we have a userId (i.e. a real registered user, not
+    // a placeholder added by phone/email alone).
+    if (userId && userId !== req.user.id) {
+      try {
+        const inviter = await User.findById(req.user.id);
+        await NotificationService.notifyGroupInvite(
+          userId,
+          id,
+          group.name,
+          inviter?.name || 'Someone',
+        );
+      } catch (notifError) {
+        console.error('[GroupController] notify failed:', notifError);
+      }
+    }
+
     res.status(201).json({
       success: true,
       message: 'Member added successfully',

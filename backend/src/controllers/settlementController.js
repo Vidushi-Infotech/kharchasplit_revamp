@@ -116,6 +116,20 @@ const createSettlement = async (req, res, next) => {
       settlementCurrency
     );
 
+    // Push notify the recipient (and others in group) about the pending
+    // settlement. Don't fail the request if push fails.
+    try {
+      await NotificationService.notifySettlementCreated(
+        groupId,
+        { ...settlement, currency: settlementCurrency },
+        fromUser.name,
+        toUser.name,
+        req.user.id,
+      );
+    } catch (notifError) {
+      console.error('[SettlementController] notify failed:', notifError);
+    }
+
     res.status(201).json({
       success: true,
       message: 'Settlement created successfully',

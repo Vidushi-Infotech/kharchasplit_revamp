@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'floating_bottom_bar.dart';
+import 'pick_group_for_expense_sheet.dart';
 import 'shell_state.dart';
 
 /// Mobile shell with BottomNavigationBar
@@ -107,7 +108,10 @@ class MobileShell extends ConsumerWidget {
         context.go('/home/groups');
         break;
       case 2:
-        context.push('/home/create-group');
+        // The + button now opens a group picker so the user can quickly
+        // add an expense to one of their groups. Creating a new group
+        // is offered as a secondary action inside the sheet.
+        PickGroupForExpenseSheet.show(context);
         break;
       case 3:
         context.go('/home/personal');
