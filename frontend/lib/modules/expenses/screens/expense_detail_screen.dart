@@ -19,7 +19,7 @@ String _splitTypeLabel(SplitType t) {
     case SplitType.equal:
       return 'Equal share';
     case SplitType.exact:
-      return 'Exact amounts';
+      return 'Split unequally';
     case SplitType.percentage:
       return 'By percentage';
     case SplitType.shares:

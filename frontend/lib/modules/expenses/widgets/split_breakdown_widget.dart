@@ -299,30 +299,129 @@ class _SplitBreakdownWidgetState extends State<SplitBreakdownWidget> {
                   .toList(),
             ),
             const Divider(height: 1),
-            // Footer with total
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Total Included',
-                    style: AppTextStyles.body2(isDark),
-                  ),
-                  Text(
-                    widget.splitType == SplitType.percentage
-                        ? '${_getTotalIncluded().toStringAsFixed(1)}%'
-                        : widget.splitType == SplitType.shares
-                            ? '${_getTotalIncluded().toStringAsFixed(0)} shares'
-                            : '₹${_getTotalIncluded().toStringAsFixed(2)}',
-                    style: AppTextStyles.body2(isDark)
-                        .copyWith(fontWeight: FontWeight.w600),
-                  ),
-                ],
+            // Footer with total + (Unequally only) remaining + helper hint
+            _buildFooter(isDark),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFooter(bool isDark) {
+    final total = _getTotalIncluded();
+
+    String totalLabel;
+    String totalValue;
+    switch (widget.splitType) {
+      case SplitType.percentage:
+        totalLabel = 'Total assigned';
+        totalValue = '${total.toStringAsFixed(1)}% / 100%';
+        break;
+      case SplitType.shares:
+        totalLabel = 'Total shares';
+        totalValue = '${total.toStringAsFixed(0)} shares';
+        break;
+      case SplitType.exact:
+        final pct = widget.totalAmount > 0
+            ? (total / widget.totalAmount * 100)
+            : 0.0;
+        totalLabel = 'Total assigned';
+        totalValue =
+            '₹${total.toStringAsFixed(2)}  ·  ${pct.toStringAsFixed(1)}%';
+        break;
+      case SplitType.equal:
+        totalLabel = 'Total Included';
+        totalValue = '₹${total.toStringAsFixed(2)}';
+        break;
+    }
+
+    final children = <Widget>[
+      Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(totalLabel, style: AppTextStyles.body2(isDark)),
+          Text(
+            totalValue,
+            style: AppTextStyles.body2(isDark)
+                .copyWith(fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    ];
+
+    // For Unequally (Exact) — show the remaining-to-assign line + a helper.
+    if (widget.splitType == SplitType.exact) {
+      final remaining = widget.totalAmount - total;
+      Color rowColor;
+      String rowLabel;
+      String rowValue;
+      if (remaining.abs() < 0.01) {
+        rowColor = AppColors.success;
+        rowLabel = '✓ Balanced';
+        rowValue = '₹0.00';
+      } else if (remaining > 0) {
+        rowColor = AppColors.warning;
+        rowLabel = '⚠️ Remaining to assign';
+        rowValue = '₹${remaining.toStringAsFixed(2)}';
+      } else {
+        rowColor = AppColors.warning;
+        rowLabel = '⚠️ Over by';
+        rowValue = '₹${(-remaining).toStringAsFixed(2)}';
+      }
+
+      children.addAll([
+        const SizedBox(height: 8),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              rowLabel,
+              style: AppTextStyles.body2(isDark).copyWith(
+                color: rowColor,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            Text(
+              rowValue,
+              style: AppTextStyles.body2(isDark).copyWith(
+                color: rowColor,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ],
-        ],
+        ),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: AppColors.brand.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.lightbulb_outline_rounded,
+                  size: 14, color: AppColors.brand),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Manually assign each amount. Sum must equal ₹${widget.totalAmount.toStringAsFixed(2)}.',
+                  style: AppTextStyles.caption(isDark).copyWith(
+                    color: AppColors.textSecondary(isDark),
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ]);
+    }
+
+    return Padding(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: children,
       ),
     );
   }
@@ -336,6 +435,22 @@ class _SplitBreakdownWidgetState extends State<SplitBreakdownWidget> {
   Widget _buildMemberRow(bool isDark, UserModel member) {
     final isIncluded = _localIncludedMembers.contains(member.id);
     final controller = _controllers[member.id]!;
+    final value = widget.splits[member.id] ?? 0;
+
+    // For Unequally (Exact): show % of total + "Owes ₹X" caption under name.
+    String? statusCaption;
+    String? percentCaption;
+    if (widget.splitType == SplitType.exact && isIncluded) {
+      if (widget.totalAmount > 0) {
+        final pct = value / widget.totalAmount * 100;
+        percentCaption = pct == pct.roundToDouble()
+            ? '${pct.toStringAsFixed(0)}% of total'
+            : '${pct.toStringAsFixed(1)}% of total';
+      }
+      statusCaption = value > 0
+          ? 'Owes ₹${value.toStringAsFixed(2)}'
+          : 'Not yet assigned';
+    }
 
     return GestureDetector(
       onTap: () => _toggleMember(member.id),
@@ -345,6 +460,7 @@ class _SplitBreakdownWidgetState extends State<SplitBreakdownWidget> {
             : AppColors.textSecondary(isDark).withValues(alpha: 0.05),
         padding: const EdgeInsets.all(12),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Checkbox(
               value: isIncluded,
@@ -368,18 +484,47 @@ class _SplitBreakdownWidgetState extends State<SplitBreakdownWidget> {
             ),
           ),
           const SizedBox(width: 8),
-          // Name
+          // Name + (Unequally only) status caption
           Expanded(
             flex: 1,
-            child: Text(
-              member.name,
-              style: AppTextStyles.body2(isDark).copyWith(
-                color: isIncluded
-                    ? AppColors.textPrimary(isDark)
-                    : AppColors.textSecondary(isDark),
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  member.name,
+                  style: AppTextStyles.body2(isDark).copyWith(
+                    color: isIncluded
+                        ? AppColors.textPrimary(isDark)
+                        : AppColors.textSecondary(isDark),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (statusCaption != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    statusCaption,
+                    style: AppTextStyles.caption(isDark).copyWith(
+                      color: value > 0
+                          ? AppColors.success
+                          : AppColors.textSecondary(isDark),
+                      fontSize: 11,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+                if (percentCaption != null) ...[
+                  const SizedBox(height: 1),
+                  Text(
+                    percentCaption,
+                    style: AppTextStyles.caption(isDark).copyWith(
+                      color: AppColors.textSecondary(isDark),
+                      fontSize: 10,
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
           const SizedBox(width: 8),

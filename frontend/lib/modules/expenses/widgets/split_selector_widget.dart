@@ -158,8 +158,8 @@ class _SplitSelectorWidgetState extends State<SplitSelectorWidget> {
         );
       case SplitType.exact:
         return _SplitCardData(
-          icon: Icons.attach_money_rounded,
-          label: 'Exact',
+          icon: Icons.tune_rounded,
+          label: 'Unequally',
           description: 'Amount each',
         );
       case SplitType.percentage:
