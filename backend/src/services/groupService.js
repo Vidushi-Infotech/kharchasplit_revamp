@@ -39,6 +39,26 @@ class GroupService {
       }
     }
 
+    // Apply settlements: when A pays B ₹X, B's positive balance shrinks by X
+    // and A's negative balance shrinks (becomes less negative) by X.
+    // Includes pending + completed settlements; excludes 'failed'/'cancelled'.
+    const settlementsResult = await query(
+      `SELECT from_user_id, to_user_id, amount
+       FROM settlements
+       WHERE group_id = $1
+         AND deleted_at IS NULL
+         AND (status IS NULL OR status NOT IN ('failed', 'cancelled'))`,
+      [groupId]
+    );
+
+    for (const row of settlementsResult.rows) {
+      const from = row.from_user_id;
+      const to = row.to_user_id;
+      const amount = +row.amount;
+      netBalance.set(to, (netBalance.get(to) || 0) - amount);
+      netBalance.set(from, (netBalance.get(from) || 0) + amount);
+    }
+
     // Simplify debts using greedy algorithm — O(n log n)
     const creditors = []; // positive balance = owed money
     const debtors = [];   // negative balance = owes money
@@ -99,6 +119,51 @@ class GroupService {
       throw new Error('User is not an admin of this group');
     }
     return true;
+  }
+
+  /**
+   * Pairwise debts for a single user in a group, derived from expense splits
+   * + settlements. Returns Map<otherUserId, amount> where positive = the
+   * user owes the other party that much; negative = the other party owes them.
+   * Excludes failed/cancelled settlements.
+   */
+  static async getUserPairwiseDebts(groupId, userId) {
+    const pair = new Map();
+
+    const expensesResult = await query(
+      `SELECT e.paid_by, es.user_id AS split_user, es.amount
+       FROM expenses e
+       JOIN expense_splits es ON e.id = es.expense_id
+       WHERE e.group_id = $1 AND e.deleted_at IS NULL AND es.deleted_at IS NULL`,
+      [groupId]
+    );
+    for (const r of expensesResult.rows) {
+      const paidBy = r.paid_by;
+      const splitUser = r.split_user;
+      const amt = +r.amount;
+      if (paidBy === userId && splitUser !== userId) {
+        pair.set(splitUser, (pair.get(splitUser) || 0) - amt);
+      } else if (paidBy !== userId && splitUser === userId) {
+        pair.set(paidBy, (pair.get(paidBy) || 0) + amt);
+      }
+    }
+
+    const settlementsResult = await query(
+      `SELECT from_user_id, to_user_id, amount
+       FROM settlements
+       WHERE group_id = $1 AND deleted_at IS NULL
+         AND (status IS NULL OR status NOT IN ('failed', 'cancelled'))`,
+      [groupId]
+    );
+    for (const r of settlementsResult.rows) {
+      const amt = +r.amount;
+      if (r.from_user_id === userId) {
+        pair.set(r.to_user_id, (pair.get(r.to_user_id) || 0) - amt);
+      } else if (r.to_user_id === userId) {
+        pair.set(r.from_user_id, (pair.get(r.from_user_id) || 0) + amt);
+      }
+    }
+    return pair;
   }
 }
 

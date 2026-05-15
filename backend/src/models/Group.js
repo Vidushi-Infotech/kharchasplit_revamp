@@ -185,7 +185,12 @@ class Group {
   static async getMembers(groupId) {
     return cache.getOrSet(`group:${groupId}:members`, TTL.GROUP_MEMBERS, async () => {
       const result = await query(
-        `SELECT gm.group_id, gm.user_id, gm.name, gm.phone_number, gm.email,
+        // Prefer the canonical users.name (kept fresh by profile updates) over
+        // the snapshot stored in group_members.name at invite time. Falls back
+        // to gm.name only when the linked user row is missing (orphaned join).
+        `SELECT gm.group_id, gm.user_id,
+                COALESCE(u.name, gm.name) AS name,
+                gm.phone_number, gm.email,
                 gm.role, gm.joined_at, gm.added_by, u.is_placeholder,
                 u.profile_image_base64
          FROM group_members gm
@@ -213,7 +218,10 @@ class Group {
 
     const placeholders = groupIds.map((_, i) => `$${i + 1}`).join(', ');
     const result = await query(
-      `SELECT gm.group_id, gm.user_id, gm.name, gm.phone_number, gm.email,
+      // See note in getMembers — prefer the live users.name.
+      `SELECT gm.group_id, gm.user_id,
+              COALESCE(u.name, gm.name) AS name,
+              gm.phone_number, gm.email,
               gm.role, gm.joined_at, gm.added_by, u.is_placeholder,
               u.profile_image_base64
        FROM group_members gm

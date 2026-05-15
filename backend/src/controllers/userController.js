@@ -348,25 +348,45 @@ const getDashboard = async (req, res, next) => {
 
     // Per-group net position for this user, in one query.
     // Positive amount = others owe me, negative = I owe others.
+    // Combines expenses (someone paying for someone else) AND settlements
+    // (a payment that reduces the underlying debt).
     const balancesResult = await query(
       `SELECT COALESCE(SUM(GREATEST(net, 0)), 0) AS you_are_owed,
               COALESCE(SUM(GREATEST(-net, 0)), 0) AS you_owe,
               COALESCE(SUM(net), 0) AS total
        FROM (
-         SELECT e.group_id,
-                SUM(CASE
-                  WHEN e.paid_by = $1 AND es.user_id != $1 THEN es.amount
-                  WHEN e.paid_by != $1 AND es.user_id = $1 THEN -es.amount
-                  ELSE 0
-                END) AS net
-         FROM expenses e
-         JOIN expense_splits es ON es.expense_id = e.id
-         WHERE e.deleted_at IS NULL
-           AND e.group_id IN (
-             SELECT group_id FROM group_members
-             WHERE user_id = $1 AND deleted_at IS NULL
-           )
-         GROUP BY e.group_id
+         SELECT group_id, SUM(contribution) AS net FROM (
+           SELECT e.group_id,
+                  SUM(CASE
+                    WHEN e.paid_by = $1 AND es.user_id != $1 THEN es.amount
+                    WHEN e.paid_by != $1 AND es.user_id = $1 THEN -es.amount
+                    ELSE 0
+                  END) AS contribution
+           FROM expenses e
+           JOIN expense_splits es ON es.expense_id = e.id
+           WHERE e.deleted_at IS NULL
+             AND e.group_id IN (
+               SELECT group_id FROM group_members
+               WHERE user_id = $1 AND deleted_at IS NULL
+             )
+           GROUP BY e.group_id
+           UNION ALL
+           SELECT s.group_id,
+                  SUM(CASE
+                    WHEN s.from_user_id = $1 THEN s.amount
+                    WHEN s.to_user_id   = $1 THEN -s.amount
+                    ELSE 0
+                  END) AS contribution
+           FROM settlements s
+           WHERE s.deleted_at IS NULL
+             AND (s.status IS NULL OR s.status NOT IN ('failed', 'cancelled'))
+             AND s.group_id IN (
+               SELECT group_id FROM group_members
+               WHERE user_id = $1 AND deleted_at IS NULL
+             )
+           GROUP BY s.group_id
+         ) all_contributions
+         GROUP BY group_id
        ) per_group`,
       [id]
     );

@@ -38,7 +38,11 @@ class KharchaSplitApp extends ConsumerWidget {
       title: 'Kharcha Split',
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
-      themeMode: ref.read(themeModeProvider.notifier).toThemeMode(),
+      themeMode: switch (themeMode) {
+        AppThemeMode.system => ThemeMode.system,
+        AppThemeMode.light => ThemeMode.light,
+        AppThemeMode.dark => ThemeMode.dark,
+      },
       routerConfig: appRouter,
       debugShowCheckedModeBanner: false,
     );

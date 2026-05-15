@@ -27,6 +27,7 @@ import '../../modules/personal_expenses/screens/personal_expenses_screen.dart';
 import '../../modules/personal_expenses/screens/add_personal_expense_screen.dart';
 import '../../modules/reports/screens/reports_screen.dart';
 import '../../modules/settlements/screens/settle_screen.dart';
+import '../../modules/settlements/screens/settlement_history_screen.dart';
 import '../../layouts/shell/mobile_shell.dart';
 import '../../layouts/shell/tablet_shell.dart';
 import '../../layouts/shell/web_shell.dart';
@@ -214,11 +215,26 @@ final appRouter = GoRouter(
       },
     ),
     GoRoute(
+      path: '/home/groups/:groupId/settlements-with/:userId',
+      name: 'settlement-history',
+      builder: (context, state) => SettlementHistoryScreen(
+        groupId: state.pathParameters['groupId']!,
+        otherUserId: state.pathParameters['userId']!,
+      ),
+    ),
+    GoRoute(
       path: '/settle/:userId',
       name: 'settle',
       builder: (context, state) {
         final userId = state.pathParameters['userId']!;
-        return SettleScreen(recipientUserId: userId);
+        final groupId = state.uri.queryParameters['groupId'];
+        final amount =
+            double.tryParse(state.uri.queryParameters['amount'] ?? '');
+        return SettleScreen(
+          recipientUserId: userId,
+          initialGroupId: groupId,
+          initialAmount: amount,
+        );
       },
     ),
     GoRoute(

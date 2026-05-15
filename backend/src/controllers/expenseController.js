@@ -227,14 +227,11 @@ const deleteExpense = async (req, res, next) => {
       });
     }
 
-    // Verify user is admin of the group or the payer
-    const isAdmin = await Group.isAdmin(expense.group_id, req.user.id);
-    const isPayer = expense.paid_by_id === req.user.id;
-
-    if (!isAdmin && !isPayer) {
+    // Only the person who added (paid for) the expense can delete it.
+    if (expense.paid_by_id !== req.user.id) {
       return res.status(403).json({
         success: false,
-        error: 'Only group admins or the payer can delete this expense',
+        error: 'Only the person who added this expense can delete it.',
       });
     }
 

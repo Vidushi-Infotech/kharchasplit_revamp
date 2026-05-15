@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../components/avatar/avatar_widget.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/theme/theme_provider.dart';
 import '../../../models/user_model.dart';
 import '../../auth/state/auth_provider.dart';
 
@@ -84,6 +85,10 @@ class _Body extends ConsumerWidget {
             ),
           ],
         ),
+        const SizedBox(height: 20),
+        _SectionLabel(label: 'APPEARANCE', isDark: isDark),
+        const SizedBox(height: 8),
+        _ThemePicker(isDark: isDark),
         const SizedBox(height: 20),
         _SectionLabel(label: 'PREFERENCES', isDark: isDark),
         const SizedBox(height: 8),
@@ -559,6 +564,115 @@ class _MenuRow extends StatelessWidget {
                 color: AppColors.textSecondary(isDark),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ThemePicker extends ConsumerWidget {
+  const _ThemePicker({required this.isDark});
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final mode = ref.watch(themeModeProvider);
+    return Container(
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: AppColors.cardBg(isDark),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.divider(isDark)),
+      ),
+      child: Row(
+        children: [
+          _ThemeOption(
+            icon: Icons.brightness_auto_rounded,
+            label: 'System',
+            selected: mode == AppThemeMode.system,
+            isDark: isDark,
+            onTap: () => ref
+                .read(themeModeProvider.notifier)
+                .setThemeMode(AppThemeMode.system),
+          ),
+          _ThemeOption(
+            icon: Icons.light_mode_rounded,
+            label: 'Light',
+            selected: mode == AppThemeMode.light,
+            isDark: isDark,
+            onTap: () => ref
+                .read(themeModeProvider.notifier)
+                .setThemeMode(AppThemeMode.light),
+          ),
+          _ThemeOption(
+            icon: Icons.dark_mode_rounded,
+            label: 'Dark',
+            selected: mode == AppThemeMode.dark,
+            isDark: isDark,
+            onTap: () => ref
+                .read(themeModeProvider.notifier)
+                .setThemeMode(AppThemeMode.dark),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ThemeOption extends StatelessWidget {
+  const _ThemeOption({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = selected ? Colors.white : AppColors.textPrimary(isDark);
+    return Expanded(
+      child: Semantics(
+        button: true,
+        selected: selected,
+        label: label,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(10),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+              decoration: BoxDecoration(
+                color: selected ? AppColors.brand : Colors.transparent,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(icon, size: 16, color: fg),
+                  const SizedBox(width: 6),
+                  Text(
+                    label,
+                    style: AppTextStyles.body2(isDark).copyWith(
+                      color: fg,
+                      fontSize: 13,
+                      fontWeight:
+                          selected ? FontWeight.w700 : FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),
