@@ -118,9 +118,6 @@ class AddExpenseState {
       case SplitType.shares:
         // Total shares should be > 0
         return includedSum > 0;
-      case SplitType.adjustment:
-        // Sum of adjustments should equal 0 (within 0.01)
-        return includedSum.abs() < 0.01;
       case SplitType.equal:
         return true;
     }

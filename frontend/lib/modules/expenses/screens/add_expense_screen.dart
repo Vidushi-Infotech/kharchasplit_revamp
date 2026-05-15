@@ -31,6 +31,11 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   late TextEditingController _titleController;
   late TextEditingController _notesController;
   late TextEditingController _equalSplitSearchController;
+  late ScrollController _scrollController;
+
+  /// Anchor key on the split-breakdown section. Used by [_scrollToBreakdown]
+  /// to slide the breakdown into view after the user picks Exact/%/Shares.
+  final GlobalKey _breakdownKey = GlobalKey();
 
   @override
   void initState() {
@@ -38,6 +43,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     _titleController = TextEditingController();
     _notesController = TextEditingController();
     _equalSplitSearchController = TextEditingController();
+    _scrollController = ScrollController();
   }
 
   @override
@@ -45,7 +51,21 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     _titleController.dispose();
     _notesController.dispose();
     _equalSplitSearchController.dispose();
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  void _scrollToBreakdown() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _breakdownKey.currentContext;
+      if (ctx == null) return;
+      Scrollable.ensureVisible(
+        ctx,
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeOutCubic,
+        alignment: 0.05,
+      );
+    });
   }
 
   @override
@@ -143,6 +163,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       body: ScrollConfiguration(
         behavior: ScrollConfiguration.of(context).copyWith(scrollbars: true),
         child: SingleChildScrollView(
+          controller: _scrollController,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
             child: Column(
@@ -161,7 +182,11 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                 const SizedBox(height: 20),
                 _buildSplitSection(isDark, state),
                 const SizedBox(height: 12),
-                _buildSplitBreakdownSection(isDark, state, groupMembers),
+                KeyedSubtree(
+                  key: _breakdownKey,
+                  child:
+                      _buildSplitBreakdownSection(isDark, state, groupMembers),
+                ),
                 const SizedBox(height: 100),
               ],
             ),
@@ -190,6 +215,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       body: ScrollConfiguration(
         behavior: ScrollConfiguration.of(context).copyWith(scrollbars: true),
         child: SingleChildScrollView(
+          controller: _scrollController,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
             child: Center(
@@ -211,7 +237,11 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                     const SizedBox(height: 24),
                     _buildSplitSection(isDark, state),
                     const SizedBox(height: 12),
-                    _buildSplitBreakdownSection(isDark, state, groupMembers),
+                    KeyedSubtree(
+                      key: _breakdownKey,
+                      child: _buildSplitBreakdownSection(
+                          isDark, state, groupMembers),
+                    ),
                     const SizedBox(height: 120),
                   ],
                 ),
@@ -275,7 +305,11 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                                 const SizedBox(height: 20),
                                 _buildSplitSection(isDark, state),
                                 const SizedBox(height: 12),
-                                _buildSplitBreakdownSection(isDark, state, groupMembers),
+                                KeyedSubtree(
+                                  key: _breakdownKey,
+                                  child: _buildSplitBreakdownSection(
+                                      isDark, state, groupMembers),
+                                ),
                                 const SizedBox(height: 32),
                                 _buildSaveButtonLarge(isDark, state),
                               ],
@@ -502,6 +536,14 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
         }
         ref.read(addExpenseProvider.notifier).state =
             state.copyWith(splitType: type, splits: nextSplits);
+
+        // Picking a non-equal type means the user needs the breakdown next —
+        // scroll to it so the keyboard / inputs are immediately reachable.
+        if (type == SplitType.exact ||
+            type == SplitType.percentage ||
+            type == SplitType.shares) {
+          _scrollToBreakdown();
+        }
       },
     );
   }
@@ -1148,17 +1190,11 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               0, (sum, mid) => sum + (state.splits[mid] ?? 0));
           if (totalShares <= 0) return 0;
           return state.amount * raw / totalShares;
-        case SplitType.adjustment:
-          final base = includedIds.isEmpty
-              ? state.amount
-              : state.amount / includedIds.length;
-          return base + raw;
       }
     }
 
-    // The backend's split_type CHECK constraint only accepts
-    // ('equal', 'unequal', 'percentage', 'shares'). Map exact + adjustment
-    // both to 'unequal' since we send concrete amounts in either case.
+    // Backend's split_type CHECK accepts ('equal', 'unequal', 'percentage', 'shares').
+    // Map 'exact' to 'unequal' since we send concrete amounts.
     String backendSplitType(SplitType t) {
       switch (t) {
         case SplitType.equal:
@@ -1168,10 +1204,18 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
         case SplitType.shares:
           return 'shares';
         case SplitType.exact:
-        case SplitType.adjustment:
           return 'unequal';
       }
     }
+
+    // Pull the raw input (percentage / shares / exact-amount) the user typed
+    // for this member, so we can persist it alongside the resolved amount.
+    // This lets the detail screen later show the working ("30% × ₹X = ₹Y").
+    double? percentageFor(String id) =>
+        state.splitType == SplitType.percentage ? (state.splits[id] ?? 0) : null;
+    int? sharesFor(String id) => state.splitType == SplitType.shares
+        ? (state.splits[id] ?? 0).round()
+        : null;
 
     final participants = includedIds.isEmpty
         ? [
@@ -1187,6 +1231,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               userId: id,
               name: member?.name ?? id,
               amount: shareFor(id),
+              percentage: percentageFor(id),
+              shares: sharesFor(id),
             );
           }).toList();
 

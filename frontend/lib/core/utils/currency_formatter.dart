@@ -3,6 +3,23 @@ import 'package:intl/intl.dart';
 /// Currency formatting utility
 /// Handles multiple currencies with proper formatting
 class CurrencyFormatter {
+  /// Convert an ISO 4217 code (e.g. "INR") to its display symbol ("₹").
+  /// Pass-through if already a symbol or unknown.
+  static String symbolFor(String input) {
+    switch (input.toUpperCase()) {
+      case 'INR':
+        return '₹';
+      case 'USD':
+        return '\$';
+      case 'EUR':
+        return '€';
+      case 'GBP':
+        return '£';
+      default:
+        return input;
+    }
+  }
+
   /// Format amount as currency with symbol
   /// Supports Indian numbering system (₹1,00,000.00)
   static String format(
@@ -11,6 +28,8 @@ class CurrencyFormatter {
     bool showSign = false,
     int decimalPlaces = 2,
   }) {
+    // Accept ISO codes ("INR") as well as raw symbols ("₹").
+    currency = symbolFor(currency);
     final absAmount = amount.abs();
 
     // Indian Rupee uses different formatting

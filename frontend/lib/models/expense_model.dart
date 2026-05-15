@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import '../core/utils/currency_formatter.dart';
 import 'category_model.dart';
 import 'split_model.dart';
 import 'user_model.dart';
@@ -9,7 +10,6 @@ enum SplitType {
   exact,
   percentage,
   shares,
-  adjustment,
 }
 
 /// Expense model representing a single expense
@@ -87,7 +87,8 @@ class ExpenseModel extends Equatable {
       id: json['id'] as String,
       title: (json['description'] ?? json['title'] ?? '') as String,
       amount: _parseAmount(json['amount']),
-      currency: (json['currency'] as String?) ?? 'INR',
+      currency: CurrencyFormatter.symbolFor(
+          (json['currency'] as String?) ?? 'INR'),
       category: category,
       paidBy: paidBy,
       splits: splits,
@@ -119,8 +120,6 @@ class ExpenseModel extends Equatable {
         return SplitType.percentage;
       case 'shares':
         return SplitType.shares;
-      case 'adjustment':
-        return SplitType.adjustment;
       default:
         return SplitType.equal;
     }
