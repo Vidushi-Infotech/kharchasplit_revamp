@@ -25,7 +25,22 @@ class PushService {
   static final PushService instance = PushService._();
 
   final FlutterLocalNotificationsPlugin _local = FlutterLocalNotificationsPlugin();
-  final FirebaseMessaging _fcm = FirebaseMessaging.instance;
+  // FirebaseMessaging.instance touches the native Firebase app — accessing it
+  // before Firebase.initializeApp() (or when init failed entirely) throws
+  // [core/no-app]. Resolve lazily so a missing/broken Firebase setup never
+  // cascades into a build-time crash.
+  FirebaseMessaging? _fcmCached;
+  FirebaseMessaging? get _fcm {
+    if (_fcmCached != null) return _fcmCached;
+    try {
+      _fcmCached = FirebaseMessaging.instance;
+      return _fcmCached;
+    } catch (e) {
+      debugPrint('[PushService] FirebaseMessaging not ready: $e');
+      return null;
+    }
+  }
+
   final StreamController<RemoteMessage> _tapController =
       StreamController<RemoteMessage>.broadcast();
   final StreamController<RemoteMessage> _foregroundController =
@@ -48,18 +63,24 @@ class PushService {
   String? get currentToken => _currentToken;
 
   /// One-time bootstrap. Call from `main()` after `Firebase.initializeApp()`.
-  /// Idempotent — safe to call multiple times.
+  /// Idempotent — safe to call multiple times. No-ops if Firebase isn't ready.
   Future<void> init() async {
     if (_initialized) return;
     _initialized = true;
 
     await _initLocalNotifications();
 
+    final fcm = _fcm;
+    if (fcm == null) {
+      debugPrint('[PushService] Skipping FCM init — Firebase not initialized');
+      return;
+    }
+
     // Request notification permissions (iOS prompt, Android 13+ runtime perm).
-    await _fcm.requestPermission(alert: true, badge: true, sound: true);
+    await fcm.requestPermission(alert: true, badge: true, sound: true);
 
     // iOS-only: show heads-up notifications even when app is in foreground.
-    await _fcm.setForegroundNotificationPresentationOptions(
+    await fcm.setForegroundNotificationPresentationOptions(
       alert: true,
       badge: true,
       sound: true,
@@ -73,7 +94,7 @@ class PushService {
     _openedSub = FirebaseMessaging.onMessageOpenedApp.listen(_tapController.add);
 
     // App launched from a terminated state by a notification tap.
-    final initialMessage = await _fcm.getInitialMessage();
+    final initialMessage = await fcm.getInitialMessage();
     if (initialMessage != null) {
       // Defer one frame so router/listeners are wired up.
       scheduleMicrotask(() => _tapController.add(initialMessage));
@@ -150,9 +171,11 @@ class PushService {
     required String userId,
   }) async {
     if (!_initialized) await init();
+    final fcm = _fcm;
+    if (fcm == null) return; // Firebase not ready — silently skip
 
     try {
-      final token = await _fcm.getToken();
+      final token = await fcm.getToken();
       if (token == null) {
         debugPrint('[PushService] No FCM token yet');
         return;
@@ -162,7 +185,7 @@ class PushService {
 
       // Listen for token rotation and re-register.
       await _tokenRefreshSub?.cancel();
-      _tokenRefreshSub = _fcm.onTokenRefresh.listen((newToken) async {
+      _tokenRefreshSub = fcm.onTokenRefresh.listen((newToken) async {
         _currentToken = newToken;
         await _postDevice(dio: dio, userId: userId, token: newToken);
       });
@@ -196,14 +219,15 @@ class PushService {
     required String userId,
   }) async {
     try {
-      final token = _currentToken ?? await _fcm.getToken();
+      final fcm = _fcm;
+      final token = _currentToken ?? await fcm?.getToken();
       if (token != null) {
         await dio.delete(
           '/users/$userId/devices',
           data: {'fcmToken': token},
         );
       }
-      await _fcm.deleteToken();
+      await fcm?.deleteToken();
       _currentToken = null;
     } catch (e) {
       debugPrint('[PushService] unregisterFromBackend failed: $e');

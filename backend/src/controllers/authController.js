@@ -3,6 +3,7 @@ import { generateAccessToken, generateRefreshToken, verifyRefreshToken  } from '
 import { generateOTP, getOTPExpiry, sendOTPviaSMS  } from '../utils/otp.js';
 import Group from '../models/Group.js';
 import User from '../models/User.js';
+import TwilioService from '../services/twilioService.js';
 
 /**
  * Pull device metadata for a refresh-token row out of the request body
@@ -148,47 +149,46 @@ const register = async (req, res, next) => {
 };
 
 /**
- * Send OTP for login
+ * Send OTP for unified login/signup.
  * POST /api/v1/auth/send-otp
+ *
+ * Triggers a Twilio Verify SMS to the given phone number. Does NOT
+ * require the user to exist yet — a new user is auto-created on
+ * verifyOTP if the number isn't on file.
  */
 const sendOTP = async (req, res, next) => {
   try {
     const { phoneNumber } = req.body;
-
-    // Check if user exists
-    const userResult = await query(
-      'SELECT id FROM users WHERE phone_number = $1 AND deleted_at IS NULL',
-      [phoneNumber]
-    );
-
-    if (userResult.rows.length === 0) {
-      return res.status(404).json({
+    if (!phoneNumber) {
+      return res.status(400).json({
         success: false,
-        error: 'User not found. Please register first.',
+        error: 'Phone number is required',
       });
     }
 
-    // Generate OTP
-    const otp = generateOTP();
-    const expiresAt = getOTPExpiry();
+    if (!TwilioService.isConfigured()) {
+      return res.status(500).json({
+        success: false,
+        error: 'OTP service not configured on the server',
+      });
+    }
 
-    // Delete old OTPs for this phone number
-    await query('DELETE FROM otps WHERE phone_number = $1', [phoneNumber]);
-
-    // Save new OTP
-    await query(
-      'INSERT INTO otps (phone_number, otp, expires_at) VALUES ($1, $2, $3)',
-      [phoneNumber, otp, expiresAt]
-    );
-
-    // Send OTP
-    await sendOTPviaSMS(phoneNumber, otp);
+    await TwilioService.sendVerification(phoneNumber);
 
     res.json({
       success: true,
       message: 'OTP sent successfully',
     });
   } catch (error) {
+    // Surface Twilio errors meaningfully so the client can show a useful
+    // message (invalid number, unverified trial recipient, etc.).
+    if (error?.status && error?.message) {
+      return res.status(error.status === 400 ? 400 : 502).json({
+        success: false,
+        error: error.message,
+        code: error.code,
+      });
+    }
     next(error);
   }
 };
@@ -201,57 +201,77 @@ const verifyOTP = async (req, res, next) => {
   try {
     const { phoneNumber, otp } = req.body;
 
-    // Dev-only master OTP: skip DB check when NODE_ENV != production.
-    // SMS delivery is a TODO stub, so without this every dev login would be blocked.
-    const isDevMasterOtp =
-      process.env.NODE_ENV !== 'production' && otp === '123456';
-
-    let otpRow = null;
-    if (!isDevMasterOtp) {
-      const otpResult = await query(
-        `SELECT * FROM otps
-         WHERE phone_number = $1
-         AND otp = $2
-         AND expires_at > NOW()
-         AND verified = FALSE
-         ORDER BY created_at DESC
-         LIMIT 1`,
-        [phoneNumber, otp]
-      );
-
-      if (otpResult.rows.length === 0) {
-        return res.status(401).json({
-          success: false,
-          error: 'Invalid or expired OTP',
-        });
-      }
-      otpRow = otpResult.rows[0];
-    }
-
-    if (otpRow) {
-      await query('UPDATE otps SET verified = TRUE WHERE id = $1', [otpRow.id]);
-    }
-
-    // Get user
-    const userResult = await query(
-      'SELECT id, phone_number, name, email, profile_image_base64, preferred_currency, created_at FROM users WHERE phone_number = $1 AND deleted_at IS NULL',
-      [phoneNumber]
-    );
-
-    if (userResult.rows.length === 0) {
-      return res.status(404).json({
+    if (!phoneNumber || !otp) {
+      return res.status(400).json({
         success: false,
-        error: 'User not found',
+        error: 'Phone number and OTP are required',
       });
     }
 
-    const user = userResult.rows[0];
+    if (!TwilioService.isConfigured()) {
+      return res.status(500).json({
+        success: false,
+        error: 'OTP service not configured on the server',
+      });
+    }
 
-    // Generate tokens
-    const accessToken = generateAccessToken(user.id);
-    const refreshToken = generateRefreshToken(user.id);
+    // Verify the code with Twilio Verify.
+    let approved = false;
+    try {
+      const result = await TwilioService.checkVerification(phoneNumber, otp);
+      approved = result.approved;
+    } catch (err) {
+      // Twilio returns 404 if the verification has already been
+      // consumed/expired and no longer exists. Treat that as an invalid
+      // code rather than a 500.
+      if (err?.status === 404) {
+        return res.status(401).json({
+          success: false,
+          error: 'OTP expired. Please request a new one.',
+        });
+      }
+      throw err;
+    }
 
-    // Save refresh token
+    if (!approved) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid OTP',
+      });
+    }
+
+    // Look up the user; auto-create a placeholder row if this is their
+    // first time. Profile-setup screen on the client will fill in name +
+    // email + photo right after the redirect.
+    let userRow;
+    let isNewUser = false;
+    const existing = await query(
+      'SELECT id, phone_number, name, email, profile_image_base64, preferred_currency FROM users WHERE phone_number = $1 AND deleted_at IS NULL',
+      [phoneNumber],
+    );
+    if (existing.rows.length > 0) {
+      userRow = existing.rows[0];
+    } else {
+      const created = await query(
+        `INSERT INTO users (phone_number, name, email, preferred_currency)
+         VALUES ($1, '', NULL, 'INR')
+         RETURNING id, phone_number, name, email, profile_image_base64, preferred_currency`,
+        [phoneNumber],
+      );
+      userRow = created.rows[0];
+      isNewUser = true;
+    }
+
+    // A user with a blank name (e.g. auto-created earlier but never
+    // completed setup) should be treated as "new" on the client so it
+    // pushes them through the profile-setup flow.
+    const needsProfileSetup =
+      isNewUser || !userRow.name || userRow.name.trim().length === 0;
+
+    // Issue tokens
+    const accessToken = generateAccessToken(userRow.id);
+    const refreshToken = generateRefreshToken(userRow.id);
+
     const refreshExpiresAt = new Date();
     refreshExpiresAt.setDate(refreshExpiresAt.getDate() + 30);
 
@@ -263,7 +283,7 @@ const verifyOTP = async (req, res, next) => {
          last_used_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())`,
       [
-        user.id,
+        userRow.id,
         refreshToken,
         refreshExpiresAt,
         device.deviceName,
@@ -272,23 +292,25 @@ const verifyOTP = async (req, res, next) => {
         device.appVersion,
         device.ipAddress,
         device.userAgent,
-      ]
+      ],
     );
 
     res.json({
       success: true,
-      message: 'Login successful',
+      message: isNewUser ? 'Account created' : 'Login successful',
       data: {
         user: {
-          id: user.id,
-          phoneNumber: user.phone_number,
-          name: user.name,
-          email: user.email,
-          profileImageBase64: user.profile_image_base64,
-          preferredCurrency: user.preferred_currency,
+          id: userRow.id,
+          phoneNumber: userRow.phone_number,
+          name: userRow.name,
+          email: userRow.email,
+          profileImageBase64: userRow.profile_image_base64,
+          preferredCurrency: userRow.preferred_currency,
         },
         accessToken,
         refreshToken,
+        isNewUser,
+        needsProfileSetup,
       },
     });
   } catch (error) {

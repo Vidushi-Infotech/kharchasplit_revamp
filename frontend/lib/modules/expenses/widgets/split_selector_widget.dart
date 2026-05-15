@@ -1,39 +1,49 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/gestures.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../models/models.dart';
 
-class SplitSelectorWidget extends StatefulWidget {
-  final SplitType splitType;
-  final double amount;
-  final Function(SplitType) onSplitTypeChanged;
-
+/// Compact 2x2 grid of split-type options. Picks the same 4 SplitTypes
+/// as before — only the visual styling changed to match the rest of the
+/// redesigned screens (hairline borders, subtle tints, no brand-color fills).
+class SplitSelectorWidget extends StatelessWidget {
   const SplitSelectorWidget({
-    Key? key,
+    super.key,
     required this.splitType,
     required this.amount,
     required this.onSplitTypeChanged,
-  }) : super(key: key);
+  });
 
-  @override
-  State<SplitSelectorWidget> createState() => _SplitSelectorWidgetState();
-}
+  final SplitType splitType;
+  final double amount;
+  final ValueChanged<SplitType> onSplitTypeChanged;
 
-class _SplitSelectorWidgetState extends State<SplitSelectorWidget> {
-  late ScrollController _scrollController;
-
-  @override
-  void initState() {
-    super.initState();
-    _scrollController = ScrollController();
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
-  }
+  static const _options = <_OptionData>[
+    _OptionData(
+      type: SplitType.equal,
+      icon: Icons.balance_rounded,
+      label: 'Equally',
+      description: 'Same share',
+    ),
+    _OptionData(
+      type: SplitType.exact,
+      icon: Icons.tune_rounded,
+      label: 'Unequally',
+      description: 'Amount each',
+    ),
+    _OptionData(
+      type: SplitType.percentage,
+      icon: Icons.percent_rounded,
+      label: 'By %',
+      description: 'Percent each',
+    ),
+    _OptionData(
+      type: SplitType.shares,
+      icon: Icons.pie_chart_outline_rounded,
+      label: 'By shares',
+      description: 'Weight-based',
+    ),
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -42,150 +52,153 @@ class _SplitSelectorWidgetState extends State<SplitSelectorWidget> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('How to split?', style: AppTextStyles.body2(isDark)),
-        const SizedBox(height: 12),
-        SizedBox(
-          height: 120,
-          child: ScrollConfiguration(
-            behavior: ScrollConfiguration.of(context).copyWith(
-              scrollbars: false,
-              dragDevices: {
-                PointerDeviceKind.touch,
-                PointerDeviceKind.mouse,
-                PointerDeviceKind.trackpad,
-              },
-            ),
-            child: ListView.builder(
-              controller: _scrollController,
-              scrollDirection: Axis.horizontal,
-              physics: const BouncingScrollPhysics(),
-              itemCount: 4,
-              itemBuilder: (context, index) {
-                final splitTypes = [
-                  SplitType.equal,
-                  SplitType.exact,
-                  SplitType.percentage,
-                  SplitType.shares,
-                ];
-                final type = splitTypes[index];
-                return Padding(
-                  padding: const EdgeInsets.only(right: 12),
-                  child: _buildSplitCard(isDark, type),
-                );
-              },
-            ),
+        Text(
+          'HOW TO SPLIT',
+          style: AppTextStyles.caption(isDark).copyWith(
+            color: AppColors.textSecondary(isDark),
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.3,
+            fontSize: 11,
           ),
+        ),
+        const SizedBox(height: 10),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            // 2-column grid; on very narrow screens fall back to a single column.
+            final crossAxisCount = constraints.maxWidth < 320 ? 1 : 2;
+            return GridView.count(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisCount: crossAxisCount,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+              childAspectRatio: crossAxisCount == 1 ? 4.6 : 2.6,
+              children: [
+                for (final opt in _options)
+                  _OptionCard(
+                    isDark: isDark,
+                    data: opt,
+                    selected: splitType == opt.type,
+                    onTap: () => onSplitTypeChanged(opt.type),
+                  ),
+              ],
+            );
+          },
         ),
       ],
     );
   }
+}
 
-  Widget _buildSplitCard(bool isDark, SplitType type) {
-    final isSelected = widget.splitType == type;
-    final cardData = _getCardData(type);
+class _OptionCard extends StatelessWidget {
+  const _OptionCard({
+    required this.isDark,
+    required this.data,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final bool isDark;
+  final _OptionData data;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = AppColors.tealDark;
+    final bg = selected
+        ? accent.withValues(alpha: isDark ? 0.16 : 0.08)
+        : AppColors.cardBg(isDark);
+    final borderColor = selected
+        ? accent.withValues(alpha: 0.55)
+        : AppColors.divider(isDark);
+    final textColor = selected ? accent : AppColors.textPrimary(isDark);
 
     return Semantics(
       button: true,
-      label: '${cardData.label} split${isSelected ? ' - selected' : ''}',
-      onTap: () => widget.onSplitTypeChanged(type),
-      child: GestureDetector(
-        onTap: () => widget.onSplitTypeChanged(type),
-        child: Container(
-          width: 120,
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: isSelected
-                ? AppColors.brand
-                : AppColors.surface(isDark),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isSelected
-                  ? AppColors.brand
-                  : AppColors.brand.withValues(alpha: 0.3),
-              width: isSelected ? 0 : 1.5,
+      label: '${data.label} split${selected ? ', selected' : ''}',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: bg,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: borderColor,
+                width: selected ? 1.4 : 1,
+              ),
             ),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Icon(
-                cardData.icon,
-                size: 28,
-                color: isSelected
-                    ? Colors.white
-                    : AppColors.brand,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                cardData.label,
-                style: AppTextStyles.caption(isDark).copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: isSelected
-                      ? Colors.white
-                      : AppColors.textPrimary(isDark),
-                  fontSize: 12,
+            child: Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: selected ? 0.18 : 0.10),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    data.icon,
+                    size: 17,
+                    color: accent,
+                  ),
                 ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                cardData.description,
-                style: AppTextStyles.caption(isDark).copyWith(
-                  color: isSelected
-                      ? Colors.white70
-                      : AppColors.textSecondary(isDark),
-                  fontSize: 10,
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        data.label,
+                        style: AppTextStyles.body1(isDark).copyWith(
+                          color: textColor,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13.5,
+                          height: 1.1,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        data.description,
+                        style: AppTextStyles.caption(isDark).copyWith(
+                          color: AppColors.textSecondary(isDark),
+                          fontSize: 11,
+                          height: 1.2,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
                 ),
-                maxLines: 2,
-                textAlign: TextAlign.center,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
     );
   }
-
-  _SplitCardData _getCardData(SplitType type) {
-    switch (type) {
-      case SplitType.equal:
-        return _SplitCardData(
-          icon: Icons.people_outline,
-          label: 'Equally',
-          description: 'Same share',
-        );
-      case SplitType.exact:
-        return _SplitCardData(
-          icon: Icons.tune_rounded,
-          label: 'Unequally',
-          description: 'Amount each',
-        );
-      case SplitType.percentage:
-        return _SplitCardData(
-          icon: Icons.percent,
-          label: 'By %',
-          description: 'Percent each',
-        );
-      case SplitType.shares:
-        return _SplitCardData(
-          icon: Icons.pie_chart_outline,
-          label: 'By Shares',
-          description: 'Weight-based',
-        );
-    }
-  }
 }
 
-class _SplitCardData {
-  final IconData icon;
-  final String label;
-  final String description;
-
-  _SplitCardData({
+class _OptionData {
+  const _OptionData({
+    required this.type,
     required this.icon,
     required this.label,
     required this.description,
   });
+
+  final SplitType type;
+  final IconData icon;
+  final String label;
+  final String description;
 }

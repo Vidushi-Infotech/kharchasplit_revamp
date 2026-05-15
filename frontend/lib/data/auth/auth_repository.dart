@@ -18,11 +18,21 @@ class AuthTokens {
     required this.accessToken,
     required this.refreshToken,
     required this.user,
+    this.isNewUser = false,
+    this.needsProfileSetup = false,
   });
 
   final String accessToken;
   final String refreshToken;
   final Map<String, dynamic> user;
+
+  /// True when verify-otp auto-created the user row.
+  final bool isNewUser;
+
+  /// True when the client should route to the profile-setup screen
+  /// before showing the main app (covers both brand-new users and
+  /// existing users with an empty name).
+  final bool needsProfileSetup;
 }
 
 class AuthRepository {
@@ -117,6 +127,8 @@ class AuthRepository {
       accessToken: access,
       refreshToken: refresh,
       user: user,
+      isNewUser: data['isNewUser'] == true,
+      needsProfileSetup: data['needsProfileSetup'] == true,
     );
   }
 }

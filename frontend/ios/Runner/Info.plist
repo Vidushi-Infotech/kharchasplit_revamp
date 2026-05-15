@@ -26,27 +26,10 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
-	<key>UIApplicationSceneManifest</key>
-	<dict>
-		<key>UIApplicationSupportsMultipleScenes</key>
-		<false/>
-		<key>UISceneConfigurations</key>
-		<dict>
-			<key>UIWindowSceneSessionRoleApplication</key>
-			<array>
-				<dict>
-					<key>UISceneClassName</key>
-					<string>UIWindowScene</string>
-					<key>UISceneConfigurationName</key>
-					<string>flutter</string>
-					<key>UISceneDelegateClassName</key>
-					<string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
-					<key>UISceneStoryboardFile</key>
-					<string>Main</string>
-				</dict>
-			</array>
-		</dict>
-	</dict>
+	<!-- Scene manifest intentionally omitted: flutter_contacts 1.1.x reads
+	     UIApplication.shared.delegate.window which is nil in scene mode.
+	     Sticking with legacy AppDelegate-owned window keeps the plugin
+	     working until it's updated. -->
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>
@@ -78,5 +61,16 @@
 		<string>remote-notification</string>
 		<string>fetch</string>
 	</array>
+	<!-- Permission usage descriptions for plugins (flutter_contacts crashes
+	     without NSContactsUsageDescription; image_picker needs camera +
+	     photo library; share_plus may save to library). -->
+	<key>NSContactsUsageDescription</key>
+	<string>KharchaSplit reads your contacts so you can quickly add friends to groups.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>KharchaSplit uses the camera to capture receipts and profile photos.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>KharchaSplit accesses your photos so you can attach receipts and pick a profile picture.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>KharchaSplit saves exported reports and receipts to your photo library.</string>
 </dict>
 </plist>
