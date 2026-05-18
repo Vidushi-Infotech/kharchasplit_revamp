@@ -94,6 +94,37 @@ dev_dependencies:
 
   flutter_lints: ^6.0.0
   build_runner: ^2.13.1
+  flutter_launcher_icons: ^0.14.4
+  flutter_native_splash: ^2.4.7
+
+# App-icon generation (Android + iOS launcher icons).
+# Run after changing logo.png:  dart run flutter_launcher_icons
+flutter_launcher_icons:
+  android: "ic_launcher"
+  ios: true
+  image_path: "assets/images/logo.png"
+  min_sdk_android: 21
+  remove_alpha_ios: true
+  # Adaptive icon for Android 8+: white background + the logo as
+  # foreground so the system can apply circle / squircle masks.
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/images/logo.png"
+
+# Native splash screen (the brief white flash before Dart wakes up).
+# Run after changing logo.png:  dart run flutter_native_splash:create
+flutter_native_splash:
+  color: "#FFFFFF"
+  color_dark: "#0B0F14"
+  image: assets/images/logo.png
+  image_dark: assets/images/logo.png
+  android: true
+  ios: true
+  fullscreen: false
+  android_12:
+    image: assets/images/logo.png
+    image_dark: assets/images/logo.png
+    color: "#FFFFFF"
+    color_dark: "#0B0F14"
 
 flutter:
   uses-material-design: true

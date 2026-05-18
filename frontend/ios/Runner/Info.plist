@@ -1,55 +1,55 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
-<dict>
-	<key>CADisableMinimumFrameDurationOnPhone</key>
-	<true/>
-	<key>CFBundleDevelopmentRegion</key>
-	<string>$(DEVELOPMENT_LANGUAGE)</string>
-	<key>CFBundleDisplayName</key>
-	<string>Kharchasplit</string>
-	<key>CFBundleExecutable</key>
-	<string>$(EXECUTABLE_NAME)</string>
-	<key>CFBundleIdentifier</key>
-	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
-	<key>CFBundleInfoDictionaryVersion</key>
-	<string>6.0</string>
-	<key>CFBundleName</key>
-	<string>kharchasplit</string>
-	<key>CFBundlePackageType</key>
-	<string>APPL</string>
-	<key>CFBundleShortVersionString</key>
-	<string>$(FLUTTER_BUILD_NAME)</string>
-	<key>CFBundleSignature</key>
-	<string>????</string>
-	<key>CFBundleVersion</key>
-	<string>$(FLUTTER_BUILD_NUMBER)</string>
-	<key>LSRequiresIPhoneOS</key>
-	<true/>
-	<!-- Scene manifest intentionally omitted: flutter_contacts 1.1.x reads
+	<dict>
+		<key>CADisableMinimumFrameDurationOnPhone</key>
+		<true/>
+		<key>CFBundleDevelopmentRegion</key>
+		<string>$(DEVELOPMENT_LANGUAGE)</string>
+		<key>CFBundleDisplayName</key>
+		<string>Kharchasplit</string>
+		<key>CFBundleExecutable</key>
+		<string>$(EXECUTABLE_NAME)</string>
+		<key>CFBundleIdentifier</key>
+		<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+		<key>CFBundleInfoDictionaryVersion</key>
+		<string>6.0</string>
+		<key>CFBundleName</key>
+		<string>kharchasplit</string>
+		<key>CFBundlePackageType</key>
+		<string>APPL</string>
+		<key>CFBundleShortVersionString</key>
+		<string>$(FLUTTER_BUILD_NAME)</string>
+		<key>CFBundleSignature</key>
+		<string>????</string>
+		<key>CFBundleVersion</key>
+		<string>$(FLUTTER_BUILD_NUMBER)</string>
+		<key>LSRequiresIPhoneOS</key>
+		<true/>
+		<!-- Scene manifest intentionally omitted: flutter_contacts 1.1.x reads
 	     UIApplication.shared.delegate.window which is nil in scene mode.
 	     Sticking with legacy AppDelegate-owned window keeps the plugin
 	     working until it's updated. -->
-	<key>UIApplicationSupportsIndirectInputEvents</key>
-	<true/>
-	<key>UILaunchStoryboardName</key>
-	<string>LaunchScreen</string>
-	<key>UIMainStoryboardFile</key>
-	<string>Main</string>
-	<key>UISupportedInterfaceOrientations</key>
-	<array>
-		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
-	</array>
-	<key>UISupportedInterfaceOrientations~ipad</key>
-	<array>
-		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationPortraitUpsideDown</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
-	</array>
-	<!-- ATS is left at iOS defaults (HTTPS only) for production safety.
+		<key>UIApplicationSupportsIndirectInputEvents</key>
+		<true/>
+		<key>UILaunchStoryboardName</key>
+		<string>LaunchScreen</string>
+		<key>UIMainStoryboardFile</key>
+		<string>Main</string>
+		<key>UISupportedInterfaceOrientations</key>
+		<array>
+			<string>UIInterfaceOrientationPortrait</string>
+			<string>UIInterfaceOrientationLandscapeLeft</string>
+			<string>UIInterfaceOrientationLandscapeRight</string>
+		</array>
+		<key>UISupportedInterfaceOrientations~ipad</key>
+		<array>
+			<string>UIInterfaceOrientationPortrait</string>
+			<string>UIInterfaceOrientationPortraitUpsideDown</string>
+			<string>UIInterfaceOrientationLandscapeLeft</string>
+			<string>UIInterfaceOrientationLandscapeRight</string>
+		</array>
+		<!-- ATS is left at iOS defaults (HTTPS only) for production safety.
 	     If you need local dev against http://localhost, TEMPORARILY add
 	     the block below back, then REMOVE before any release / TestFlight
 	     / App Store build:
@@ -59,22 +59,24 @@
 	             <true/>
 	         </dict>
 	     -->
-	<!-- Required so iOS lets the app receive remote notifications while in background. -->
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>remote-notification</string>
-		<string>fetch</string>
-	</array>
-	<!-- ============================================================
+		<!-- Required so iOS lets the app receive remote notifications while in background. -->
+		<key>UIBackgroundModes</key>
+		<array>
+			<string>remote-notification</string>
+			<string>fetch</string>
+		</array>
+		<!-- ============================================================
 	     Permission usage descriptions (App Store rejects without these)
 	     ============================================================ -->
-	<key>NSContactsUsageDescription</key>
-	<string>KharchaSplit uses your contacts so you can add members to a group without typing phone numbers.</string>
-	<key>NSCameraUsageDescription</key>
-	<string>KharchaSplit uses the camera so you can photograph a bill or receipt as proof of an expense.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>KharchaSplit reads from your photo library so you can attach a receipt image to an expense.</string>
-	<key>NSPhotoLibraryAddOnlyUsageDescription</key>
-	<string>KharchaSplit saves exported expense reports back to your photo library.</string>
-</dict>
+		<key>NSContactsUsageDescription</key>
+		<string>KharchaSplit uses your contacts so you can add members to a group without typing phone numbers.</string>
+		<key>NSCameraUsageDescription</key>
+		<string>KharchaSplit uses the camera so you can photograph a bill or receipt as proof of an expense.</string>
+		<key>NSPhotoLibraryUsageDescription</key>
+		<string>KharchaSplit reads from your photo library so you can attach a receipt image to an expense.</string>
+		<key>NSPhotoLibraryAddOnlyUsageDescription</key>
+		<string>KharchaSplit saves exported expense reports back to your photo library.</string>
+		<key>UIStatusBarHidden</key>
+		<false/>
+	</dict>
 </plist>

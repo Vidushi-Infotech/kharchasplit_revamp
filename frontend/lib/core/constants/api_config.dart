@@ -1,11 +1,19 @@
+
+
 /// Backend API configuration.
 ///
-/// On Android, requests are routed through `adb reverse tcp:3000 tcp:3000`,
-/// so `localhost:3000` on the phone hits the dev host.
+/// Default points at production (`api.kharchasplit.com`). For local dev,
+/// override at build/run time, e.g.:
+///
+///     flutter run --dart-define=API_BASE_URL=http://localhost:3000/api/v1
+///
+/// On Android emulator the host laptop is reachable as `10.0.2.2`; on a
+/// physical device, use `adb reverse tcp:3000 tcp:3000` so `localhost:3000`
+/// from the phone hits the dev host.
 class ApiConfig {
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://localhost:3000/api/v1',
+    defaultValue: 'https://api.kharchasplit.com/api/v1',
   );
 
   static const Duration connectTimeout = Duration(seconds: 10);
