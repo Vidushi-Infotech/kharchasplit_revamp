@@ -55,9 +55,7 @@ class ExpenseDetailScreen extends ConsumerWidget {
           if (value == 'delete') {
             await _confirmAndDelete(context, ref);
           } else if (value == 'edit') {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Edit expense — coming soon')),
-            );
+            context.push('/expense/$expenseId/edit');
           }
         },
       ),
@@ -254,20 +252,24 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
                     ),
                   ),
                   itemBuilder: (_) => [
-                    PopupMenuItem(
-                      value: 'edit',
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.edit_rounded,
-                            size: 18,
-                            color: AppColors.textPrimary(isDark),
-                          ),
-                          const SizedBox(width: 10),
-                          const Text('Edit'),
-                        ],
+                    // Edit gates on the same payer-only rule as Delete: the
+                    // backend rejects PUT /expenses/:id with 403 if the
+                    // caller isn't the original payer.
+                    if (canDelete)
+                      PopupMenuItem(
+                        value: 'edit',
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.edit_rounded,
+                              size: 18,
+                              color: AppColors.textPrimary(isDark),
+                            ),
+                            const SizedBox(width: 10),
+                            const Text('Edit'),
+                          ],
+                        ),
                       ),
-                    ),
                     if (canDelete)
                       PopupMenuItem(
                         value: 'delete',

@@ -114,6 +114,9 @@ class ExpensesRepository {
     String? notes,
     DateTime? expenseDate,
     String? receiptBase64,
+    String? paidById,
+    String? splitType,
+    List<ExpenseParticipant>? participants,
   }) async {
     final res = await _client.dio.put(
       '/expenses/$expenseId',
@@ -125,6 +128,10 @@ class ExpensesRepository {
         if (notes != null) 'notes': notes,
         if (expenseDate != null) 'expenseDate': expenseDate.toIso8601String(),
         if (receiptBase64 != null) 'receiptBase64': receiptBase64,
+        if (paidById != null) 'paidById': paidById,
+        if (splitType != null) 'splitType': splitType,
+        if (participants != null)
+          'participants': participants.map((p) => p.toJson()).toList(),
       },
     );
     final data = _ensureMap(res);

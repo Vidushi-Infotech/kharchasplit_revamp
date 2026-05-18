@@ -180,7 +180,18 @@ const createExpense = async (req, res, next) => {
 const updateExpense = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { description, amount, currency, category, receiptBase64, notes, expenseDate } = req.body;
+    const {
+      description,
+      amount,
+      currency,
+      category,
+      receiptBase64,
+      notes,
+      expenseDate,
+      paidById,
+      splitType,
+      participants,
+    } = req.body;
 
     // Get expense to verify access
     const existingExpense = await Expense.findById(id);
@@ -195,15 +206,16 @@ const updateExpense = async (req, res, next) => {
     // Verify user has access
     await GroupService.validateGroupAccess(existingExpense.group_id, req.user.id);
 
-    // Only the person who paid can edit the expense
-    if (existingExpense.paid_by_id !== req.user.id) {
+    // Only the *original* payer may edit. Payer can be reassigned via
+    // `paidById` in the body, but the caller must currently be the payer.
+    if (existingExpense.paid_by !== req.user.id) {
       return res.status(403).json({
         success: false,
         error: 'Only the person who paid can edit this expense',
       });
     }
 
-    const expense = await Expense.update(id, {
+    const fields = {
       description,
       amount,
       currency,
@@ -211,7 +223,16 @@ const updateExpense = async (req, res, next) => {
       receiptBase64,
       notes,
       expenseDate,
-    });
+      paidById,
+      splitType,
+    };
+
+    // When the client sends a fresh participants array we re-write splits in
+    // a transaction; otherwise we leave splits alone (legacy callers that
+    // only patch description / notes / category).
+    const expense = Array.isArray(participants)
+      ? await Expense.updateWithSplits(id, fields, participants)
+      : await Expense.update(id, fields);
 
     // Invalidate group expense/balance caches
     Expense.invalidateGroupExpenses(existingExpense.group_id);
@@ -222,6 +243,12 @@ const updateExpense = async (req, res, next) => {
       data: expense,
     });
   } catch (error) {
+    if (error.message === 'User is not a member of this group') {
+      return res.status(403).json({
+        success: false,
+        error: error.message,
+      });
+    }
     next(error);
   }
 };

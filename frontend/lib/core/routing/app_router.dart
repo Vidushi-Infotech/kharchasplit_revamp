@@ -221,6 +221,14 @@ final appRouter = GoRouter(
       },
     ),
     GoRoute(
+      path: '/expense/:expenseId/edit',
+      name: 'edit-expense',
+      builder: (context, state) {
+        final expenseId = state.pathParameters['expenseId']!;
+        return AddExpenseScreen(expenseId: expenseId);
+      },
+    ),
+    GoRoute(
       path: '/home/groups/:groupId/settlements-with/:userId',
       name: 'settlement-history',
       builder: (context, state) => SettlementHistoryScreen(

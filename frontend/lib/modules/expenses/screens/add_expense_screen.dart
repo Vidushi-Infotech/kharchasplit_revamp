@@ -17,6 +17,7 @@ import '../../../modules/dashboard/state/dashboard_provider.dart';
 import '../../../modules/groups/state/group_detail_provider.dart';
 import '../../../modules/groups/state/groups_provider.dart';
 import '../state/add_expense_provider.dart';
+import '../state/expense_detail_provider.dart';
 import '../widgets/amount_input_widget.dart';
 import '../widgets/category_selector_widget.dart';
 import '../widgets/split_selector_widget.dart';
@@ -26,7 +27,15 @@ import '../widgets/split_breakdown_widget.dart';
 class AddExpenseScreen extends ConsumerStatefulWidget {
   final String? groupId;
 
-  const AddExpenseScreen({Key? key, this.groupId}) : super(key: key);
+  /// When non-null, the screen runs in edit mode: it loads the existing
+  /// expense, hydrates the form, and PUTs to /expenses/:id on save instead
+  /// of POSTing a new one. The title bar also reads "Edit expense".
+  final String? expenseId;
+
+  const AddExpenseScreen({Key? key, this.groupId, this.expenseId})
+      : super(key: key);
+
+  bool get isEditing => expenseId != null;
 
   @override
   ConsumerState<AddExpenseScreen> createState() => _AddExpenseScreenState();
@@ -52,6 +61,13 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   /// devices. 200 ms collapses a typed word into one rebuild.
   Timer? _titleDebounce;
 
+  /// Edit-mode latches.
+  ///   _hydrating    — true while the initial GET /expenses/:id is in flight;
+  ///                   used to show the spinner overlay and block save.
+  ///   _hydrateError — last hydration failure (rendered as inline error).
+  bool _hydrating = false;
+  String? _hydrateError;
+
   @override
   void initState() {
     super.initState();
@@ -59,6 +75,77 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     _notesController = TextEditingController();
     _equalSplitSearchController = TextEditingController();
     _scrollController = ScrollController();
+
+    if (widget.isEditing) {
+      _hydrating = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _hydrateFromExpense());
+    }
+  }
+
+  /// Fetch the existing expense and seed [addExpenseProvider] + the text
+  /// controllers. Runs exactly once on entry to edit mode.
+  Future<void> _hydrateFromExpense() async {
+    final id = widget.expenseId;
+    if (id == null) return;
+    try {
+      final expense = await ref.read(expensesRepositoryProvider).getById(id);
+      if (!mounted) return;
+
+      // Build the splits map in the same shape AddExpenseState uses:
+      //   equal/exact → amount, percentage → percent, shares → share count.
+      // includedMemberIds is everyone with a non-zero entry.
+      final splits = <String, double>{};
+      final included = <String>{};
+      for (final s in expense.splits) {
+        double value;
+        switch (expense.splitType) {
+          case SplitType.percentage:
+            value = s.percentage;
+            break;
+          case SplitType.shares:
+            value = s.shares;
+            break;
+          case SplitType.exact:
+          case SplitType.equal:
+            value = s.owedShare;
+            break;
+        }
+        splits[s.userId] = value;
+        if (value > 0) included.add(s.userId);
+      }
+
+      _titleController.text = expense.title;
+      _notesController.text = expense.notes ?? '';
+
+      ref.read(addExpenseProvider.notifier).state = AddExpenseState(
+        title: expense.title,
+        amount: expense.amount,
+        currency: expense.currency,
+        category: expense.category,
+        paidBy: expense.paidBy,
+        splitType: expense.splitType,
+        splits: splits,
+        includedMemberIds: included,
+        date: expense.date,
+        notes: expense.notes,
+        groupId: expense.groupId,
+        receiptBase64: expense.receiptBase64,
+      );
+
+      setState(() {
+        _hydrating = false;
+        // Edit mode reuses the equal-split auto-recalc path; setting the
+        // groupId-synced latch prevents the build() block from re-pushing
+        // widget.groupId (which is null in edit mode) over the loaded value.
+        _groupIdSynced = true;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _hydrating = false;
+        _hydrateError = e.toString();
+      });
+    }
   }
 
   @override
@@ -68,6 +155,15 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     _notesController.dispose();
     _equalSplitSearchController.dispose();
     _scrollController.dispose();
+    // Edit mode hydrates the shared provider with the expense being edited.
+    // If the user pops without saving, that hydrated state would otherwise
+    // bleed into the next Add Expense session — reset it on exit.
+    if (widget.isEditing) {
+      Future.microtask(() {
+        ref.read(addExpenseProvider.notifier).state =
+            AddExpenseState(date: DateTime.now());
+      });
+    }
     super.dispose();
   }
 
@@ -88,6 +184,57 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final screenWidth = MediaQuery.of(context).size.width;
+
+    // Edit mode short-circuits: spinner while the GET is in flight, error
+    // page with retry if it failed. We never show the half-empty form.
+    if (widget.isEditing && (_hydrating || _hydrateError != null)) {
+      return Scaffold(
+        backgroundColor: AppColors.background(isDark),
+        appBar: _TopBar(
+          title: 'Edit expense',
+          onClose: _closeScreen,
+          isDark: isDark,
+        ),
+        body: Center(
+          child: _hydrateError != null
+              ? Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Could not load expense',
+                        style: AppTextStyles.body1(isDark).copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _hydrateError!,
+                        textAlign: TextAlign.center,
+                        style: AppTextStyles.body2(isDark).copyWith(
+                          color: AppColors.textSecondary(isDark),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      OutlinedButton(
+                        onPressed: () {
+                          setState(() {
+                            _hydrateError = null;
+                            _hydrating = true;
+                          });
+                          _hydrateFromExpense();
+                        },
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                )
+              : const CircularProgressIndicator(),
+        ),
+      );
+    }
+
     final expenseState = ref.watch(addExpenseProvider);
 
     // Initialise expense.groupId from the route param exactly once.
@@ -182,7 +329,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       child: Scaffold(
       backgroundColor: AppColors.background(isDark),
       appBar: _TopBar(
-        title: 'Add expense',
+        title: widget.isEditing ? 'Edit expense' : 'Add expense',
         onClose: _closeScreen,
         isDark: isDark,
       ),
@@ -234,7 +381,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     return Scaffold(
       backgroundColor: AppColors.background(isDark),
       appBar: _TopBar(
-        title: 'Add expense',
+        title: widget.isEditing ? 'Edit expense' : 'Add expense',
         onClose: _closeScreen,
         isDark: isDark,
       ),
@@ -290,7 +437,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     return Scaffold(
       backgroundColor: AppColors.background(isDark),
       appBar: _TopBar(
-        title: 'Add expense',
+        title: widget.isEditing ? 'Edit expense' : 'Add expense',
         onClose: _closeScreen,
         isDark: isDark,
       ),
@@ -1343,20 +1490,37 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     try {
       // Title is required and validated by state.isValid before reaching
       // here; trim defensively but never substitute "Untitled".
-      await ref.read(expensesRepositoryProvider).create(
-            groupId: groupId,
-            description: state.title!.trim(),
-            amount: state.amount,
-            currency: state.currency,
-            category: (state.category ?? CategoryModel.other).id,
-            paidById: paidBy.id,
-            paidByName: paidBy.name,
-            splitType: backendSplitType(state.splitType),
-            notes: state.notes,
-            expenseDate: state.date,
-            receiptBase64: state.receiptBase64,
-            participants: participants,
-          );
+      final repo = ref.read(expensesRepositoryProvider);
+      if (widget.isEditing) {
+        await repo.update(
+          widget.expenseId!,
+          description: state.title!.trim(),
+          amount: state.amount,
+          currency: state.currency,
+          category: (state.category ?? CategoryModel.other).id,
+          notes: state.notes,
+          expenseDate: state.date,
+          receiptBase64: state.receiptBase64,
+          paidById: paidBy.id,
+          splitType: backendSplitType(state.splitType),
+          participants: participants,
+        );
+      } else {
+        await repo.create(
+          groupId: groupId,
+          description: state.title!.trim(),
+          amount: state.amount,
+          currency: state.currency,
+          category: (state.category ?? CategoryModel.other).id,
+          paidById: paidBy.id,
+          paidByName: paidBy.name,
+          splitType: backendSplitType(state.splitType),
+          notes: state.notes,
+          expenseDate: state.date,
+          receiptBase64: state.receiptBase64,
+          participants: participants,
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       ref.read(addExpenseProvider.notifier).state =
@@ -1369,13 +1533,17 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
 
     ref.invalidate(dashboardProvider);
     ref.invalidate(groupDetailProvider(groupId));
+    if (widget.isEditing) {
+      // Bust the detail-screen cache so the popped-to screen reflects edits.
+      ref.invalidate(expenseDetailProvider(widget.expenseId!));
+    }
 
     if (!mounted) return;
     ref.read(addExpenseProvider.notifier).state =
         AddExpenseState(date: DateTime.now());
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: const Text('✓ Expense saved'),
+        content: Text(widget.isEditing ? '✓ Expense updated' : '✓ Expense saved'),
         backgroundColor: AppColors.success,
         duration: const Duration(seconds: 2),
       ),
