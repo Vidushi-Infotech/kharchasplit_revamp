@@ -23,6 +23,8 @@ plugins {
     id("org.jetbrains.kotlin.android") version "2.2.20" apply false
     // Firebase: applies google-services.json processing in :app
     id("com.google.gms.google-services") version "4.4.2" apply false
+    // Crashlytics: uploads symbol mapping files for stack-trace deobfuscation
+    id("com.google.firebase.crashlytics") version "3.0.2" apply false
 }
 
 include(":app")

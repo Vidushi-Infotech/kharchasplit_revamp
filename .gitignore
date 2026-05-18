@@ -60,6 +60,8 @@ build/
 frontend/android/.gradle/
 frontend/android/local.properties
 frontend/android/key.properties
+*.jks
+*.keystore
 frontend/android/**/GeneratedPluginRegistrant.java
 frontend/android/app/debug
 frontend/android/app/profile

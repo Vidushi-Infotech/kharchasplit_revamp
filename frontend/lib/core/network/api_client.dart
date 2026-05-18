@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
+import 'package:dio/io.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../constants/api_config.dart';
@@ -24,7 +27,41 @@ class ApiClient {
       responseType: ResponseType.json,
       validateStatus: (s) => s != null && s < 500,
     ));
+    _installCertificatePinning();
     dio.interceptors.add(_AuthInterceptor(this));
+  }
+
+  /// Wire SHA-256 certificate pinning into the underlying HttpClient.
+  /// No-op when [ApiConfig.certPinSha256] is empty (dev / staging) or when
+  /// the base URL is plaintext HTTP (localhost). When pins are configured
+  /// and the served leaf cert's SHA-256 doesn't match any pin, the request
+  /// fails before any bytes are exchanged — defeats CA-trust-store / MITM
+  /// attacks even on hostile networks or compromised devices.
+  void _installCertificatePinning() {
+    final pins = ApiConfig.certPinSha256
+        .map((p) => p.toLowerCase())
+        .toSet();
+    if (pins.isEmpty) return;
+    if (!ApiConfig.baseUrl.startsWith('https://')) return;
+
+    final adapter = IOHttpClientAdapter(
+      createHttpClient: () {
+        final client = HttpClient();
+        client.badCertificateCallback = (cert, host, port) {
+          // Reach this when the system trust store would normally reject;
+          // pinning is the additional defence.
+          final fingerprint = sha256.convert(cert.der).toString().toLowerCase();
+          return pins.contains(fingerprint);
+        };
+        return client;
+      },
+      validateCertificate: (cert, host, port) {
+        if (cert == null) return false;
+        final fingerprint = sha256.convert(cert.der).toString().toLowerCase();
+        return pins.contains(fingerprint);
+      },
+    );
+    dio.httpClientAdapter = adapter;
   }
 
   late final Dio dio;

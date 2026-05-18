@@ -2,15 +2,16 @@ import dotenv from 'dotenv';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import morgan from 'morgan';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
+import pinoHttp from 'pino-http';
 
 import { testConnection, pool, getPoolMetrics } from './config/database.js';
 import { initializeDatabase } from './config/initDatabase.js';
 import { initFirebase } from './config/firebaseAdmin.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
 import { cache } from './services/cacheService.js';
+import { logger } from './utils/logger.js';
 
 // Import routes
 import authRoutes from './routes/authRoutes.js';
@@ -29,12 +30,50 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Trust the first proxy (Cloudflare / nginx / Render / Heroku) so
+// req.secure + x-forwarded-* headers reflect the real client connection.
+if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
+
 // Security middleware
 app.use(helmet());
 
-// CORS
+// Force HTTPS + HSTS in production. Any plaintext request is upgraded with
+// a 308 (preserving method + body). HSTS instructs compliant browsers to
+// refuse plaintext for one year, including subdomains.
+if (process.env.NODE_ENV === 'production') {
+  app.use((req, res, next) => {
+    if (req.secure || req.get('x-forwarded-proto') === 'https') return next();
+    return res.redirect(308, `https://${req.get('host')}${req.originalUrl}`);
+  });
+  app.use(helmet.hsts({
+    maxAge: 31536000,        // 1 year
+    includeSubDomains: true,
+    preload: true,
+  }));
+}
+
+// CORS — explicit allow-list. Set CORS_ORIGIN to a comma-separated list
+// of trusted origins (e.g. "https://app.kharchasplit.com,https://web.kharchasplit.com").
+// Special value '*' is permitted ONLY when NODE_ENV !== 'production' so that
+// emulators / local web builds work; rejected outright in production.
+const rawCors = (process.env.CORS_ORIGIN || '').trim();
+let corsOrigin;
+if (rawCors === '*' || rawCors === '') {
+  if (process.env.NODE_ENV === 'production') {
+    console.error(
+      '[CORS] CORS_ORIGIN must be a non-empty allow-list in production. ' +
+      "Refusing to start with '*' or empty value."
+    );
+    process.exit(1);
+  }
+  corsOrigin = true; // reflect request origin in dev
+} else {
+  corsOrigin = rawCors.split(',').map((s) => s.trim()).filter(Boolean);
+}
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || '*',
+  origin: corsOrigin,
   credentials: true,
 }));
 
@@ -51,17 +90,30 @@ const limiter = rateLimit({
 });
 app.use('/api', limiter);
 
-// Body parsing — 2MB covers profile images + receipt photos
-// JSON.parse of 10MB blocks event loop for ~200ms; 2MB keeps it under ~40ms
-app.use(express.json({ limit: '2mb' }));
-app.use(express.urlencoded({ extended: true, limit: '2mb' }));
+// Body parsing — 10MB lets receipt photos (base64-encoded) come through
+// even when client-side compression underperforms on huge phone cameras.
+// Trade-off: JSON.parse of 10MB blocks the event loop for ~200ms.
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Compression — skip responses under 1KB (overhead not worth it for small JSON)
 app.use(compression({ threshold: 1024 }));
 
-// Logging — 'tiny' is ~5x less CPU overhead than 'combined' (no user-agent, referrer parsing)
+// Structured request logging via pino-http. Replaces morgan; logger.js
+// handles redaction (Authorization headers, OTPs, tokens, base64 blobs).
+// Skip noisy /health pings to keep logs focused.
 if (process.env.NODE_ENV !== 'test') {
-  app.use(morgan(process.env.NODE_ENV === 'production' ? 'tiny' : 'dev'));
+  app.use(pinoHttp({
+    logger,
+    autoLogging: {
+      ignore: (req) => req.url === '/health',
+    },
+    customLogLevel: (req, res, err) => {
+      if (err || res.statusCode >= 500) return 'error';
+      if (res.statusCode >= 400) return 'warn';
+      return 'info';
+    },
+  }));
 }
 
 // Health check — includes pool + cache metrics for monitoring
@@ -138,16 +190,18 @@ const startServer = async () => {
   }
 };
 
-// Handle uncaught exceptions
+// Handle uncaught exceptions — structured + flush logger before exit so
+// the error actually reaches the platform's log collector.
 process.on('uncaughtException', (error) => {
-  console.error('Uncaught Exception:', error);
-  process.exit(1);
+  logger.fatal({ err: error }, 'Uncaught exception');
+  // Give the logger one tick to flush, then die.
+  setImmediate(() => process.exit(1));
 });
 
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (error) => {
-  console.error('Unhandled Rejection:', error);
-  process.exit(1);
+  logger.fatal({ err: error }, 'Unhandled rejection');
+  setImmediate(() => process.exit(1));
 });
 
 // Graceful shutdown — drain in-flight requests then close DB pool

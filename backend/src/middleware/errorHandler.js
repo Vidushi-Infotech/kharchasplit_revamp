@@ -27,14 +27,26 @@ const errorHandler = (err, req, res, next) => {
     // PostgreSQL not null violation
     status = 400;
     message = 'Required field missing';
+  } else if (err.type === 'entity.too.large') {
+    // express.json() body limit exceeded
+    status = 413;
+    message = 'Request body too large. Try a smaller image.';
   } else if (err.message) {
     message = err.message;
+  }
+
+  // Production: never expose stack traces or internal error messages on 5xx.
+  // Belt-and-braces: a positive check for production rather than negation, so
+  // any unset / typo'd NODE_ENV defaults to the safe (sanitised) branch.
+  const isProd = process.env.NODE_ENV === 'production';
+  if (isProd && status >= 500) {
+    message = 'Internal server error';
   }
 
   res.status(status).json({
     success: false,
     error: message,
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
+    ...(!isProd && err.stack ? { stack: err.stack } : {}),
   });
 };
 

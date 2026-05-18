@@ -1,3 +1,4 @@
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -57,10 +58,10 @@ class GroupDetailScreen extends ConsumerWidget {
         error: (err, stack) => _buildErrorState(context, ref, err),
         data: (detail) {
           final body = screenWidth < 600
-              ? _buildCompactLayout(context, isDark, detail, tab, ref)
+              ? _buildCompactLayout(context, isDark, detail, tab, ref, myId, isAdmin)
               : screenWidth < 1100
-                  ? _buildStandardLayout(context, isDark, detail, tab, ref)
-                  : _buildLargeLayout(context, isDark, detail, tab, ref);
+                  ? _buildStandardLayout(context, isDark, detail, tab, ref, myId, isAdmin)
+                  : _buildLargeLayout(context, isDark, detail, tab, ref, myId, isAdmin);
           return RefreshIndicator(
             onRefresh: () async {
               // Invalidate the family entry for this group + the pending
@@ -258,6 +259,44 @@ class GroupDetailScreen extends ConsumerWidget {
     );
   }
 
+  Future<void> _sendReminder(
+    BuildContext context,
+    WidgetRef ref,
+    UserModel debtor,
+  ) async {
+    try {
+      await ref.read(groupsRepositoryProvider).sendReminder(
+            groupId: groupId,
+            userId: debtor.id,
+          );
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Reminded ${debtor.name}'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } on GroupsApiException catch (e) {
+      // Backend rejects with 400 (nothing owed), 429 (cooldown), 404, etc.
+      // Surface the message verbatim so the user sees the real reason.
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.message),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not send reminder: $e'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
   Future<void> _confirmRemoveMember(
     BuildContext context,
     WidgetRef ref,
@@ -415,17 +454,19 @@ class GroupDetailScreen extends ConsumerWidget {
     GroupDetail detail,
     GroupTab tab,
     WidgetRef ref,
+    String? myId,
+    bool isAdmin,
   ) {
     // Compact: <600px - full width, single column, tight spacing (16-20px)
     return SingleChildScrollView(
       child: Column(
         children: [
-          _buildCompactHeader(context, isDark, detail),
+          _buildCompactHeader(context, isDark, detail, ref, myId, isAdmin),
           _buildTabs(context, isDark, tab, ref),
           if (tab == GroupTab.expenses)
             _buildExpensesList(context, isDark, detail)
           else
-            _buildBalancesTab(context, isDark, detail),
+            _buildBalancesTab(context, isDark, detail, myId),
         ],
       ),
     );
@@ -437,17 +478,19 @@ class GroupDetailScreen extends ConsumerWidget {
     GroupDetail detail,
     GroupTab tab,
     WidgetRef ref,
+    String? myId,
+    bool isAdmin,
   ) {
     // Standard: 600-1100px - improved spacing (24-32px), better grouped layout
     return SingleChildScrollView(
       child: Column(
         children: [
-          _buildStandardHeader(context, isDark, detail),
+          _buildStandardHeader(context, isDark, detail, ref, myId, isAdmin),
           _buildTabs(context, isDark, tab, ref),
           if (tab == GroupTab.expenses)
             _buildExpensesList(context, isDark, detail)
           else
-            _buildBalancesTab(context, isDark, detail),
+            _buildBalancesTab(context, isDark, detail, myId),
         ],
       ),
     );
@@ -459,6 +502,8 @@ class GroupDetailScreen extends ConsumerWidget {
     GroupDetail detail,
     GroupTab tab,
     WidgetRef ref,
+    String? myId,
+    bool isAdmin,
   ) {
     // Large: >1100px - generous spacing (32-48px), sidebar + content layout
     return Row(
@@ -474,7 +519,7 @@ class GroupDetailScreen extends ConsumerWidget {
                 children: [
                   _buildLargeHeader(context, isDark, detail),
                   const SizedBox(height: 32),
-                  _buildMembersSection(context, isDark, detail),
+                  _buildMembersSection(context, isDark, detail, ref, myId, isAdmin),
                 ],
               ),
             ),
@@ -502,7 +547,7 @@ class GroupDetailScreen extends ConsumerWidget {
                       padding: const EdgeInsets.all(32),
                       child: tab == GroupTab.expenses
                           ? _buildExpensesList(context, isDark, detail)
-                          : _buildBalancesTab(context, isDark, detail),
+                          : _buildBalancesTab(context, isDark, detail, myId),
                     ),
                   ),
                 ),
@@ -515,7 +560,14 @@ class GroupDetailScreen extends ConsumerWidget {
   }
 
   // Compact header: <600px — hero gradient card + members strip
-  Widget _buildCompactHeader(BuildContext context, bool isDark, GroupDetail detail) {
+  Widget _buildCompactHeader(
+    BuildContext context,
+    bool isDark,
+    GroupDetail detail,
+    WidgetRef ref,
+    String? myId,
+    bool isAdmin,
+  ) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
       child: Column(
@@ -535,14 +587,21 @@ class GroupDetailScreen extends ConsumerWidget {
               ),
             ),
           ),
-          _buildMembersList(context, isDark, detail),
+          _buildMembersList(context, isDark, detail, ref, myId, isAdmin),
         ],
       ),
     );
   }
 
   // Standard header: 600-1100px - improved spacing (24-32px)
-  Widget _buildStandardHeader(BuildContext context, bool isDark, GroupDetail detail) {
+  Widget _buildStandardHeader(
+    BuildContext context,
+    bool isDark,
+    GroupDetail detail,
+    WidgetRef ref,
+    String? myId,
+    bool isAdmin,
+  ) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
       decoration: BoxDecoration(
@@ -607,7 +666,7 @@ class GroupDetailScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 24),
           // Members list
-          _buildMembersList(context, isDark, detail),
+          _buildMembersList(context, isDark, detail, ref, myId, isAdmin),
         ],
       ),
     );
@@ -771,74 +830,86 @@ class GroupDetailScreen extends ConsumerWidget {
     );
   }
 
-  // Responsive members list - horizontal scroll for compact/standard, grid for large
-  Widget _buildMembersList(BuildContext context, bool isDark, GroupDetail detail) {
-    return Consumer(builder: (context, ref, _) {
-      final myId = ref.watch(authProvider).user?.id;
-      final isAdmin = myId != null && detail.group.createdBy == myId;
-      return SizedBox(
-        height: 80,
-        child: ListView.builder(
-          scrollDirection: Axis.horizontal,
-          itemCount: detail.members.length,
-          itemBuilder: (context, index) {
-            final member = detail.members[index];
-            return Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(32),
-                onTap: () => _showMemberActionsSheet(
-                  context: context,
-                  ref: ref,
-                  member: member,
-                  isAdmin: isAdmin,
-                  isSelf: member.id == myId,
-                ),
-                child: Column(
-                  children: [
-                    AvatarWidget(
-                      imageUrl: member.avatarUrl,
-                      name: member.name,
-                      radius: 24,
-                    ),
-                    const SizedBox(height: 6),
-                    SizedBox(
-                      width: 56,
-                      child: Text(
-                        member.name.split(' ')[0],
-                        style: AppTextStyles.caption(isDark),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  ],
-                ),
+  // Responsive members list - horizontal scroll for compact/standard, grid for large.
+  //
+  // Auth state (myId, isAdmin) is hoisted from the screen-level build via the
+  // signature so this method doesn't open a second authProvider subscription
+  // — every auth change rebuilds the whole tree once, not per-section.
+  Widget _buildMembersList(
+    BuildContext context,
+    bool isDark,
+    GroupDetail detail,
+    WidgetRef ref,
+    String? myId,
+    bool isAdmin,
+  ) {
+    return SizedBox(
+      height: 80,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: detail.members.length,
+        itemBuilder: (context, index) {
+          final member = detail.members[index];
+          return Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(32),
+              onTap: () => _showMemberActionsSheet(
+                context: context,
+                ref: ref,
+                member: member,
+                isAdmin: isAdmin,
+                isSelf: member.id == myId,
               ),
-            );
-          },
-        ),
-      );
-    });
+              child: Column(
+                children: [
+                  AvatarWidget(
+                    imageUrl: member.avatarUrl,
+                    name: member.name,
+                    radius: 24,
+                  ),
+                  const SizedBox(height: 6),
+                  SizedBox(
+                    width: 56,
+                    child: Text(
+                      member.name.split(' ')[0],
+                      style: AppTextStyles.caption(isDark),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 
-  // Members section for large layout - compact list display
-  Widget _buildMembersSection(BuildContext context, bool isDark, GroupDetail detail) {
-    return Consumer(builder: (context, ref, _) {
-      final myId = ref.watch(authProvider).user?.id;
-      final isAdmin = myId != null && detail.group.createdBy == myId;
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Members (${detail.members.length})',
-            style: AppTextStyles.headline3(isDark),
-          ),
-          const SizedBox(height: 12),
-          ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: detail.members.length,
+  // Members section for large layout - compact list display.
+  // Same hoisting pattern as _buildMembersList.
+  Widget _buildMembersSection(
+    BuildContext context,
+    bool isDark,
+    GroupDetail detail,
+    WidgetRef ref,
+    String? myId,
+    bool isAdmin,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Members (${detail.members.length})',
+          style: AppTextStyles.headline3(isDark),
+        ),
+        const SizedBox(height: 12),
+        ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: detail.members.length,
             itemBuilder: (context, index) {
               final member = detail.members[index];
               final isSelf = member.id == myId;
@@ -914,7 +985,6 @@ class GroupDetailScreen extends ConsumerWidget {
           ),
         ],
       );
-    });
   }
 
   Widget _buildTabs(
@@ -923,13 +993,29 @@ class GroupDetailScreen extends ConsumerWidget {
     GroupTab tab,
     WidgetRef ref,
   ) {
+    // Watch the provider exactly once and reuse the AsyncValue, avoiding
+    // a second listener subscription per build (and a redundant rebuild).
+    final detailAsync = ref.watch(groupDetailProvider(groupId));
+    final detail = detailAsync.value;
+    final myId = ref.watch(authProvider).user?.id;
+
+    // The Balances badge previously showed member count, which read as
+    // "2 outstanding balances" on a brand-new group with zero expenses.
+    // Show the count of *active pairwise debts* (`|net| > 0.01`) instead —
+    // matches what the Balances tab actually renders.
+    int? balancesCount;
+    if (detail != null && myId != null) {
+      final pair = _pairwiseDebts(myId: myId, detail: detail);
+      balancesCount = pair.values.where((v) => v.abs() > 0.01).length;
+    }
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 14, 20, 4),
       child: Row(
         children: [
           _TabButton(
             label: 'Expenses',
-            count: ref.watch(groupDetailProvider(groupId)).value?.expenses.length,
+            count: detail?.expenses.length,
             selected: tab == GroupTab.expenses,
             isDark: isDark,
             onTap: () =>
@@ -938,7 +1024,7 @@ class GroupDetailScreen extends ConsumerWidget {
           const SizedBox(width: 22),
           _TabButton(
             label: 'Balances',
-            count: ref.watch(groupDetailProvider(groupId)).value?.members.length,
+            count: balancesCount,
             selected: tab == GroupTab.balances,
             isDark: isDark,
             onTap: () =>
@@ -986,13 +1072,18 @@ class GroupDetailScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildBalancesTab(BuildContext context, bool isDark, GroupDetail detail) {
+  Widget _buildBalancesTab(
+    BuildContext context,
+    bool isDark,
+    GroupDetail detail,
+    String? myId,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _PendingIncomingSettlementsSection(groupId: groupId),
         _PendingOutgoingSettlementsSection(groupId: groupId),
-        _buildBalancesList(context, isDark, detail),
+        _buildBalancesList(context, isDark, detail, myId),
       ],
     );
   }
@@ -1037,102 +1128,103 @@ class GroupDetailScreen extends ConsumerWidget {
     return pair;
   }
 
-  Widget _buildBalancesList(BuildContext context, bool isDark, GroupDetail detail) {
+  Widget _buildBalancesList(
+    BuildContext context,
+    bool isDark,
+    GroupDetail detail,
+    String? myId,
+  ) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isCompact = screenWidth < 600;
     final horizontalPadding = isCompact ? 16.0 : 24.0;
     final verticalSpacing = isCompact ? 8.0 : 12.0;
 
-    return Consumer(builder: (context, ref, _) {
-      final myId = ref.watch(authProvider).user?.id;
-      if (myId == null) return const SizedBox.shrink();
+    if (myId == null) return const SizedBox.shrink();
+    final pair = _pairwiseDebts(myId: myId, detail: detail);
+    final iOwe = pair.entries
+        .where((e) => e.value > 0.01)
+        .toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final owedToMe = pair.entries
+        .where((e) => e.value < -0.01)
+        .toList()
+      ..sort((a, b) => a.value.compareTo(b.value));
 
-      final pair = _pairwiseDebts(myId: myId, detail: detail);
-      final iOwe = pair.entries
-          .where((e) => e.value > 0.01)
-          .toList()
-        ..sort((a, b) => b.value.compareTo(a.value));
-      final owedToMe = pair.entries
-          .where((e) => e.value < -0.01)
-          .toList()
-        ..sort((a, b) => a.value.compareTo(b.value));
-
-      if (iOwe.isEmpty && owedToMe.isEmpty) {
-        return Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: horizontalPadding,
-            vertical: 32,
+    if (iOwe.isEmpty && owedToMe.isEmpty) {
+      return Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: horizontalPadding,
+          vertical: 32,
+        ),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: AppColors.surface(isDark),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.divider(isDark), width: 1),
           ),
-          child: Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: AppColors.surface(isDark),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.divider(isDark), width: 1),
-            ),
-            child: Column(
-              children: [
-                const Text('🎉', style: TextStyle(fontSize: 40)),
-                const SizedBox(height: 8),
-                Text(
-                  'All settled up',
-                  style: AppTextStyles.body1(isDark)
-                      .copyWith(fontWeight: FontWeight.w600),
+          child: Column(
+            children: [
+              const Text('🎉', style: TextStyle(fontSize: 40)),
+              const SizedBox(height: 8),
+              Text(
+                'All settled up',
+                style: AppTextStyles.body1(isDark)
+                    .copyWith(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'No one owes anyone in this group.',
+                textAlign: TextAlign.center,
+                style: AppTextStyles.caption(isDark).copyWith(
+                  color: AppColors.textSecondary(isDark),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  'No one owes anyone in this group.',
-                  textAlign: TextAlign.center,
-                  style: AppTextStyles.caption(isDark).copyWith(
-                    color: AppColors.textSecondary(isDark),
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-        );
-      }
-
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (iOwe.isNotEmpty) ...[
-            _buildSectionHeader(
-              'You owe',
-              isDark: isDark,
-              padding: horizontalPadding,
-            ),
-            ...iOwe.map((e) => _buildPairRow(
-                  context: context,
-                  isDark: isDark,
-                  detail: detail,
-                  otherId: e.key,
-                  amount: e.value, // positive
-                  iOweThem: true,
-                  horizontalPadding: horizontalPadding,
-                  verticalSpacing: verticalSpacing,
-                )),
-          ],
-          if (owedToMe.isNotEmpty) ...[
-            _buildSectionHeader(
-              'Owed to you',
-              isDark: isDark,
-              padding: horizontalPadding,
-            ),
-            ...owedToMe.map((e) => _buildPairRow(
-                  context: context,
-                  isDark: isDark,
-                  detail: detail,
-                  otherId: e.key,
-                  amount: e.value.abs(),
-                  iOweThem: false,
-                  horizontalPadding: horizontalPadding,
-                  verticalSpacing: verticalSpacing,
-                )),
-          ],
-        ],
+        ),
       );
-    });
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (iOwe.isNotEmpty) ...[
+          _buildSectionHeader(
+            'You owe',
+            isDark: isDark,
+            padding: horizontalPadding,
+          ),
+          ...iOwe.map((e) => _buildPairRow(
+                context: context,
+                isDark: isDark,
+                detail: detail,
+                otherId: e.key,
+                amount: e.value, // positive
+                iOweThem: true,
+                horizontalPadding: horizontalPadding,
+                verticalSpacing: verticalSpacing,
+              )),
+        ],
+        if (owedToMe.isNotEmpty) ...[
+          _buildSectionHeader(
+            'Owed to you',
+            isDark: isDark,
+            padding: horizontalPadding,
+          ),
+          ...owedToMe.map((e) => _buildPairRow(
+                context: context,
+                isDark: isDark,
+                detail: detail,
+                otherId: e.key,
+                amount: e.value.abs(),
+                iOweThem: false,
+                horizontalPadding: horizontalPadding,
+                verticalSpacing: verticalSpacing,
+              )),
+        ],
+      ],
+    );
   }
 
   Widget _buildSectionHeader(
@@ -1163,10 +1255,7 @@ class GroupDetailScreen extends ConsumerWidget {
     required double horizontalPadding,
     required double verticalSpacing,
   }) {
-    final member = detail.members
-        .where((m) => m.id == otherId)
-        .cast<UserModel?>()
-        .firstWhere((m) => true, orElse: () => null);
+    final member = detail.members.firstWhereOrNull((m) => m.id == otherId);
     if (member == null) return const SizedBox.shrink();
 
     final accent = iOweThem ? AppColors.warning : AppColors.success;
@@ -1248,6 +1337,29 @@ class GroupDetailScreen extends ConsumerWidget {
                           minimumSize: const Size(0, 28),
                         ),
                         child: const Text('Settle Up'),
+                      ),
+                    ] else ...[
+                      const SizedBox(height: 6),
+                      Consumer(
+                        builder: (context, ref, _) => TextButton.icon(
+                          onPressed: () =>
+                              _sendReminder(context, ref, member),
+                          icon: Icon(
+                            Icons.notifications_active_rounded,
+                            size: 14,
+                            color: AppColors.brand,
+                          ),
+                          label: Text(
+                            'Remind',
+                            style: TextStyle(color: AppColors.brand),
+                          ),
+                          style: TextButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 0),
+                            minimumSize: const Size(0, 28),
+                          ),
+                        ),
                       ),
                     ],
                   ],
@@ -1361,6 +1473,7 @@ class _DetailTopBar extends StatelessWidget implements PreferredSizeWidget {
                       ),
                     ),
                     itemBuilder: (_) => [
+                      // Add member: visible to everyone in the group.
                       PopupMenuItem(
                         value: 'add_member',
                         child: Row(
@@ -1375,7 +1488,10 @@ class _DetailTopBar extends StatelessWidget implements PreferredSizeWidget {
                           ],
                         ),
                       ),
-                      if (canManage)
+                      // Leave group: members only. The admin can't leave
+                      // their own group from here — they have to delete it
+                      // (or transfer admin first, in a future change).
+                      if (canManage && !isAdmin)
                         PopupMenuItem(
                           value: 'leave',
                           child: Row(
@@ -1390,6 +1506,7 @@ class _DetailTopBar extends StatelessWidget implements PreferredSizeWidget {
                             ],
                           ),
                         ),
+                      // Delete group: admin only.
                       if (canManage && isAdmin)
                         PopupMenuItem(
                           value: 'delete',

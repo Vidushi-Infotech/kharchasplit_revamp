@@ -1,3 +1,4 @@
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -114,10 +115,8 @@ class _SettleScreenState extends ConsumerState<SettleScreen> {
 
     // Apply initialGroupId once, after groups have loaded.
     if (!_initialGroupApplied && widget.initialGroupId != null) {
-      final preselect = shared
-          .where((g) => g.id == widget.initialGroupId)
-          .cast<GroupModel?>()
-          .firstWhere((g) => true, orElse: () => null);
+      final preselect =
+          shared.firstWhereOrNull((g) => g.id == widget.initialGroupId);
       if (preselect != null) {
         _initialGroupApplied = true;
         WidgetsBinding.instance.addPostFrameCallback((_) {

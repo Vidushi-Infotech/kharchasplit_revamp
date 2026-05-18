@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/network/api_client.dart';
@@ -80,7 +81,15 @@ class AuthRepository {
     return _tokensFromData(data);
   }
 
+  /// Dev-only no-OTP login. Disabled in release builds — release callers
+  /// would otherwise leak this even if the backend route is open.
   Future<AuthTokens> simpleLogin(String phoneNumber) async {
+    if (kReleaseMode) {
+      throw AuthException(
+        'Simple login is disabled in release builds.',
+        statusCode: 404,
+      );
+    }
     final device = await DeviceInfoService.describe();
     final res = await _client.dio.post(
       '/auth/simple-login',

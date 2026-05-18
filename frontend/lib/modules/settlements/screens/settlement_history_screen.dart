@@ -1,3 +1,4 @@
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -40,10 +41,8 @@ class SettlementHistoryScreen extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Could not load: $e')),
         data: (detail) {
-          final other = detail.members
-              .where((m) => m.id == otherUserId)
-              .cast<dynamic>()
-              .firstWhere((_) => true, orElse: () => null);
+          final other =
+              detail.members.firstWhereOrNull((m) => m.id == otherUserId);
           final pair = detail.settlements.where((s) {
             final involvesPair =
                 (s.fromUser.id == me?.id && s.toUser.id == otherUserId) ||

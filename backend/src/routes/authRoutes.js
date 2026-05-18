@@ -2,6 +2,7 @@ import express from 'express';
 import { body } from 'express-validator';
 import { validate } from '../middleware/validation.js';
 import { authenticate } from '../middleware/auth.js';
+import { otpRateLimit } from '../middleware/rateLimits.js';
 import authController from '../controllers/authController.js';
 
 const router = express.Router();
@@ -13,6 +14,8 @@ const router = express.Router();
  */
 router.post(
   '/register',
+  // Same per-phone bucket as /send-otp — register also issues an OTP.
+  otpRateLimit,
   [
     body('phoneNumber')
       .matches(/^\+?[1-9]\d{1,14}$/)
@@ -37,6 +40,9 @@ router.post(
  */
 router.post(
   '/send-otp',
+  // Per-phone limit before validation so a malformed payload still costs
+  // a slot and we can't be probed for free.
+  otpRateLimit,
   [
     body('phoneNumber')
       .matches(/^\+?[1-9]\d{1,14}$/)

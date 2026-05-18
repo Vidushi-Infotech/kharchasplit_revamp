@@ -1,14 +1,16 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../models/models.dart';
-import '../state/dashboard_provider.dart';
+import '../../groups/state/groups_provider.dart';
 
-// NOTE: GroupModel.myBalance is not yet populated by the backend list endpoint —
-// these providers will return empty lists until per-group balances are wired in.
-// See data/groups/groups_repository.dart for where to extend that.
+// These providers source from groupsProvider (the full list, up to 50) — NOT
+// from dashboardProvider.recentGroups, which caps at 5 and was hiding
+// higher-balance groups from the You're-Owed / You-Owe detail screens. The
+// dashboard's *summary cards* still use the backend-aggregated totals, so
+// the per-group breakdown here now sums to the same number.
 
 /// Provider for groups where user is owed money (myBalance > 0)
 final owedToMeGroupsProvider = Provider<List<GroupModel>>((ref) {
-  final groups = ref.watch(dashboardProvider).value?.recentGroups ?? const [];
+  final groups = ref.watch(groupsProvider).value ?? const <GroupModel>[];
   return groups
       .where((g) => g.myBalance > 0)
       .toList()
@@ -17,7 +19,7 @@ final owedToMeGroupsProvider = Provider<List<GroupModel>>((ref) {
 
 /// Provider for groups where user owes money (myBalance < 0)
 final iOweGroupsProvider = Provider<List<GroupModel>>((ref) {
-  final groups = ref.watch(dashboardProvider).value?.recentGroups ?? const [];
+  final groups = ref.watch(groupsProvider).value ?? const <GroupModel>[];
   return groups
       .where((g) => g.myBalance < 0)
       .toList()

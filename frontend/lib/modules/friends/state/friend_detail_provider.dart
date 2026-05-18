@@ -1,3 +1,4 @@
+import 'package:collection/collection.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../data/expenses/expenses_repository.dart';
@@ -43,9 +44,19 @@ final friendDetailProvider =
     );
   }
 
+  // Fall back to a placeholder UserModel if the friend has been removed
+  // from every shared group between fetch and resolve — better an "Unknown"
+  // detail screen than a StateError crash.
   final friend = sharedGroups
-      .expand((g) => g.members)
-      .firstWhere((m) => m.id == friendId);
+          .expand((g) => g.members)
+          .firstWhereOrNull((m) => m.id == friendId) ??
+      UserModel(
+        id: friendId,
+        name: 'Unknown',
+        email: '',
+        phone: '',
+        createdAt: DateTime.now(),
+      );
 
   // Fetch expenses for every shared group in parallel.
   final repo = ref.read(expensesRepositoryProvider);

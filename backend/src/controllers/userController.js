@@ -350,8 +350,23 @@ const getDashboard = async (req, res, next) => {
     // Positive amount = others owe me, negative = I owe others.
     // Combines expenses (someone paying for someone else) AND settlements
     // (a payment that reduces the underlying debt).
+    // The user's "active" group set: membership row alive AND group itself
+    // not soft-deleted. Aligning this with Group.findByUserId so the
+    // dashboard summary cards match the sum of per-group myBalance values
+    // shown in the "You're owed" / "You owe" detail screens. (Without the
+    // groups.deleted_at filter, leftover expenses in soft-deleted groups
+    // still counted into the dashboard total but vanished from the
+    // breakdown — root cause of the ₹X mismatch.)
     const balancesResult = await query(
-      `SELECT COALESCE(SUM(GREATEST(net, 0)), 0) AS you_are_owed,
+      `WITH active_groups AS (
+         SELECT g.id AS group_id
+         FROM groups g
+         JOIN group_members gm ON gm.group_id = g.id
+         WHERE gm.user_id = $1
+           AND gm.deleted_at IS NULL
+           AND g.deleted_at IS NULL
+       )
+       SELECT COALESCE(SUM(GREATEST(net, 0)), 0) AS you_are_owed,
               COALESCE(SUM(GREATEST(-net, 0)), 0) AS you_owe,
               COALESCE(SUM(net), 0) AS total
        FROM (
@@ -365,10 +380,7 @@ const getDashboard = async (req, res, next) => {
            FROM expenses e
            JOIN expense_splits es ON es.expense_id = e.id
            WHERE e.deleted_at IS NULL
-             AND e.group_id IN (
-               SELECT group_id FROM group_members
-               WHERE user_id = $1 AND deleted_at IS NULL
-             )
+             AND e.group_id IN (SELECT group_id FROM active_groups)
            GROUP BY e.group_id
            UNION ALL
            SELECT s.group_id,
@@ -380,10 +392,7 @@ const getDashboard = async (req, res, next) => {
            FROM settlements s
            WHERE s.deleted_at IS NULL
              AND (s.status IS NULL OR s.status NOT IN ('failed', 'cancelled'))
-             AND s.group_id IN (
-               SELECT group_id FROM group_members
-               WHERE user_id = $1 AND deleted_at IS NULL
-             )
+             AND s.group_id IN (SELECT group_id FROM active_groups)
            GROUP BY s.group_id
          ) all_contributions
          GROUP BY group_id
@@ -629,6 +638,171 @@ const exportUserData = async (req, res, next) => {
   }
 };
 
+/**
+ * GET /api/v1/users/:id/reports?period=month|quarter|year
+ *
+ * Aggregated spending breakdown for the Reports screen. All money figures
+ * are in the user's preferred currency (the dashboard already mixes
+ * currencies, this endpoint follows the same convention — sums are taken
+ * raw, no FX conversion).
+ *
+ * Window semantics (all relative to NOW):
+ *   month   → from start of the *current* calendar month
+ *   quarter → from start of (current month - 2)  (covers 3 months)
+ *   year    → from start of (current month - 11) (covers 12 months)
+ *
+ * Returns:
+ *   totalSpending    — Σ (es.amount) for splits belonging to the caller,
+ *                      within the window, across active groups.
+ *   youOwe / owedToYou — current pairwise *balances* (NOT period-windowed —
+ *                      these are point-in-time snapshots of what's outstanding
+ *                      right now, same definition the dashboard uses).
+ *   categorySpending — { categoryId: amount } for the caller's splits, window.
+ *   monthlySpending  — { 'YYYY-MM': amount } per calendar month in the window.
+ *   topCategories    — categorySpending sorted desc, top 5, with categoryId.
+ */
+const getReports = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    if (id !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        error: 'You can only fetch your own reports',
+      });
+    }
+
+    const period = (req.query.period || 'month').toString().toLowerCase();
+    let windowStartSql;
+    switch (period) {
+      case 'year':
+        windowStartSql = "date_trunc('month', NOW()) - INTERVAL '11 months'";
+        break;
+      case 'quarter':
+        windowStartSql = "date_trunc('month', NOW()) - INTERVAL '2 months'";
+        break;
+      case 'month':
+      default:
+        windowStartSql = "date_trunc('month', NOW())";
+        break;
+    }
+
+    // Snapshot of current outstanding balances — same shape as dashboard's
+    // you_owe / you_are_owed numbers. We intentionally do NOT period-window
+    // these (debts don't have a "this month" — they're either outstanding
+    // now or settled).
+    const balancesResult = await query(
+      `WITH active_groups AS (
+         SELECT g.id AS group_id
+         FROM groups g
+         JOIN group_members gm ON gm.group_id = g.id
+         WHERE gm.user_id = $1
+           AND gm.deleted_at IS NULL
+           AND g.deleted_at IS NULL
+       )
+       SELECT COALESCE(SUM(GREATEST(net, 0)), 0) AS you_are_owed,
+              COALESCE(SUM(GREATEST(-net, 0)), 0) AS you_owe
+       FROM (
+         SELECT group_id, SUM(contribution) AS net FROM (
+           SELECT e.group_id,
+                  SUM(CASE
+                    WHEN e.paid_by = $1 AND es.user_id != $1 THEN es.amount
+                    WHEN e.paid_by != $1 AND es.user_id = $1 THEN -es.amount
+                    ELSE 0
+                  END) AS contribution
+           FROM expenses e
+           JOIN expense_splits es ON es.expense_id = e.id
+           WHERE e.deleted_at IS NULL
+             AND e.group_id IN (SELECT group_id FROM active_groups)
+           GROUP BY e.group_id
+           UNION ALL
+           SELECT s.group_id,
+                  SUM(CASE
+                    WHEN s.from_user_id = $1 THEN s.amount
+                    WHEN s.to_user_id   = $1 THEN -s.amount
+                    ELSE 0
+                  END) AS contribution
+           FROM settlements s
+           WHERE s.deleted_at IS NULL
+             AND (s.status IS NULL OR s.status NOT IN ('failed', 'cancelled'))
+             AND s.group_id IN (SELECT group_id FROM active_groups)
+           GROUP BY s.group_id
+         ) all_contributions
+         GROUP BY group_id
+       ) per_group`,
+      [id]
+    );
+    const balances = balancesResult.rows[0] || {};
+
+    // Per-category spend = amount the caller *consumed* (their own split row)
+    // within the window. Counts the caller's portion of every expense in
+    // every group they're a member of.
+    const categoryResult = await query(
+      `SELECT COALESCE(NULLIF(e.category, ''), 'other') AS category,
+              COALESCE(SUM(es.amount), 0) AS amount
+         FROM expense_splits es
+         JOIN expenses e ON e.id = es.expense_id
+         JOIN group_members gm ON gm.group_id = e.group_id AND gm.user_id = $1 AND gm.deleted_at IS NULL
+         JOIN groups g ON g.id = e.group_id AND g.deleted_at IS NULL
+        WHERE es.user_id = $1
+          AND es.deleted_at IS NULL
+          AND e.deleted_at IS NULL
+          AND e.expense_date >= ${windowStartSql}
+        GROUP BY COALESCE(NULLIF(e.category, ''), 'other')
+        ORDER BY amount DESC`,
+      [id]
+    );
+
+    const categorySpending = {};
+    for (const row of categoryResult.rows) {
+      categorySpending[row.category] = parseFloat(row.amount);
+    }
+    const totalSpending = Object.values(categorySpending)
+      .reduce((sum, v) => sum + v, 0);
+    const topCategories = Object.entries(categorySpending)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([category, amount]) => ({ category, amount }));
+
+    // Monthly spend series — bucketed by calendar month so the bar chart's
+    // X axis has stable labels regardless of timezone. Months in the window
+    // with zero spend are filled in client-side.
+    const monthlyResult = await query(
+      `SELECT to_char(date_trunc('month', e.expense_date), 'YYYY-MM') AS month,
+              COALESCE(SUM(es.amount), 0) AS amount
+         FROM expense_splits es
+         JOIN expenses e ON e.id = es.expense_id
+         JOIN group_members gm ON gm.group_id = e.group_id AND gm.user_id = $1 AND gm.deleted_at IS NULL
+         JOIN groups g ON g.id = e.group_id AND g.deleted_at IS NULL
+        WHERE es.user_id = $1
+          AND es.deleted_at IS NULL
+          AND e.deleted_at IS NULL
+          AND e.expense_date >= ${windowStartSql}
+        GROUP BY date_trunc('month', e.expense_date)
+        ORDER BY date_trunc('month', e.expense_date)`,
+      [id]
+    );
+    const monthlySpending = {};
+    for (const row of monthlyResult.rows) {
+      monthlySpending[row.month] = parseFloat(row.amount);
+    }
+
+    res.json({
+      success: true,
+      data: {
+        period,
+        totalSpending,
+        youOwe: parseFloat(balances.you_owe || 0),
+        owedToYou: parseFloat(balances.you_are_owed || 0),
+        categorySpending,
+        monthlySpending,
+        topCategories,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export default {
   getUser,
   getUserByPhone,
@@ -640,4 +814,5 @@ export default {
   removeFcmToken,
   getDashboard,
   exportUserData,
+  getReports,
 };

@@ -1,3 +1,4 @@
+import 'package:collection/collection.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
 
@@ -133,12 +134,9 @@ class CategoryModel extends Equatable {
         other,
       ];
 
-  /// Get category by ID
+  /// Get category by ID. Falls back to `other` for unknown ids so callers
+  /// never see null and can render the fallback icon.
   static CategoryModel? fromId(String id) {
-    try {
-      return all.firstWhere((cat) => cat.id == id);
-    } catch (e) {
-      return other;
-    }
+    return all.firstWhereOrNull((cat) => cat.id == id) ?? other;
   }
 }

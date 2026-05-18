@@ -1,10 +1,15 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:collection/collection.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/currency_formatter.dart';
-import '../../../core/services/invoice_scanner_service.dart';
 import '../../../data/expenses/expenses_repository.dart';
 import '../../../models/models.dart';
 import '../../../modules/auth/state/auth_provider.dart';
@@ -12,6 +17,7 @@ import '../../../modules/dashboard/state/dashboard_provider.dart';
 import '../../../modules/groups/state/group_detail_provider.dart';
 import '../../../modules/groups/state/groups_provider.dart';
 import '../state/add_expense_provider.dart';
+import '../state/expense_detail_provider.dart';
 import '../widgets/amount_input_widget.dart';
 import '../widgets/category_selector_widget.dart';
 import '../widgets/split_selector_widget.dart';
@@ -21,7 +27,15 @@ import '../widgets/split_breakdown_widget.dart';
 class AddExpenseScreen extends ConsumerStatefulWidget {
   final String? groupId;
 
-  const AddExpenseScreen({Key? key, this.groupId}) : super(key: key);
+  /// When non-null, the screen runs in edit mode: it loads the existing
+  /// expense, hydrates the form, and PUTs to /expenses/:id on save instead
+  /// of POSTing a new one. The title bar also reads "Edit expense".
+  final String? expenseId;
+
+  const AddExpenseScreen({Key? key, this.groupId, this.expenseId})
+      : super(key: key);
+
+  bool get isEditing => expenseId != null;
 
   @override
   ConsumerState<AddExpenseScreen> createState() => _AddExpenseScreenState();
@@ -37,6 +51,23 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   /// to slide the breakdown into view after the user picks Exact/%/Shares.
   final GlobalKey _breakdownKey = GlobalKey();
 
+  /// Latch — set once the widget.groupId has been pushed into state. Stops
+  /// the build() loop from re-scheduling the same write every frame.
+  bool _groupIdSynced = false;
+
+  /// Debounce on the title TextField. Each keystroke previously wrote
+  /// straight to the provider, which rebuilds the entire 1300-line screen
+  /// (split breakdown, member list, etc.) — visible lag on lower-end
+  /// devices. 200 ms collapses a typed word into one rebuild.
+  Timer? _titleDebounce;
+
+  /// Edit-mode latches.
+  ///   _hydrating    — true while the initial GET /expenses/:id is in flight;
+  ///                   used to show the spinner overlay and block save.
+  ///   _hydrateError — last hydration failure (rendered as inline error).
+  bool _hydrating = false;
+  String? _hydrateError;
+
   @override
   void initState() {
     super.initState();
@@ -44,14 +75,95 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     _notesController = TextEditingController();
     _equalSplitSearchController = TextEditingController();
     _scrollController = ScrollController();
+
+    if (widget.isEditing) {
+      _hydrating = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _hydrateFromExpense());
+    }
+  }
+
+  /// Fetch the existing expense and seed [addExpenseProvider] + the text
+  /// controllers. Runs exactly once on entry to edit mode.
+  Future<void> _hydrateFromExpense() async {
+    final id = widget.expenseId;
+    if (id == null) return;
+    try {
+      final expense = await ref.read(expensesRepositoryProvider).getById(id);
+      if (!mounted) return;
+
+      // Build the splits map in the same shape AddExpenseState uses:
+      //   equal/exact → amount, percentage → percent, shares → share count.
+      // includedMemberIds is everyone with a non-zero entry.
+      final splits = <String, double>{};
+      final included = <String>{};
+      for (final s in expense.splits) {
+        double value;
+        switch (expense.splitType) {
+          case SplitType.percentage:
+            value = s.percentage;
+            break;
+          case SplitType.shares:
+            value = s.shares;
+            break;
+          case SplitType.exact:
+          case SplitType.equal:
+            value = s.owedShare;
+            break;
+        }
+        splits[s.userId] = value;
+        if (value > 0) included.add(s.userId);
+      }
+
+      _titleController.text = expense.title;
+      _notesController.text = expense.notes ?? '';
+
+      ref.read(addExpenseProvider.notifier).state = AddExpenseState(
+        title: expense.title,
+        amount: expense.amount,
+        currency: expense.currency,
+        category: expense.category,
+        paidBy: expense.paidBy,
+        splitType: expense.splitType,
+        splits: splits,
+        includedMemberIds: included,
+        date: expense.date,
+        notes: expense.notes,
+        groupId: expense.groupId,
+        receiptBase64: expense.receiptBase64,
+      );
+
+      setState(() {
+        _hydrating = false;
+        // Edit mode reuses the equal-split auto-recalc path; setting the
+        // groupId-synced latch prevents the build() block from re-pushing
+        // widget.groupId (which is null in edit mode) over the loaded value.
+        _groupIdSynced = true;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _hydrating = false;
+        _hydrateError = e.toString();
+      });
+    }
   }
 
   @override
   void dispose() {
+    _titleDebounce?.cancel();
     _titleController.dispose();
     _notesController.dispose();
     _equalSplitSearchController.dispose();
     _scrollController.dispose();
+    // Edit mode hydrates the shared provider with the expense being edited.
+    // If the user pops without saving, that hydrated state would otherwise
+    // bleed into the next Add Expense session — reset it on exit.
+    if (widget.isEditing) {
+      Future.microtask(() {
+        ref.read(addExpenseProvider.notifier).state =
+            AddExpenseState(date: DateTime.now());
+      });
+    }
     super.dispose();
   }
 
@@ -72,11 +184,68 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final screenWidth = MediaQuery.of(context).size.width;
+
+    // Edit mode short-circuits: spinner while the GET is in flight, error
+    // page with retry if it failed. We never show the half-empty form.
+    if (widget.isEditing && (_hydrating || _hydrateError != null)) {
+      return Scaffold(
+        backgroundColor: AppColors.background(isDark),
+        appBar: _TopBar(
+          title: 'Edit expense',
+          onClose: _closeScreen,
+          isDark: isDark,
+        ),
+        body: Center(
+          child: _hydrateError != null
+              ? Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Could not load expense',
+                        style: AppTextStyles.body1(isDark).copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _hydrateError!,
+                        textAlign: TextAlign.center,
+                        style: AppTextStyles.body2(isDark).copyWith(
+                          color: AppColors.textSecondary(isDark),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      OutlinedButton(
+                        onPressed: () {
+                          setState(() {
+                            _hydrateError = null;
+                            _hydrating = true;
+                          });
+                          _hydrateFromExpense();
+                        },
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                )
+              : const CircularProgressIndicator(),
+        ),
+      );
+    }
+
     final expenseState = ref.watch(addExpenseProvider);
 
-    // Initialize with groupId if provided and not already set
-    if (widget.groupId != null && expenseState.groupId != widget.groupId) {
+    // Initialise expense.groupId from the route param exactly once.
+    // The latch prevents re-scheduling the same write every rebuild even if
+    // the comparison briefly regresses (e.g. provider invalidation).
+    if (!_groupIdSynced &&
+        widget.groupId != null &&
+        expenseState.groupId != widget.groupId) {
+      _groupIdSynced = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
         ref.read(addExpenseProvider.notifier).state =
             expenseState.copyWith(groupId: widget.groupId);
       });
@@ -89,10 +258,16 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     final List<UserModel> groupMembers =
         groupAsync?.value?.members ?? [];
 
-    // Auto-initialize or recalculate splits for equal split
+    // Auto-initialise / recalculate splits for equal split.
+    //
+    // Critically: change-detection uses STRUCTURAL equality (`mapEquals`,
+    // `setEquals`). Map/Set use reference equality by default, so the old
+    // `newSplits != expenseState.splits` always evaluated true and scheduled
+    // a state write every frame (= permanent rebuild loop, ~60 writes/sec).
     if (expenseState.splitType == SplitType.equal && groupMembers.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        // Initialize with all members included by default
+        if (!mounted) return;
+
         Set<String> includedIds = expenseState.includedMemberIds;
         if (includedIds.isEmpty) {
           includedIds = Set<String>.from(groupMembers.map((m) => m.id));
@@ -103,27 +278,25 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
           final equalShare = includedCount > 0
               ? (expenseState.amount / includedCount).toDouble()
               : 0.0;
-          final newSplits = <String, double>{};
+          final newSplits = <String, double>{
+            for (final member in groupMembers)
+              member.id: includedIds.contains(member.id) ? equalShare : 0,
+          };
 
-          // Calculate splits for included members only
-          for (final member in groupMembers) {
-            if (includedIds.contains(member.id)) {
-              newSplits[member.id] = equalShare;
-            } else {
-              newSplits[member.id] = 0;
-            }
-          }
+          final splitsChanged =
+              !mapEquals(newSplits, expenseState.splits);
+          final includedChanged =
+              !setEquals(includedIds, expenseState.includedMemberIds);
 
-          // Update if splits or includedMemberIds changed
-          if (newSplits != expenseState.splits ||
-              includedIds != expenseState.includedMemberIds) {
+          if (splitsChanged || includedChanged) {
             ref.read(addExpenseProvider.notifier).state = expenseState.copyWith(
               splits: newSplits,
               includedMemberIds: includedIds,
             );
           }
-        } else if (includedIds != expenseState.includedMemberIds) {
-          // Initialize includedMemberIds even if amount is 0
+        } else if (!setEquals(includedIds, expenseState.includedMemberIds)) {
+          // Amount=0: still initialise includedMemberIds so the UI shows
+          // every member checked.
           ref.read(addExpenseProvider.notifier).state =
               expenseState.copyWith(includedMemberIds: includedIds);
         }
@@ -156,7 +329,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       child: Scaffold(
       backgroundColor: AppColors.background(isDark),
       appBar: _TopBar(
-        title: 'Add expense',
+        title: widget.isEditing ? 'Edit expense' : 'Add expense',
         onClose: _closeScreen,
         isDark: isDark,
       ),
@@ -170,11 +343,11 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               children: [
                 _buildInvoiceSection(isDark, state),
                 const SizedBox(height: 24),
+                _buildTitleSection(isDark),
+                const SizedBox(height: 20),
                 _buildAmountSection(isDark, state),
                 const SizedBox(height: 20),
                 _buildMemberSection(isDark, state, groupMembers),
-                const SizedBox(height: 20),
-                _buildDescriptionSection(isDark),
                 const SizedBox(height: 20),
                 _buildCategorySection(isDark, state),
                 const SizedBox(height: 20),
@@ -208,7 +381,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     return Scaffold(
       backgroundColor: AppColors.background(isDark),
       appBar: _TopBar(
-        title: 'Add expense',
+        title: widget.isEditing ? 'Edit expense' : 'Add expense',
         onClose: _closeScreen,
         isDark: isDark,
       ),
@@ -225,11 +398,11 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                   children: [
                     _buildInvoiceSection(isDark, state),
                     const SizedBox(height: 28),
+                    _buildTitleSection(isDark),
+                    const SizedBox(height: 24),
                     _buildAmountSection(isDark, state),
                     const SizedBox(height: 24),
                     _buildMemberSection(isDark, state, groupMembers),
-                    const SizedBox(height: 24),
-                    _buildDescriptionSection(isDark),
                     const SizedBox(height: 24),
                     _buildCategorySection(isDark, state),
                     const SizedBox(height: 24),
@@ -264,7 +437,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     return Scaffold(
       backgroundColor: AppColors.background(isDark),
       appBar: _TopBar(
-        title: 'Add expense',
+        title: widget.isEditing ? 'Edit expense' : 'Add expense',
         onClose: _closeScreen,
         isDark: isDark,
       ),
@@ -293,11 +466,11 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                           child: SingleChildScrollView(
                             child: Column(
                               children: [
+                                _buildTitleSection(isDark),
+                                const SizedBox(height: 20),
                                 _buildAmountSection(isDark, state),
                                 const SizedBox(height: 20),
                                 _buildMemberSection(isDark, state, groupMembers),
-                                const SizedBox(height: 20),
-                                _buildDescriptionSection(isDark),
                                 const SizedBox(height: 20),
                                 _buildCategorySection(isDark, state),
                                 const SizedBox(height: 20),
@@ -329,45 +502,28 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     );
   }
 
-  // Invoice upload section - first step in streamlined flow
+  // Receipt upload — picks an image and stores it as base64 to attach as
+  // proof on save. (OCR scanning is intentionally disabled for now.)
   Widget _buildInvoiceSection(bool isDark, AddExpenseState state) {
     return Semantics(
-      label: 'Invoice upload section',
+      label: 'Receipt upload section',
       child: InvoiceUploadWidget(
-        onImageSelected: (imagePath, file) {
-          ref
-              .read(addExpenseProvider.notifier)
-              .state = state.copyWith(invoiceImagePath: imagePath);
-        },
-        onProcessing: () {
-          ref.read(addExpenseProvider.notifier).state =
-              state.copyWith(isScanning: true);
-        },
-        onComplete: () async {
-          // Mock invoice scanning
-          if (state.invoiceImagePath != null) {
-            final result = await InvoiceScannerService.scanInvoiceImage(
-              state.invoiceImagePath!,
+        onImageSelected: (imagePath, file) async {
+          // Read once → base64 once. Re-using the same bytes both for the
+          // preview tile (handled by the widget) and the POST body.
+          try {
+            final bytes = await File(imagePath).readAsBytes();
+            final encoded = base64Encode(bytes);
+            ref.read(addExpenseProvider.notifier).state = state.copyWith(
+              invoiceImagePath: imagePath,
+              receiptBase64: encoded,
             );
-
-            if (mounted) {
-              ref.read(addExpenseProvider.notifier).state = state.copyWith(
-                amount: result.amount,
-                category: CategoryModel(
-                  id: result.category,
-                  name: result.category,
-                  icon: Icons.receipt_long_rounded,
-                  colorHex: '#FF6B6B',
-                ),
-                date: result.date,
-                title: result.description,
-                isScanning: false,
-                invoiceScanned: true,
-              );
-            }
+          } catch (_) {
+            // Fall back to just storing the path; save will skip the receipt.
+            ref.read(addExpenseProvider.notifier).state =
+                state.copyWith(invoiceImagePath: imagePath);
           }
         },
-        isLoading: state.isScanning,
       ),
     );
   }
@@ -391,39 +547,34 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
             },
           ),
         ),
-        if (state.invoiceScanned && state.amount > 0)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.check_circle_rounded,
-                  size: 16,
-                  color: AppColors.success,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  'Auto-detected from invoice',
-                  style: AppTextStyles.caption(isDark)
-                      .copyWith(color: AppColors.success),
-                ),
-              ],
-            ),
-          ),
       ],
     );
   }
 
-  Widget _buildDescriptionSection(bool isDark) {
+  Widget _buildTitleSection(bool isDark) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SectionTitle(label: 'DESCRIPTION', isDark: isDark),
+        Row(
+          children: [
+            _SectionTitle(label: 'TITLE', isDark: isDark),
+            const SizedBox(width: 4),
+            // Asterisk to flag required-ness; reads as '*' but uses the
+            // app's warning color so it stands out without a wall of text.
+            Text(
+              '*',
+              style: AppTextStyles.caption(isDark).copyWith(
+                color: AppColors.warning,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 10),
         TextField(
           controller: _titleController,
           decoration: InputDecoration(
-            hintText: 'Dinner, movie, groceries...',
+            hintText: 'Dinner, movie, groceries…',
             filled: true,
             fillColor: AppColors.inputFill(isDark),
             border: OutlineInputBorder(
@@ -432,8 +583,13 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
             ),
           ),
           onChanged: (value) {
-            ref.read(addExpenseProvider.notifier).state =
-                ref.read(addExpenseProvider).copyWith(title: value);
+            // Debounce — see _titleDebounce field for rationale.
+            _titleDebounce?.cancel();
+            _titleDebounce = Timer(const Duration(milliseconds: 200), () {
+              if (!mounted) return;
+              ref.read(addExpenseProvider.notifier).state =
+                  ref.read(addExpenseProvider).copyWith(title: value);
+            });
           },
         ),
       ],
@@ -458,25 +614,6 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
             },
           ),
         ),
-        if (state.invoiceScanned && state.category != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.check_circle_rounded,
-                  size: 16,
-                  color: AppColors.success,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  'Auto-detected from invoice',
-                  style: AppTextStyles.caption(isDark)
-                      .copyWith(color: AppColors.success),
-                ),
-              ],
-            ),
-          ),
       ],
     );
   }
@@ -933,10 +1070,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     final me = ref.watch(authProvider).user;
     // Resolve display payer: explicit pick > the current user (default).
     final UserModel? payer = state.paidBy ??
-        groupMembers
-            .where((m) => me != null && m.id == me.id)
-            .cast<UserModel?>()
-            .firstWhere((_) => true, orElse: () => null);
+        (me == null
+            ? null
+            : groupMembers.firstWhereOrNull((m) => m.id == me.id));
     final isMe = me != null && payer != null && payer.id == me.id;
     final displayName = payer == null
         ? 'Me'
@@ -1243,6 +1379,15 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
 
   Future<void> _handleSave() async {
     final state = ref.read(addExpenseProvider);
+    // Defensive: the Save button is already gated by state.isValid, but a
+    // bypass (hot reload, swipe gesture) could still hit this — surface a
+    // clear message rather than letting the model send an empty title.
+    if (state.title == null || state.title!.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Add a title before saving.')),
+      );
+      return;
+    }
     if (state.groupId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Pick a group before saving the expense.')),
@@ -1259,23 +1404,19 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     }
 
     final groups = ref.read(groupsProvider).value ?? const <GroupModel>[];
-    final group = groups
-        .where((g) => g.id == groupId)
-        .cast<GroupModel?>()
-        .firstWhere((g) => true, orElse: () => null);
+    final group = groups.firstWhereOrNull((g) => g.id == groupId);
     final members = group?.members ?? const <UserModel>[];
 
     final paidBy = state.paidBy ??
-        (members.where((m) => m.id == currentUser.id).isNotEmpty
-            ? members.firstWhere((m) => m.id == currentUser.id)
-            : UserModel(
-                id: currentUser.id,
-                name: currentUser.name,
-                email: currentUser.email,
-                phone: currentUser.phone,
-                avatarUrl: currentUser.avatarUrl,
-                createdAt: currentUser.createdAt,
-              ));
+        members.firstWhereOrNull((m) => m.id == currentUser.id) ??
+        UserModel(
+          id: currentUser.id,
+          name: currentUser.name,
+          email: currentUser.email,
+          phone: currentUser.phone,
+          avatarUrl: currentUser.avatarUrl,
+          createdAt: currentUser.createdAt,
+        );
 
     final memberById = {for (final m in members) m.id: m};
     final includedIds = state.includedMemberIds.isNotEmpty
@@ -1347,21 +1488,39 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
         state.copyWith(isLoading: true, error: null);
 
     try {
-      await ref.read(expensesRepositoryProvider).create(
-            groupId: groupId,
-            description: (state.title == null || state.title!.trim().isEmpty)
-                ? 'Untitled'
-                : state.title!.trim(),
-            amount: state.amount,
-            currency: state.currency,
-            category: (state.category ?? CategoryModel.other).id,
-            paidById: paidBy.id,
-            paidByName: paidBy.name,
-            splitType: backendSplitType(state.splitType),
-            notes: state.notes,
-            expenseDate: state.date,
-            participants: participants,
-          );
+      // Title is required and validated by state.isValid before reaching
+      // here; trim defensively but never substitute "Untitled".
+      final repo = ref.read(expensesRepositoryProvider);
+      if (widget.isEditing) {
+        await repo.update(
+          widget.expenseId!,
+          description: state.title!.trim(),
+          amount: state.amount,
+          currency: state.currency,
+          category: (state.category ?? CategoryModel.other).id,
+          notes: state.notes,
+          expenseDate: state.date,
+          receiptBase64: state.receiptBase64,
+          paidById: paidBy.id,
+          splitType: backendSplitType(state.splitType),
+          participants: participants,
+        );
+      } else {
+        await repo.create(
+          groupId: groupId,
+          description: state.title!.trim(),
+          amount: state.amount,
+          currency: state.currency,
+          category: (state.category ?? CategoryModel.other).id,
+          paidById: paidBy.id,
+          paidByName: paidBy.name,
+          splitType: backendSplitType(state.splitType),
+          notes: state.notes,
+          expenseDate: state.date,
+          receiptBase64: state.receiptBase64,
+          participants: participants,
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       ref.read(addExpenseProvider.notifier).state =
@@ -1374,13 +1533,17 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
 
     ref.invalidate(dashboardProvider);
     ref.invalidate(groupDetailProvider(groupId));
+    if (widget.isEditing) {
+      // Bust the detail-screen cache so the popped-to screen reflects edits.
+      ref.invalidate(expenseDetailProvider(widget.expenseId!));
+    }
 
     if (!mounted) return;
     ref.read(addExpenseProvider.notifier).state =
         AddExpenseState(date: DateTime.now());
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: const Text('✓ Expense saved'),
+        content: Text(widget.isEditing ? '✓ Expense updated' : '✓ Expense saved'),
         backgroundColor: AppColors.success,
         duration: const Duration(seconds: 2),
       ),

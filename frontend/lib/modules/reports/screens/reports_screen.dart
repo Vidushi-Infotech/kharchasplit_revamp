@@ -29,9 +29,7 @@ class ReportsScreen extends ConsumerWidget {
         error: (err, stack) => ErrorStateWidget(
           title: 'Failed to load reports',
           message: 'Unable to fetch report data. Please try again.',
-          onRetry: () {
-            // Trigger refresh
-          },
+          onRetry: () => ref.invalidate(reportsProvider),
         ),
         data: (report) {
           if (screenWidth < 600) {
@@ -455,7 +453,10 @@ class ReportsScreen extends ConsumerWidget {
                             borderRadius: BorderRadius.circular(2),
                           ),
                           child: FractionallySizedBox(
-                            widthFactor: category.amount / report.totalSpending,
+                            widthFactor: report.totalSpending > 0
+                                ? (category.amount / report.totalSpending)
+                                    .clamp(0.0, 1.0)
+                                : 0,
                             alignment: Alignment.centerLeft,
                             child: Container(
                               decoration: BoxDecoration(

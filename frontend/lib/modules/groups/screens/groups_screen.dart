@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -24,9 +26,11 @@ class _GroupsScreenState extends ConsumerState<GroupsScreen> {
   _BalanceFilter _filter = _BalanceFilter.all;
   String _query = '';
   bool _isSearching = false;
+  Timer? _searchDebounce;
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     _searchFocus.dispose();
     super.dispose();
@@ -40,11 +44,23 @@ class _GroupsScreenState extends ConsumerState<GroupsScreen> {
   }
 
   void _closeSearch() {
+    _searchDebounce?.cancel();
     _searchController.clear();
     _searchFocus.unfocus();
     setState(() {
       _isSearching = false;
       _query = '';
+    });
+  }
+
+  /// 250 ms debounce on every keystroke. Cancels the previous pending
+  /// rebuild and only commits the latest query when typing settles. Cuts
+  /// rebuild count from one-per-keystroke down to one-per-pause.
+  void _onSearchChanged(String q) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 250), () {
+      if (!mounted) return;
+      setState(() => _query = q);
     });
   }
 
@@ -97,7 +113,7 @@ class _GroupsScreenState extends ConsumerState<GroupsScreen> {
                       searchFocus: _searchFocus,
                       onSearchTap: _openSearch,
                       onSearchClose: _closeSearch,
-                      onSearchChanged: (q) => setState(() => _query = q),
+                      onSearchChanged: _onSearchChanged,
                     ),
                   ),
                   if (allGroups.isEmpty)

@@ -10,6 +10,7 @@
 import admin from 'firebase-admin';
 import { query } from '../config/database.js';
 import { isFirebaseReady } from '../config/firebaseAdmin.js';
+import { logger } from '../utils/logger.js';
 
 /**
  * Notification types. `prefKey` maps each type to the column in
@@ -261,7 +262,7 @@ class NotificationService {
 
   static async _pushMany(tokens, type, data, additionalData) {
     if (!isFirebaseReady()) {
-      console.log(`[NotificationService] Skipping ${type} — Firebase not initialized`);
+      logger.debug({ type }, '[NotificationService] Skipping — Firebase not initialized');
       return { success: false, reason: 'firebase_not_ready' };
     }
     if (tokens.length === 0) {
@@ -282,7 +283,7 @@ class NotificationService {
     try {
       const config = NOTIFICATION_TYPES[type];
       if (!config) {
-        console.error(`[NotificationService] Unknown notification type: ${type}`);
+        logger.error({ type }, '[NotificationService] Unknown notification type');
         return { success: false, reason: 'unknown_type' };
       }
 
@@ -313,13 +314,17 @@ class NotificationService {
       const response = await admin.messaging().send(message);
       return { success: true, messageId: response };
     } catch (error) {
-      console.error('[NotificationService] Send failed:', error.code || error.message);
-      if (
+      // Token-invalidation paths are routine cleanup, not bugs — log at warn.
+      // Any other FCM failure is a real bug worth surfacing.
+      const isInvalidToken =
         error.code === 'messaging/registration-token-not-registered' ||
         error.code === 'messaging/invalid-registration-token' ||
-        error.code === 'messaging/invalid-argument'
-      ) {
+        error.code === 'messaging/invalid-argument';
+      if (isInvalidToken) {
+        logger.warn({ code: error.code }, '[NotificationService] Stale FCM token — invalidating');
         await this.invalidateToken(token);
+      } else {
+        logger.error({ err: error, type }, '[NotificationService] FCM send failed');
       }
       return { success: false, error: error.message };
     }
@@ -337,9 +342,9 @@ class NotificationService {
          WHERE fcm_token = $1`,
         [token],
       );
-      console.log('[NotificationService] Invalidated stale token');
+      logger.debug('[NotificationService] Invalidated stale token');
     } catch (error) {
-      console.error('[NotificationService] Error invalidating token:', error);
+      logger.error({ err: error }, '[NotificationService] Error invalidating token');
     }
   }
 
@@ -370,7 +375,7 @@ class NotificationService {
       );
       return { success: true };
     } catch (error) {
-      console.error('[NotificationService] registerDevice failed:', error);
+      logger.error({ err: error, userId }, '[NotificationService] registerDevice failed');
       return { success: false, error: error.message };
     }
   }

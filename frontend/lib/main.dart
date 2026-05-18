@@ -1,11 +1,13 @@
 import 'dart:async';
 
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'core/services/app_logger.dart';
 import 'core/services/notification_router.dart';
 import 'core/services/push_service.dart';
 import 'core/theme/app_theme.dart';
@@ -13,38 +15,61 @@ import 'core/theme/theme_provider.dart';
 import 'core/routing/app_router.dart';
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  // Status bar: transparent background with DARK icons/text across all screens
-  // so the system clock/battery read against the app's light backgrounds.
-  SystemChrome.setSystemUIOverlayStyle(
-    const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.dark, // Android: dark icons
-      statusBarBrightness: Brightness.light, // iOS: light bg → dark content
-      systemNavigationBarColor: Colors.transparent,
-      systemNavigationBarIconBrightness: Brightness.dark,
-    ),
-  );
+  // runZonedGuarded catches uncaught async errors that escape the framework.
+  // Combined with the two onError hooks below, every unhandled exception
+  // (sync widget build, async gap, isolate top-level) lands in Crashlytics.
+  runZonedGuarded<Future<void>>(() async {
+    WidgetsFlutterBinding.ensureInitialized();
 
-  // Firebase + push notifications. Wrapped so a missing config doesn't
-  // crash app startup on platforms where we haven't set it up yet (web/desktop).
-  if (PushService.isSupportedPlatform) {
-    try {
-      await Firebase.initializeApp();
-      FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-      await PushService.instance.init();
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('[main] Firebase init failed: $e');
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.dark,
+        statusBarBrightness: Brightness.light,
+        systemNavigationBarColor: Colors.transparent,
+        systemNavigationBarIconBrightness: Brightness.dark,
+      ),
+    );
+
+    // Firebase + push + Crashlytics. Wrapped so a missing config doesn't
+    // crash app startup on platforms where we haven't set it up yet
+    // (web / desktop).
+    if (PushService.isSupportedPlatform) {
+      try {
+        await Firebase.initializeApp();
+
+        // Crashlytics — collect unhandled Flutter framework errors and
+        // platform-level errors. Disabled in debug to keep stack traces
+        // local; Crashlytics dashboard would otherwise drown in dev noise.
+        await FirebaseCrashlytics.instance
+            .setCrashlyticsCollectionEnabled(!kDebugMode);
+        FlutterError.onError =
+            FirebaseCrashlytics.instance.recordFlutterFatalError;
+        PlatformDispatcher.instance.onError = (error, stack) {
+          FirebaseCrashlytics.instance
+              .recordError(error, stack, fatal: true);
+          return true;
+        };
+
+        FirebaseMessaging.onBackgroundMessage(
+            firebaseMessagingBackgroundHandler);
+        await PushService.instance.init();
+      } catch (e, st) {
+        AppLogger.error('Firebase / push init failed',
+            tag: 'main', error: e, stackTrace: st);
       }
     }
-  }
 
-  runApp(
-    const ProviderScope(
-      child: KharchaSplitApp(),
-    ),
-  );
+    runApp(
+      const ProviderScope(
+        child: KharchaSplitApp(),
+      ),
+    );
+  }, (error, stack) {
+    // Final safety net — anything that escaped the framework's hooks.
+    AppLogger.error('Uncaught zone error',
+        tag: 'main', error: error, stackTrace: stack, fatal: true);
+  });
 }
 
 /// Main app widget wrapped in Consumer to watch theme changes

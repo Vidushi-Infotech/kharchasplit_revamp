@@ -156,7 +156,8 @@ class Expense {
   }
 
   /**
-   * Update expense
+   * Update expense fields (no split changes). Use [updateWithSplits] when the
+   * participant set, amounts, or split type need to change too.
    */
   static async update(id, expenseData) {
     const result = await query(
@@ -167,8 +168,10 @@ class Expense {
            category = COALESCE($4, category),
            receipt_base64 = COALESCE($5, receipt_base64),
            notes = COALESCE($6, notes),
-           expense_date = COALESCE($7, expense_date)
-       WHERE id = $8 AND deleted_at IS NULL
+           expense_date = COALESCE($7, expense_date),
+           paid_by = COALESCE($8, paid_by),
+           split_type = COALESCE($9, split_type)
+       WHERE id = $10 AND deleted_at IS NULL
        RETURNING id, group_id, description, amount, currency, category,
                  paid_by, split_type, notes, expense_date, created_at, updated_at`,
       [
@@ -179,10 +182,83 @@ class Expense {
         expenseData.receiptBase64,
         expenseData.notes,
         expenseData.expenseDate,
-        id
+        expenseData.paidById || expenseData.paidBy || null,
+        expenseData.splitType || null,
+        id,
       ]
     );
     return result.rows[0] || null;
+  }
+
+  /**
+   * Update expense + replace its splits in a single transaction. Used by the
+   * edit-expense flow when amount / payer / split type / participant set
+   * change and the splits need to be recomputed wholesale.
+   */
+  static async updateWithSplits(id, expenseData, participants) {
+    return transaction(async (client) => {
+      const updateRes = await client.query(
+        `UPDATE expenses
+         SET description = COALESCE($1, description),
+             amount = COALESCE($2, amount),
+             currency = COALESCE($3, currency),
+             category = COALESCE($4, category),
+             receipt_base64 = COALESCE($5, receipt_base64),
+             notes = COALESCE($6, notes),
+             expense_date = COALESCE($7, expense_date),
+             paid_by = COALESCE($8, paid_by),
+             split_type = COALESCE($9, split_type)
+         WHERE id = $10 AND deleted_at IS NULL
+         RETURNING id, group_id, description, amount, currency, category,
+                   paid_by, split_type, notes, expense_date, created_at, updated_at`,
+        [
+          expenseData.description,
+          expenseData.amount,
+          expenseData.currency,
+          expenseData.category,
+          expenseData.receiptBase64,
+          expenseData.notes,
+          expenseData.expenseDate,
+          expenseData.paidById || expenseData.paidBy || null,
+          expenseData.splitType || null,
+          id,
+        ]
+      );
+      const expense = updateRes.rows[0];
+      if (!expense) return null;
+
+      // Replace the split rows wholesale. We always wipe first — even when the
+      // caller passes the same member set — so amounts/percentages/shares can
+      // change atomically without leaving stale rows behind.
+      await client.query(
+        'DELETE FROM expense_splits WHERE expense_id = $1',
+        [id]
+      );
+
+      if (Array.isArray(participants) && participants.length > 0) {
+        const values = [];
+        const params = [];
+        let paramIndex = 1;
+        for (const p of participants) {
+          values.push(`($${paramIndex}, $${paramIndex + 1}, $${paramIndex + 2}, $${paramIndex + 3}, $${paramIndex + 4})`);
+          params.push(
+            expense.id,
+            p.userId,
+            p.amount,
+            p.percentage || null,
+            p.shares || null
+          );
+          paramIndex += 5;
+        }
+        await client.query(
+          `INSERT INTO expense_splits (expense_id, user_id, amount, percentage, shares)
+           VALUES ${values.join(', ')}`,
+          params
+        );
+      }
+
+      return expense;
+    });
   }
 
   /**

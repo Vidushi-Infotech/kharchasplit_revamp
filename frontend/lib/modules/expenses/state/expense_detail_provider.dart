@@ -2,18 +2,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../data/expenses/expenses_repository.dart';
 import '../../../models/expense_model.dart';
-import '../../dashboard/state/dashboard_provider.dart';
 
+/// Always fetches the full expense by id — the dashboard / list endpoints
+/// strip heavy fields (`receipt_base64`) from their payloads to keep them
+/// small, so we cannot reuse those cached models on the detail screen.
 final expenseDetailProvider =
     FutureProvider.family<ExpenseModel, String>((ref, expenseId) async {
-  // Cheap path: serve from the dashboard's recent-expenses cache when present.
-  final recent =
-      ref.watch(dashboardProvider).value?.recentExpenses ?? const <ExpenseModel>[];
-  final cached = recent
-      .where((e) => e.id == expenseId)
-      .cast<ExpenseModel?>()
-      .firstWhere((e) => true, orElse: () => null);
-  if (cached != null) return cached;
-
   return ref.read(expensesRepositoryProvider).getById(expenseId);
 });

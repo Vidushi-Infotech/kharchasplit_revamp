@@ -1017,6 +1017,113 @@ const completeGroup = async (req, res, next) => {
   }
 };
 
+/**
+ * Send a settlement reminder push to a member who owes the caller money in
+ * this group.
+ *
+ * POST /api/v1/groups/:groupId/remind/:userId
+ *
+ * Rules:
+ *   - Caller must be a member of the group.
+ *   - Target must be a different member of the group.
+ *   - Target must currently owe the caller > 0.01 in the group's pairwise
+ *     debt math. Self-reminders + reminders for settled debts are 400.
+ *   - Soft rate limit — at most one reminder per (caller, target, group)
+ *     every 6 hours, to keep this from being a nag-spam vector.
+ *
+ * Side effects:
+ *   - SETTLEMENT_REMINDER push sent to target (gated by their notif prefs).
+ *   - One row inserted into `notifications` (the persistent inbox).
+ */
+const remindForBalance = async (req, res, next) => {
+  try {
+    const { id: groupId, userId: targetId } = req.params;
+    const callerId = req.user.id;
+
+    if (callerId === targetId) {
+      return res.status(400).json({
+        success: false,
+        error: "You can't remind yourself.",
+      });
+    }
+
+    // Caller must be in the group.
+    await GroupService.validateGroupAccess(groupId, callerId);
+
+    // Target must also be a member — silently 404 if not (avoids leaking
+    // group membership to outsiders by error-message inference).
+    const targetIsMember = await Group.isMember(groupId, targetId);
+    if (!targetIsMember) {
+      return res.status(404).json({
+        success: false,
+        error: 'Member not found in this group',
+      });
+    }
+
+    // Pairwise from caller's perspective:
+    //   pair[targetId] > 0  → caller owes target (don't remind)
+    //   pair[targetId] < 0  → target owes caller |that much|
+    const pair = await GroupService.getUserPairwiseDebts(groupId, callerId);
+    const owedToCaller = -(pair.get(targetId) || 0);
+    if (owedToCaller <= 0.01) {
+      return res.status(400).json({
+        success: false,
+        error: 'No outstanding balance to remind about.',
+      });
+    }
+
+    // Soft rate limit — last reminder for this exact (caller, target, group)
+    // must be older than 6 hours.
+    const recent = await query(
+      `SELECT created_at FROM notifications
+       WHERE user_id = $1
+         AND type = 'SETTLEMENT_REMINDER'
+         AND data->>'fromUserId' = $2
+         AND data->>'groupId' = $3
+         AND created_at > NOW() - INTERVAL '6 hours'
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [targetId, callerId, groupId],
+    );
+    if (recent.rows.length > 0) {
+      return res.status(429).json({
+        success: false,
+        error: "You've already reminded this person in the last 6 hours.",
+      });
+    }
+
+    const group = await Group.findById(groupId);
+    const caller = await User.findById(callerId);
+
+    // Pre-rounded amount so the body string + activity log agree.
+    const amount = owedToCaller.toFixed(2);
+    const currency = group?.currency || 'INR';
+
+    await NotificationService.sendToUser(targetId, 'SETTLEMENT_REMINDER', {
+      amount,
+      currency,
+      groupName: group?.name || 'this group',
+    }, {
+      groupId,
+      fromUserId: callerId,
+      fromUserName: caller?.name || 'A group member',
+    });
+
+    res.json({
+      success: true,
+      message: `Reminder sent to ${targetId}`,
+    });
+  } catch (error) {
+    if (error.message === 'User is not a member of this group') {
+      return res.status(403).json({
+        success: false,
+        error: error.message,
+      });
+    }
+    next(error);
+  }
+};
+
 export default {
   getGroups,
   getGroup,
@@ -1034,4 +1141,5 @@ export default {
   archiveGroup,
   unarchiveGroup,
   completeGroup,
+  remindForBalance,
 };

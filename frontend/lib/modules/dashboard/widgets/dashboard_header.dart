@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../auth/state/auth_provider.dart';
+import '../../groups/state/groups_provider.dart';
 import '../../notifications/state/notifications_inbox_provider.dart';
 import '../state/dashboard_provider.dart';
 
@@ -29,9 +30,13 @@ class DashboardHeader extends ConsumerWidget {
     final firstName = _firstName(user?.name);
     final greeting = _greetingFor(DateTime.now());
 
-    final groups = data.recentGroups;
-    final owedCount = groups.where((g) => g.myBalance > 0).length;
-    final oweCount = groups.where((g) => g.myBalance < 0).length;
+    // The group counts under the pills must reflect ALL of the user's
+    // groups, not the recent-5 carousel — otherwise the dashboard's
+    // "N groups" caption disagrees with the You're-Owed / You-Owe detail
+    // screens (which now read the same full list).
+    final allGroups = ref.watch(groupsProvider).value ?? const [];
+    final owedCount = allGroups.where((g) => g.myBalance > 0).length;
+    final oweCount = allGroups.where((g) => g.myBalance < 0).length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
