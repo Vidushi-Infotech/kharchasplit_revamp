@@ -1037,7 +1037,7 @@ const completeGroup = async (req, res, next) => {
  */
 const remindForBalance = async (req, res, next) => {
   try {
-    const { groupId, userId: targetId } = req.params;
+    const { id: groupId, userId: targetId } = req.params;
     const callerId = req.user.id;
 
     if (callerId === targetId) {

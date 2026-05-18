@@ -150,6 +150,8 @@ class ActivityService {
    * Log expense added activity
    */
   static async logExpenseAdded(expenseId, groupId, userId, groupName, description, amount, currency) {
+    // Postgres NUMERIC returns as string; coerce so .toFixed doesn't bomb.
+    const amountNum = Number(amount) || 0;
     return await Activity.create({
       groupId,
       userId,
@@ -157,8 +159,8 @@ class ActivityService {
       entityType: this.ENTITY_TYPES.EXPENSE,
       entityId: expenseId,
       title: 'Expense added',
-      description: `Added "${description}" for ${currency} ${amount.toFixed(2)} in "${groupName}"`,
-      metadata: { groupName, expenseDescription: description, amount, currency },
+      description: `Added "${description}" for ${currency} ${amountNum.toFixed(2)} in "${groupName}"`,
+      metadata: { groupName, expenseDescription: description, amount: amountNum, currency },
     });
   }
 
@@ -198,6 +200,7 @@ class ActivityService {
    * Log settlement created activity
    */
   static async logSettlementCreated(settlementId, groupId, fromUserId, toUserId, groupName, fromName, toName, amount, currency) {
+    const amountNum = Number(amount) || 0;
     return await Activity.create({
       groupId,
       userId: fromUserId,
@@ -205,8 +208,8 @@ class ActivityService {
       entityType: this.ENTITY_TYPES.SETTLEMENT,
       entityId: settlementId,
       title: 'Settlement created',
-      description: `${fromName} paid ${toName} ${currency} ${amount.toFixed(2)} in "${groupName}"`,
-      metadata: { groupName, fromName, toName, amount, currency },
+      description: `${fromName} paid ${toName} ${currency} ${amountNum.toFixed(2)} in "${groupName}"`,
+      metadata: { groupName, fromName, toName, amount: amountNum, currency },
     });
   }
 
@@ -214,6 +217,8 @@ class ActivityService {
    * Log settlement confirmed activity
    */
   static async logSettlementConfirmed(settlementId, groupId, fromUserId, toUserId, groupName, fromName, toName, amount, currency) {
+    // `amount` arrives as a string from Postgres NUMERIC; coerce before .toFixed.
+    const amountNum = Number(amount) || 0;
     return await Activity.create({
       groupId,
       userId: toUserId,
@@ -221,8 +226,8 @@ class ActivityService {
       entityType: this.ENTITY_TYPES.SETTLEMENT,
       entityId: settlementId,
       title: 'Settlement confirmed',
-      description: `${toName} confirmed payment of ${currency} ${amount.toFixed(2)} from ${fromName} in "${groupName}"`,
-      metadata: { groupName, fromName, toName, amount, currency },
+      description: `${toName} confirmed payment of ${currency} ${amountNum.toFixed(2)} from ${fromName} in "${groupName}"`,
+      metadata: { groupName, fromName, toName, amount: amountNum, currency },
     });
   }
 

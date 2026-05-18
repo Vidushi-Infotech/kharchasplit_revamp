@@ -16,12 +16,18 @@ class AuthData {
     this.user,
     this.errorMessage,
     this.successMessage,
+    this.needsProfileSetup = false,
   });
 
   final AuthState state;
   final UserModel? user;
   final String? errorMessage;
   final String? successMessage;
+
+  /// Set true right after OTP verify if the user has no name on file (brand
+  /// new user, or existing user who never completed setup). The router
+  /// uses this to send them to ProfileSetupScreen instead of the dashboard.
+  final bool needsProfileSetup;
 
   bool get isAuthenticated => user != null;
 
@@ -33,6 +39,7 @@ class AuthData {
     bool clearError = false,
     String? successMessage,
     bool clearSuccess = false,
+    bool? needsProfileSetup,
   }) {
     return AuthData(
       state: state ?? this.state,
@@ -40,6 +47,7 @@ class AuthData {
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
       successMessage:
           clearSuccess ? null : (successMessage ?? this.successMessage),
+      needsProfileSetup: needsProfileSetup ?? this.needsProfileSetup,
     );
   }
 }
@@ -151,7 +159,11 @@ class AuthNotifier extends Notifier<AuthData> {
       );
       await _apiClient.tokens.saveUser(result.user);
       final user = UserModel.fromJson(result.user);
-      state = AuthData(state: AuthState.success, user: user);
+      state = AuthData(
+        state: AuthState.success,
+        user: user,
+        needsProfileSetup: result.needsProfileSetup,
+      );
       // Register this device's FCM token with the backend so push works.
       // Fire-and-forget so signin completes immediately.
       if (PushService.isSupportedPlatform) {
@@ -217,10 +229,14 @@ class AuthNotifier extends Notifier<AuthData> {
                   (payload['preferredCurrency'] as String?) ??
                       user.preferredCurrency,
             );
+      // Once a non-empty name is on file, the user is no longer in
+      // first-time-setup mode.
+      final clearedSetup = updated.name.trim().isNotEmpty;
       state = state.copyWith(
         state: AuthState.success,
         user: updated,
         successMessage: 'Profile updated',
+        needsProfileSetup: clearedSetup ? false : null,
       );
       return true;
     } catch (e) {

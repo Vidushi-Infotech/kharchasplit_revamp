@@ -4,7 +4,7 @@ import '../../presentation/screens/splash/splash_screen.dart';
 import '../../modules/onboarding/screens/onboarding_screen.dart';
 import '../../modules/auth/screens/login_screen.dart';
 import '../../modules/auth/screens/otp_verification_screen.dart';
-import '../../modules/auth/screens/register_screen.dart';
+import '../../modules/auth/screens/profile_setup_screen.dart';
 import '../../modules/auth/screens/forgot_password_screen.dart';
 import '../../modules/dashboard/screens/dashboard_screen.dart';
 import '../../modules/dashboard/screens/owed_to_me_screen.dart';
@@ -52,9 +52,9 @@ final appRouter = GoRouter(
       builder: (context, state) => const LoginScreen(),
     ),
     GoRoute(
-      path: '/register',
-      name: 'register',
-      builder: (context, state) => const RegisterScreen(),
+      path: '/profile-setup',
+      name: 'profile-setup',
+      builder: (context, state) => const ProfileSetupScreen(),
     ),
     GoRoute(
       path: '/verify-otp',

@@ -544,155 +544,247 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       return const SizedBox.shrink();
     }
 
-    // For equal split, show member selection list
+    // For equal split, show member selection list (redesigned to match
+    // the 21st.dev aesthetic used elsewhere in the app).
     if (state.splitType == SplitType.equal) {
-      final includedMembers = state.includedMemberIds.length;
+      final includedCount = state.includedMemberIds.length;
+      final totalCount = members.length;
       final searchQuery = _equalSplitSearchController.text.toLowerCase();
-      final filteredMembers = members
-          .where((m) => m.name.toLowerCase().contains(searchQuery))
-          .toList();
-      final totalIncluded = state.splits.entries
-          .where((e) => state.includedMemberIds.contains(e.key))
-          .fold<double>(0, (sum, e) => sum + e.value);
+      final filteredMembers = searchQuery.isEmpty
+          ? members
+          : members
+              .where((m) => m.name.toLowerCase().contains(searchQuery))
+              .toList();
+      final perMember = (includedCount > 0 && state.amount > 0)
+          ? state.amount / includedCount
+          : 0.0;
+      final showSearch = members.length > 4;
 
-      return Container(
-        decoration: BoxDecoration(
-          color: AppColors.surface(isDark),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.divider(isDark)),
-        ),
-        margin: const EdgeInsets.symmetric(vertical: 12),
-        child: Column(
-          children: [
-            // Header
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.background(isDark),
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(12),
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Section header
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'BREAKDOWN',
+                  style: AppTextStyles.caption(isDark).copyWith(
+                    color: AppColors.textSecondary(isDark),
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.3,
+                    fontSize: 11,
+                  ),
                 ),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Split Breakdown ($includedMembers members)',
-                      style: AppTextStyles.body2(isDark)
-                          .copyWith(fontWeight: FontWeight.w600),
-                    ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.success.withValues(alpha: isDark ? 0.18 : 0.12),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: AppColors.success.withValues(alpha: 0.4),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: AppColors.success,
+                        shape: BoxShape.circle,
+                      ),
                     ),
-                    decoration: BoxDecoration(
-                      color: AppColors.success.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      '✓ Balanced',
+                    const SizedBox(width: 6),
+                    Text(
+                      'Balanced',
                       style: AppTextStyles.caption(isDark).copyWith(
                         color: AppColors.success,
+                        fontWeight: FontWeight.w700,
                         fontSize: 11,
-                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          // Card
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.cardBg(isDark),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.divider(isDark)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '$includedCount of $totalCount included',
+                          style: AppTextStyles.body2(isDark).copyWith(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          final allIncluded =
+                              state.includedMemberIds.length == members.length;
+                          ref.read(addExpenseProvider.notifier).state =
+                              state.copyWith(
+                            includedMemberIds: allIncluded
+                                ? <String>{}
+                                : Set<String>.from(members.map((m) => m.id)),
+                          );
+                        },
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppColors.tealDark,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: Text(
+                          state.includedMemberIds.length == members.length
+                              ? 'Clear'
+                              : 'Select all',
+                          style: AppTextStyles.caption(isDark).copyWith(
+                            color: AppColors.tealDark,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  height: 1,
+                  color: AppColors.divider(isDark).withValues(alpha: 0.6),
+                ),
+                if (showSearch) ...[
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+                    child: Container(
+                      height: 38,
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface(isDark),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppColors.divider(isDark)),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.search_rounded,
+                            size: 16,
+                            color: AppColors.textSecondary(isDark),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: TextField(
+                              controller: _equalSplitSearchController,
+                              onChanged: (_) => setState(() {}),
+                              style: AppTextStyles.body2(isDark)
+                                  .copyWith(fontSize: 13),
+                              decoration: InputDecoration(
+                                isCollapsed: true,
+                                border: InputBorder.none,
+                                contentPadding:
+                                    const EdgeInsets.symmetric(vertical: 10),
+                                hintText: 'Search members',
+                                hintStyle: AppTextStyles.body2(isDark).copyWith(
+                                  color: AppColors.textSecondary(isDark),
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                          ),
+                          if (_equalSplitSearchController.text.isNotEmpty)
+                            GestureDetector(
+                              onTap: () {
+                                _equalSplitSearchController.clear();
+                                setState(() {});
+                              },
+                              child: Icon(
+                                Icons.close_rounded,
+                                size: 16,
+                                color: AppColors.textSecondary(isDark),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                   ),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
-            // Search box
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: TextField(
-                controller: _equalSplitSearchController,
-                decoration: InputDecoration(
-                  hintText: 'Search members...',
-                  hintStyle: TextStyle(color: AppColors.textSecondary(isDark)),
-                  prefixIcon: Icon(Icons.search, color: AppColors.brand, size: 20),
-                  suffixIcon: _equalSplitSearchController.text.isNotEmpty
-                      ? GestureDetector(
-                          onTap: () {
-                            _equalSplitSearchController.clear();
-                            setState(() {});
-                          },
-                          child: Icon(Icons.close, color: AppColors.brand, size: 20),
-                        )
-                      : null,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: AppColors.inputBorder(isDark)),
+                  Container(
+                    height: 1,
+                    color: AppColors.divider(isDark).withValues(alpha: 0.6),
                   ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                ],
+                for (int i = 0; i < filteredMembers.length; i++) ...[
+                  _buildMemberEqualSplitRow(
+                    isDark,
+                    state,
+                    filteredMembers[i],
+                    perMember,
+                  ),
+                  if (i < filteredMembers.length - 1)
+                    Container(
+                      height: 1,
+                      color: AppColors.divider(isDark).withValues(alpha: 0.6),
+                    ),
+                ],
+                if (filteredMembers.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(
+                      'No members match "$searchQuery"',
+                      style: AppTextStyles.body2(isDark).copyWith(
+                        color: AppColors.textSecondary(isDark),
+                      ),
+                    ),
+                  ),
+                Container(
+                  height: 1,
+                  color: AppColors.divider(isDark).withValues(alpha: 0.6),
                 ),
-                onChanged: (_) => setState(() {}),
-              ),
-            ),
-            const Divider(height: 1),
-            // Select All / Deselect All buttons
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  TextButton.icon(
-                    onPressed: () {
-                      ref.read(addExpenseProvider.notifier).state = state.copyWith(
-                        includedMemberIds: Set<String>.from(members.map((m) => m.id)),
-                      );
-                    },
-                    icon: const Icon(Icons.done_all_rounded, size: 18),
-                    label: const Text('Select All'),
-                    style: TextButton.styleFrom(
-                      foregroundColor: AppColors.brand,
-                    ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Each pays',
+                        style: AppTextStyles.body2(isDark).copyWith(
+                          color: AppColors.textSecondary(isDark),
+                          fontSize: 13,
+                        ),
+                      ),
+                      Text(
+                        '₹${perMember.toStringAsFixed(2)}',
+                        style: AppTextStyles.body2(isDark).copyWith(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13.5,
+                        ),
+                      ),
+                    ],
                   ),
-                  TextButton.icon(
-                    onPressed: () {
-                      ref.read(addExpenseProvider.notifier).state =
-                          state.copyWith(includedMemberIds: <String>{});
-                    },
-                    icon: const Icon(Icons.clear_all_rounded, size: 18),
-                    label: const Text('Deselect All'),
-                    style: TextButton.styleFrom(
-                      foregroundColor: AppColors.brand,
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
-            const Divider(height: 1),
-            // Filtered members list
-            Column(
-              children: filteredMembers
-                  .map((member) => _buildMemberEqualSplitRow(isDark, state, member))
-                  .toList(),
-            ),
-            const Divider(height: 1),
-            // Footer with total
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Total Included',
-                    style: AppTextStyles.body2(isDark),
-                  ),
-                  Text(
-                    '₹${totalIncluded.toStringAsFixed(2)}',
-                    style: AppTextStyles.body2(isDark)
-                        .copyWith(fontWeight: FontWeight.w600),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       );
     }
 
@@ -718,98 +810,113 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     bool isDark,
     AddExpenseState state,
     UserModel member,
+    double perMember,
   ) {
     final isIncluded = state.includedMemberIds.contains(member.id);
-    final splitAmount = state.splits[member.id] ?? 0.0;
+    final dim = !isIncluded;
+    final initials = _initialsFor(member.name);
 
-    return GestureDetector(
-      onTap: () {
-        final newSet = Set<String>.from(state.includedMemberIds);
-        if (newSet.contains(member.id)) {
-          newSet.remove(member.id);
-        } else {
-          newSet.add(member.id);
-        }
-        ref.read(addExpenseProvider.notifier).state =
-            state.copyWith(includedMemberIds: newSet);
-      },
-      child: Container(
-        color: isIncluded
-            ? Colors.transparent
-            : AppColors.textSecondary(isDark).withValues(alpha: 0.05),
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            Checkbox(
-              value: isIncluded,
-              tristate: false,
-              onChanged: (_) {
-                final newSet = Set<String>.from(state.includedMemberIds);
-                if (newSet.contains(member.id)) {
-                  newSet.remove(member.id);
-                } else {
-                  newSet.add(member.id);
-                }
-                ref.read(addExpenseProvider.notifier).state =
-                    state.copyWith(includedMemberIds: newSet);
-              },
-              activeColor: AppColors.brand,
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-            const SizedBox(width: 8),
-            // Avatar
-            CircleAvatar(
-              radius: 16,
-              backgroundColor: AppColors.brand.withValues(alpha: 0.2),
-              child: Text(
-                member.name.split(' ').map((e) => e[0]).join().toUpperCase(),
-                style: TextStyle(
-                  color: AppColors.brand,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 11,
+    void toggle() {
+      final newSet = Set<String>.from(state.includedMemberIds);
+      if (newSet.contains(member.id)) {
+        newSet.remove(member.id);
+      } else {
+        newSet.add(member.id);
+      }
+      ref.read(addExpenseProvider.notifier).state =
+          state.copyWith(includedMemberIds: newSet);
+    }
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: toggle,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Toggle box
+              Container(
+                width: 22,
+                height: 22,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: isIncluded ? AppColors.tealDark : Colors.transparent,
+                  borderRadius: BorderRadius.circular(7),
+                  border: Border.all(
+                    color: isIncluded
+                        ? AppColors.tealDark
+                        : AppColors.divider(isDark),
+                    width: 1.5,
+                  ),
+                ),
+                child: isIncluded
+                    ? const Icon(Icons.check_rounded,
+                        size: 14, color: Colors.white)
+                    : null,
+              ),
+              const SizedBox(width: 10),
+              // Avatar tile
+              Container(
+                width: 32,
+                height: 32,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.tealDark
+                      .withValues(alpha: dim ? 0.06 : 0.14),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  initials,
+                  style: AppTextStyles.caption(isDark).copyWith(
+                    color: dim
+                        ? AppColors.textSecondary(isDark)
+                        : AppColors.tealDark,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(width: 12),
-            // Name and status
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    member.name,
-                    style: AppTextStyles.body2(isDark).copyWith(
-                      color: isIncluded
-                          ? AppColors.textPrimary(isDark)
-                          : AppColors.textSecondary(isDark),
-                      fontWeight: FontWeight.w500,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+              const SizedBox(width: 10),
+              // Name
+              Expanded(
+                child: Text(
+                  member.name,
+                  style: AppTextStyles.body1(isDark).copyWith(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                    color: dim
+                        ? AppColors.textSecondary(isDark)
+                        : AppColors.textPrimary(isDark),
                   ),
-                  Text(
-                    isIncluded ? '✓ Selected' : '○ Not selected',
-                    style: AppTextStyles.caption(isDark).copyWith(
-                      color: isIncluded ? AppColors.success : AppColors.textSecondary(isDark),
-                      fontSize: 10,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            // Split amount
-            if (isIncluded)
-              Text(
-                '₹${splitAmount.toStringAsFixed(2)}',
-                style: AppTextStyles.body2(isDark).copyWith(
-                  color: AppColors.brand,
-                  fontWeight: FontWeight.w600,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-          ],
+              const SizedBox(width: 8),
+              // Per-person amount (only when included)
+              if (isIncluded)
+                Text(
+                  '₹${perMember.toStringAsFixed(2)}',
+                  style: AppTextStyles.body2(isDark).copyWith(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                    color: AppColors.textPrimary(isDark),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
+  }
+
+  String _initialsFor(String name) {
+    final parts = name.trim().split(RegExp(r'\s+'));
+    if (parts.isEmpty || parts.first.isEmpty) return '?';
+    if (parts.length == 1) return parts.first[0].toUpperCase();
+    return (parts.first[0] + parts.last[0]).toUpperCase();
   }
 
   Widget _buildMemberSection(bool isDark, AddExpenseState state, List<UserModel> groupMembers) {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/network/api_client.dart';
 import 'splash_provider.dart';
 
 class SplashScreen extends ConsumerWidget {
@@ -14,7 +15,18 @@ class SplashScreen extends ConsumerWidget {
     ref.listen(splashProviderProvider, (previous, next) {
       switch (next) {
         case SplashState.authenticated:
-          context.go('/home/dashboard');
+          // Read the stored user directly from secure storage — the
+          // authProvider hydration is async and may not have populated
+          // its state yet, which would falsely send completed users to
+          // the profile-setup screen on every cold start.
+          ref.read(tokenStorageProvider).readUser().then((storedUser) {
+            if (!context.mounted) return;
+            final name =
+                (storedUser?['name'] as String?)?.trim() ?? '';
+            context.go(name.isEmpty
+                ? '/profile-setup'
+                : '/home/dashboard');
+          });
           break;
         case SplashState.unauthenticated:
         case SplashState.ready:

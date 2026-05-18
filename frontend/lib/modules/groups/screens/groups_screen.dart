@@ -192,7 +192,9 @@ class _CollapsibleHeader extends SliverPersistentHeaderDelegate {
   final VoidCallback onSearchClose;
   final ValueChanged<String> onSearchChanged;
 
-  static const double _expandedExtent = 110;
+  // Tight enough to sit just below the status bar (no big empty band on
+  // top), still tall enough for the 28pt headline + the GROUPS overline.
+  static const double _expandedExtent = 84;
   static const double _collapsedExtent = 56;
   static const double _filterStripHeight = 42;
 
