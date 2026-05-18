@@ -16,6 +16,10 @@ class GroupModel extends Equatable {
   final String id;
   final String name;
   final String coverEmoji;
+  /// Optional base64-encoded cover photo. Populated by the backend's
+  /// `coverImageBase64` field on findById/findAll responses; null when
+  /// the group still uses the emoji-only fallback.
+  final String? coverImageBase64;
   final List<UserModel> members;
   final double totalExpenses;
   final double myBalance;
@@ -28,6 +32,7 @@ class GroupModel extends Equatable {
     required this.id,
     required this.name,
     required this.coverEmoji,
+    this.coverImageBase64,
     required this.members,
     this.totalExpenses = 0,
     this.myBalance = 0,
@@ -46,10 +51,14 @@ class GroupModel extends Equatable {
             .toList()
         : <UserModel>[];
     final created = json['created_at'] ?? json['createdAt'];
+    final rawCover = (json['coverImageBase64'] ?? json['cover_image_base64'])
+        as String?;
     return GroupModel(
       id: json['id'] as String,
       name: (json['name'] as String?) ?? '',
       coverEmoji: (json['coverEmoji'] as String?) ?? '👥',
+      coverImageBase64:
+          (rawCover != null && rawCover.isNotEmpty) ? rawCover : null,
       members: members,
       totalExpenses: (json['totalExpenses'] as num?)?.toDouble() ?? 0,
       myBalance: (json['myBalance'] as num?)?.toDouble() ?? 0,
@@ -66,6 +75,7 @@ class GroupModel extends Equatable {
     String? id,
     String? name,
     String? coverEmoji,
+    String? coverImageBase64,
     List<UserModel>? members,
     double? totalExpenses,
     double? myBalance,
@@ -78,6 +88,7 @@ class GroupModel extends Equatable {
       id: id ?? this.id,
       name: name ?? this.name,
       coverEmoji: coverEmoji ?? this.coverEmoji,
+      coverImageBase64: coverImageBase64 ?? this.coverImageBase64,
       members: members ?? this.members,
       totalExpenses: totalExpenses ?? this.totalExpenses,
       myBalance: myBalance ?? this.myBalance,
@@ -112,6 +123,7 @@ class GroupModel extends Equatable {
         id,
         name,
         coverEmoji,
+        coverImageBase64,
         members,
         totalExpenses,
         myBalance,

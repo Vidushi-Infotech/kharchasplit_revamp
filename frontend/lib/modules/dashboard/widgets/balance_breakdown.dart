@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../groups/widgets/group_cover_thumb.dart';
 
 /// Shared scaffold for the "You're owed" and "You owe" screens.
 ///
@@ -270,9 +271,8 @@ class _GroupRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final emoji = (group.coverEmoji as String?) ?? '';
-    final hasCustomEmoji = emoji.isNotEmpty &&
-        emoji != BalanceBreakdownView._defaultPeopleEmoji;
+    final coverEmoji = (group.coverEmoji as String?) ?? '';
+    final coverImageBase64 = group.coverImageBase64 as String?;
     final amount = (group.myBalance as num).toDouble().abs();
     final formatted = NumberFormat.currency(
       locale: 'en_IN',
@@ -300,13 +300,14 @@ class _GroupRow extends StatelessWidget {
                     color: AppColors.divider(isDark).withValues(alpha: 0.6),
                   ),
                 ),
-                child: hasCustomEmoji
-                    ? Text(emoji, style: const TextStyle(fontSize: 20))
-                    : Icon(
-                        Icons.group_rounded,
-                        size: 20,
-                        color: AppColors.textSecondary(isDark),
-                      ),
+                child: GroupCoverThumb(
+                  coverImageBase64: coverImageBase64,
+                  coverEmoji: coverEmoji,
+                  size: 40,
+                  borderRadius: 11,
+                  emojiFontSize: 20,
+                  fallbackIconColor: AppColors.textSecondary(isDark),
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(

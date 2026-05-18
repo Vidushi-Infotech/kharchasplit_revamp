@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../models/models.dart';
+import '../../groups/widgets/group_cover_thumb.dart';
 
 /// Compact horizontally-scrolling card for the Groups carousel.
 class GroupMiniCard extends StatelessWidget {
@@ -50,7 +51,7 @@ class GroupMiniCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _EmojiBadge(emoji: group.coverEmoji, isDark: isDark),
+                  _EmojiBadge(group: group, isDark: isDark),
                   const SizedBox(height: 10),
                   Text(
                     group.name,
@@ -104,20 +105,13 @@ class GroupMiniCard extends StatelessWidget {
 }
 
 class _EmojiBadge extends StatelessWidget {
-  const _EmojiBadge({required this.emoji, required this.isDark});
+  const _EmojiBadge({required this.group, required this.isDark});
 
-  final String emoji;
+  final GroupModel group;
   final bool isDark;
-
-  /// Default fallback emoji set by GroupModel.fromJson when no cover image
-  /// or emoji is set on the group. Treated as "no custom icon" so we can
-  /// substitute a monochrome icon that matches the app palette.
-  static const String _defaultPeopleEmoji = '👥';
 
   @override
   Widget build(BuildContext context) {
-    final hasCustomEmoji = emoji.isNotEmpty && emoji != _defaultPeopleEmoji;
-
     return Container(
       width: 44,
       height: 44,
@@ -129,13 +123,14 @@ class _EmojiBadge extends StatelessWidget {
           color: AppColors.divider(isDark).withValues(alpha: 0.6),
         ),
       ),
-      child: hasCustomEmoji
-          ? Text(emoji, style: const TextStyle(fontSize: 22))
-          : Icon(
-              Icons.group_rounded,
-              size: 22,
-              color: AppColors.textSecondary(isDark),
-            ),
+      child: GroupCoverThumb(
+        coverImageBase64: group.coverImageBase64,
+        coverEmoji: group.coverEmoji,
+        size: 44,
+        borderRadius: 12,
+        emojiFontSize: 22,
+        fallbackIconColor: AppColors.textSecondary(isDark),
+      ),
     );
   }
 }

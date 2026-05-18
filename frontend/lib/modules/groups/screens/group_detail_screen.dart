@@ -2,12 +2,15 @@ import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../widgets/edit_group_sheet.dart';
+import '../widgets/group_cover_thumb.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../components/components.dart';
 import '../../../data/groups/groups_repository.dart';
 import '../../../data/settlements/settlements_repository.dart';
+import '../../../models/group_model.dart';
 import '../../../models/settlement_model.dart';
 import '../../../models/user_model.dart';
 import '../../auth/state/auth_provider.dart';
@@ -50,6 +53,9 @@ class GroupDetailScreen extends ConsumerWidget {
           }
         },
         onAddMember: () => _showInviteDialog(context, ref),
+        onEditGroup: loadedDetail == null
+            ? null
+            : () => _openEditGroupSheet(context, ref, loadedDetail.group),
         onLeaveGroup: () => _confirmLeaveGroup(context, ref, myId),
         onDeleteGroup: () => _confirmDeleteGroup(context, ref),
       ),
@@ -120,6 +126,25 @@ class GroupDetailScreen extends ConsumerWidget {
           : null,
       onSecondaryAction: () => context.go('/home/groups'),
       secondaryActionLabel: 'Back to Groups',
+    );
+  }
+
+  /// Open the bottom sheet for editing the group's name + cover photo.
+  /// Admin-only at the call site; backend also enforces. Refreshes the
+  /// detail provider on save so the header re-renders with new data.
+  Future<void> _openEditGroupSheet(
+    BuildContext context,
+    WidgetRef ref,
+    GroupModel group,
+  ) async {
+    final updated = await EditGroupSheet.show(context, group: group);
+    if (updated == null || !context.mounted) return;
+    ref.invalidate(groupDetailProvider(group.id));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Group updated'),
+        behavior: SnackBarBehavior.floating,
+      ),
     );
   }
 
@@ -616,12 +641,16 @@ class GroupDetailScreen extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Group title with emoji
+          // Group title with cover image (or emoji fallback)
           Row(
             children: [
-              Text(
-                detail.group.coverEmoji,
-                style: const TextStyle(fontSize: 36),
+              GroupCoverThumb(
+                coverImageBase64: detail.group.coverImageBase64,
+                coverEmoji: detail.group.coverEmoji,
+                size: 52,
+                borderRadius: 14,
+                emojiFontSize: 32,
+                fallbackIconColor: AppColors.textSecondary(isDark),
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -677,12 +706,16 @@ class GroupDetailScreen extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Group title with large emoji
+        // Group title with large cover image (or emoji fallback)
         Row(
           children: [
-            Text(
-              detail.group.coverEmoji,
-              style: const TextStyle(fontSize: 48),
+            GroupCoverThumb(
+              coverImageBase64: detail.group.coverImageBase64,
+              coverEmoji: detail.group.coverEmoji,
+              size: 64,
+              borderRadius: 16,
+              emojiFontSize: 42,
+              fallbackIconColor: AppColors.textSecondary(isDark),
             ),
             const SizedBox(width: 20),
             Expanded(
@@ -1378,6 +1411,7 @@ class _DetailTopBar extends StatelessWidget implements PreferredSizeWidget {
     required this.isDark,
     required this.onClose,
     required this.onAddMember,
+    required this.onEditGroup,
     required this.onLeaveGroup,
     required this.onDeleteGroup,
     required this.isAdmin,
@@ -1387,6 +1421,10 @@ class _DetailTopBar extends StatelessWidget implements PreferredSizeWidget {
   final bool isDark;
   final VoidCallback onClose;
   final VoidCallback onAddMember;
+
+  /// Set when the admin can edit the group. Null disables the option
+  /// (e.g. while the detail is still loading).
+  final VoidCallback? onEditGroup;
   final VoidCallback onLeaveGroup;
   final VoidCallback onDeleteGroup;
 
@@ -1446,6 +1484,9 @@ class _DetailTopBar extends StatelessWidget implements PreferredSizeWidget {
                     ),
                     onSelected: (value) {
                       switch (value) {
+                        case 'edit_group':
+                          onEditGroup?.call();
+                          break;
                         case 'add_member':
                           onAddMember();
                           break;
@@ -1473,6 +1514,22 @@ class _DetailTopBar extends StatelessWidget implements PreferredSizeWidget {
                       ),
                     ),
                     itemBuilder: (_) => [
+                      // Edit group: admin only. Lets them change name / cover photo.
+                      if (canManage && isAdmin && onEditGroup != null)
+                        PopupMenuItem(
+                          value: 'edit_group',
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.edit_outlined,
+                                size: 18,
+                                color: AppColors.textPrimary(isDark),
+                              ),
+                              const SizedBox(width: 10),
+                              const Text('Edit group'),
+                            ],
+                          ),
+                        ),
                       // Add member: visible to everyone in the group.
                       PopupMenuItem(
                         value: 'add_member',
@@ -1594,9 +1651,6 @@ class _HeroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final emoji = detail.group.coverEmoji;
-    final hasCustomEmoji =
-        emoji.isNotEmpty && emoji != _defaultPeopleEmoji;
     final total = CurrencyFormatter.format(detail.totalExpense, currency: '₹');
     final memberCount = detail.members.length;
     final expenseCount = detail.expenses.length;
@@ -1643,16 +1697,14 @@ class _HeroCard extends StatelessWidget {
                             color: Colors.white.withValues(alpha: 0.24),
                           ),
                         ),
-                        child: hasCustomEmoji
-                            ? Text(
-                                emoji,
-                                style: const TextStyle(fontSize: 24),
-                              )
-                            : const Icon(
-                                Icons.group_rounded,
-                                color: Colors.white,
-                                size: 22,
-                              ),
+                        child: GroupCoverThumb(
+                          coverImageBase64: detail.group.coverImageBase64,
+                          coverEmoji: detail.group.coverEmoji,
+                          size: 48,
+                          borderRadius: 14,
+                          emojiFontSize: 24,
+                          fallbackIconColor: Colors.white,
+                        ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(

@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../models/models.dart';
+import 'group_cover_thumb.dart';
 
 /// Quiet, content-forward grid tile for a group. Visual hierarchy mirrors
 /// the registry-card pattern used on sites like 21st.dev: preview icon
@@ -69,7 +70,7 @@ class GroupGridCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _IconTile(emoji: group.coverEmoji, isDark: isDark),
+                  _IconTile(group: group, isDark: isDark),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
@@ -129,16 +130,13 @@ class GroupGridCard extends StatelessWidget {
 }
 
 class _IconTile extends StatelessWidget {
-  const _IconTile({required this.emoji, required this.isDark});
+  const _IconTile({required this.group, required this.isDark});
 
-  final String emoji;
+  final GroupModel group;
   final bool isDark;
 
   @override
   Widget build(BuildContext context) {
-    final hasCustomEmoji =
-        emoji.isNotEmpty && emoji != GroupGridCard._defaultPeopleEmoji;
-
     return Container(
       width: 40,
       height: 40,
@@ -150,13 +148,14 @@ class _IconTile extends StatelessWidget {
           color: AppColors.divider(isDark).withValues(alpha: 0.6),
         ),
       ),
-      child: hasCustomEmoji
-          ? Text(emoji, style: const TextStyle(fontSize: 20))
-          : Icon(
-              Icons.group_rounded,
-              size: 20,
-              color: AppColors.textSecondary(isDark),
-            ),
+      child: GroupCoverThumb(
+        coverImageBase64: group.coverImageBase64,
+        coverEmoji: group.coverEmoji,
+        size: 40,
+        borderRadius: 10,
+        emojiFontSize: 20,
+        fallbackIconColor: AppColors.textSecondary(isDark),
+      ),
     );
   }
 }

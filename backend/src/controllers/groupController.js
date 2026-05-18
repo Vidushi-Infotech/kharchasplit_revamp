@@ -87,6 +87,7 @@ const getGroups = async (req, res, next) => {
         name: group.name,
         description: group.description,
         currency: group.currency,
+        coverImageBase64: group.cover_image_base64 || null,
         createdBy: group.created_by,
         createdAt: group.created_at,
         updatedAt: group.updated_at,

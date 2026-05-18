@@ -50,4 +50,26 @@ class GroupsNotifier extends AsyncNotifier<List<GroupModel>> {
     await refresh();
     return created;
   }
+
+  /// Edits an existing group. Only the admin/creator can call this
+  /// (backend enforces). Refetches the list so list cards reflect the
+  /// new name / photo right away.
+  Future<GroupModel> updateGroup(
+    String groupId, {
+    String? name,
+    String? description,
+    String? coverImageBase64,
+    String? currency,
+  }) async {
+    final repo = ref.read(groupsRepositoryProvider);
+    final updated = await repo.update(
+      groupId,
+      name: name,
+      description: description,
+      coverImageBase64: coverImageBase64,
+      currency: currency,
+    );
+    await refresh();
+    return updated;
+  }
 }

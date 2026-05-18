@@ -4,6 +4,7 @@ import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'dart:convert';
 import 'dart:io';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -30,6 +31,10 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
   late FocusNode _groupNameFocus;
   GroupCategory _selectedCategory = GroupCategory.other;
   XFile? _selectedImageFile;
+  /// Compressed bytes of the picked cover image. Used both for the
+  /// in-screen preview and for the base64 payload sent to the backend
+  /// on _createGroup().
+  Uint8List? _coverBytes;
   bool _isProcessing = false;
   String? _processingStatus;
   double _uploadProgress = 0.0;
@@ -106,6 +111,16 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
         final compressedBytes =
             await ImageProcessorService.compressImageToWebP(pickedFile.path);
 
+        // Persist the bytes we'll actually send. On web/desktop the
+        // compressor may return null/empty (no-op), in which case we
+        // fall back to reading the picked file directly so the cover
+        // photo still gets uploaded.
+        Uint8List? bytesForUpload = (compressedBytes != null &&
+                compressedBytes.isNotEmpty)
+            ? compressedBytes
+            : null;
+        bytesForUpload ??= await pickedFile.readAsBytes();
+
         // Calculate compression percentage (handle null/empty bytes on web)
         String compressionPercent = '0';
         if (compressedBytes != null && compressedBytes.isNotEmpty) {
@@ -125,6 +140,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
         if (!mounted) return;
         setState(() {
           _selectedImageFile = pickedFile;
+          _coverBytes = bytesForUpload;
           _isProcessing = false;
           _processingStatus = null;
           _uploadProgress = 0.0;
@@ -141,10 +157,16 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
       } catch (processingError, st) {
         AppLogger.error('Image processing error',
             tag: 'create_group', error: processingError, stackTrace: st);
-        // On web or any error, still allow image to be used
+        // On web or any error, still allow image to be used — read raw
+        // bytes so _createGroup still has something to upload.
+        Uint8List? fallbackBytes;
+        try {
+          fallbackBytes = await pickedFile.readAsBytes();
+        } catch (_) {/* leave null */}
         if (!mounted) return;
         setState(() {
           _selectedImageFile = pickedFile;
+          _coverBytes = fallbackBytes;
           _isProcessing = false;
           _processingStatus = null;
           _uploadProgress = 0.0;
@@ -352,7 +374,11 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
     // 1. Create the group (creator is added as the only member by the backend).
     GroupModel newGroup;
     try {
-      newGroup = await ref.read(groupsProvider.notifier).addGroup(name: name);
+      newGroup = await ref.read(groupsProvider.notifier).addGroup(
+            name: name,
+            coverImageBase64:
+                _coverBytes != null ? base64Encode(_coverBytes!) : null,
+          );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

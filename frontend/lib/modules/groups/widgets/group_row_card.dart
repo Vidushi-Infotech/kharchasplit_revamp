@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../models/models.dart';
+import 'group_cover_thumb.dart';
 
 /// Full-width compact list row for the Groups screen.
 class GroupRowCard extends StatelessWidget {
@@ -62,7 +63,7 @@ class GroupRowCard extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  _GroupIcon(emoji: group.coverEmoji, isDark: isDark),
+                  _GroupIcon(group: group, isDark: isDark),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
@@ -117,16 +118,13 @@ class GroupRowCard extends StatelessWidget {
 }
 
 class _GroupIcon extends StatelessWidget {
-  const _GroupIcon({required this.emoji, required this.isDark});
+  const _GroupIcon({required this.group, required this.isDark});
 
-  final String emoji;
+  final GroupModel group;
   final bool isDark;
 
   @override
   Widget build(BuildContext context) {
-    final hasCustomEmoji =
-        emoji.isNotEmpty && emoji != GroupRowCard._defaultPeopleEmoji;
-
     return Container(
       width: 42,
       height: 42,
@@ -138,13 +136,14 @@ class _GroupIcon extends StatelessWidget {
           color: AppColors.divider(isDark).withValues(alpha: 0.6),
         ),
       ),
-      child: hasCustomEmoji
-          ? Text(emoji, style: const TextStyle(fontSize: 22))
-          : Icon(
-              Icons.group_rounded,
-              size: 22,
-              color: AppColors.textSecondary(isDark),
-            ),
+      child: GroupCoverThumb(
+        coverImageBase64: group.coverImageBase64,
+        coverEmoji: group.coverEmoji,
+        size: 42,
+        borderRadius: 12,
+        emojiFontSize: 22,
+        fallbackIconColor: AppColors.textSecondary(isDark),
+      ),
     );
   }
 }

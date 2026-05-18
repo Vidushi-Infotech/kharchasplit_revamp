@@ -49,10 +49,12 @@ class Group {
    * Find groups by user ID
    */
   static async findByUserId(userId, limit = 20, offset = 0) {
-    // Uses subqueries instead of triple JOIN + GROUP BY for much better performance
+    // Uses subqueries instead of triple JOIN + GROUP BY for much better performance.
+    // cover_image_base64 is included so the groups list / dashboard cards
+    // render the actual photo (cover images are compressed to ~30-80KB).
     const result = await query(
       `SELECT g.id, g.name, g.description, g.created_by, g.created_at, g.updated_at,
-              g.currency, g.is_archived,
+              g.currency, g.is_archived, g.cover_image_base64,
               (SELECT COUNT(*) FROM group_members gm2
                WHERE gm2.group_id = g.id AND gm2.deleted_at IS NULL) as member_count,
               (SELECT COUNT(*) FROM expenses e
