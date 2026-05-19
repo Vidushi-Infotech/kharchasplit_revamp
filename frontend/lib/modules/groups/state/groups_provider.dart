@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/state/connectivity_provider.dart';
 import '../../../data/groups/groups_repository.dart';
 import '../../../models/group_model.dart';
 import '../../auth/state/auth_provider.dart';
@@ -12,6 +13,11 @@ class GroupsNotifier extends AsyncNotifier<List<GroupModel>> {
   @override
   Future<List<GroupModel>> build() async {
     final user = ref.watch(authProvider).user;
+    // Auto-refresh when the device comes back online so the list reflects
+    // anything that changed server-side while we were disconnected.
+    ref.listen(onReconnectStreamProvider, (_, __) {
+      refresh();
+    });
     if (user == null) return const <GroupModel>[];
     return ref.read(groupsRepositoryProvider).listForUser(user.id);
   }

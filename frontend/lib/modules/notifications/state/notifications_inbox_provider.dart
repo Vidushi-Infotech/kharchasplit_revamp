@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_client.dart';
 import '../../../core/services/push_service.dart';
+import '../../../core/state/connectivity_provider.dart';
 import '../../auth/state/auth_provider.dart';
 
 class NotificationItem {
@@ -94,6 +95,12 @@ class NotificationsInboxNotifier
       if (prev?.user?.id != next.user?.id) {
         ref.invalidateSelf();
       }
+    });
+
+    // Refresh after a reconnect — catches notifications that arrived while
+    // the device was offline (push delivered to FCM but not relayed yet).
+    ref.listen(onReconnectStreamProvider, (_, __) {
+      refresh();
     });
 
     // Live-update: whenever a foreground push arrives, refresh so the

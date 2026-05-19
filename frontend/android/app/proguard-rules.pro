@@ -42,13 +42,12 @@
 # ---- flutter_contacts -------------------------------------------------
 -keep class co.quis.flutter_contacts.** { *; }
 
-# ---- flutter_facebook_auth -------------------------------------------
--keep class com.facebook.** { *; }
--keep class app.meedu.flutter_facebook_auth.** { *; }
--dontwarn com.facebook.**
-
-# ---- google_sign_in ---------------------------------------------------
--keep class io.flutter.plugins.googlesignin.** { *; }
+# ---- Play Core (deferred components) ---------------------------------
+# Flutter's embedding references com.google.android.play.core.* even when
+# the app does NOT use deferred components. R8 fails the build otherwise.
+# We don't ship a play-core dependency, so just silence the warnings.
+-dontwarn com.google.android.play.core.**
+-keep class com.google.android.play.core.** { *; }
 
 # ---- url_launcher / share_plus / connectivity_plus ------------------
 -keep class io.flutter.plugins.urllauncher.** { *; }
