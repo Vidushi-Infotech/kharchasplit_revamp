@@ -87,7 +87,10 @@ class _PersonalExpensesScreenState
       body: SafeArea(
         bottom: false,
         child: asyncExpenses.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
+          loading: () => const Padding(
+            padding: EdgeInsets.fromLTRB(16, 16, 16, 16),
+            child: ShimmerList(type: ShimmerListType.expense, itemCount: 6),
+          ),
           error: (err, _) => ErrorStateWidget(
             title: "Couldn't load personal expenses",
             message: err.toString(),

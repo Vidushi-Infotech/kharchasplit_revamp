@@ -30,7 +30,7 @@ class DashboardScreen extends ConsumerWidget {
             bottom: false,
             child: dashboardAsync.when(
               loading: () =>
-                  const Center(child: CircularProgressIndicator()),
+                  const ShimmerList(type: ShimmerListType.dashboard),
               error: (err, _) => _DashboardError(
                 message: err.toString(),
                 onRetry: () =>

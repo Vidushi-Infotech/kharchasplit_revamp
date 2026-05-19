@@ -23,7 +23,10 @@ class FriendsScreen extends ConsumerWidget {
         backgroundColor: AppColors.surface(isDark),
       ),
       body: friendsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const Padding(
+          padding: EdgeInsets.fromLTRB(16, 16, 16, 16),
+          child: ShimmerList(type: ShimmerListType.friend, itemCount: 6),
+        ),
         error: (err, _) => ErrorStateWidget(
           title: "Couldn't load friends",
           message: err.toString(),

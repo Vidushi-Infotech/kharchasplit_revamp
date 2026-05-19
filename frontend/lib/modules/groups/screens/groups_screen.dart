@@ -88,7 +88,10 @@ class _GroupsScreenState extends ConsumerState<GroupsScreen> {
       body: SafeArea(
         bottom: false,
         child: groupsAsync.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
+          loading: () => const Padding(
+            padding: EdgeInsets.fromLTRB(16, 16, 16, 16),
+            child: ShimmerList(type: ShimmerListType.group, itemCount: 6),
+          ),
           error: (err, _) => _ErrorState(
             message: err.toString(),
             onRetry: () => ref.read(groupsProvider.notifier).refresh(),

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../components/components.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../auth/state/sessions_provider.dart';
@@ -32,8 +33,13 @@ class ActiveSessionsScreen extends ConsumerWidget {
               maxWidth: screenWidth < 1100 ? 640 : 760,
             ),
             child: sessionsAsync.when(
-              loading: () =>
-                  const Center(child: CircularProgressIndicator()),
+              loading: () => const Padding(
+                padding: EdgeInsets.fromLTRB(16, 16, 16, 16),
+                child: ShimmerList(
+                  type: ShimmerListType.friend,
+                  itemCount: 4,
+                ),
+              ),
               error: (err, _) => _ErrorView(
                 isDark: isDark,
                 message: err.toString(),

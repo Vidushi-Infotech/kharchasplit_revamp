@@ -19,6 +19,13 @@ class ShimmerList extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
+    // Dashboard composite: greeting + balance pills + groups carousel +
+    // recent-expenses list. Doesn't share the simple ListView structure of
+    // the per-row types, so it short-circuits here.
+    if (type == ShimmerListType.dashboard) {
+      return _buildDashboardSkeleton(isDark);
+    }
+
     return ListView.separated(
       physics: const NeverScrollableScrollPhysics(),
       itemCount: itemCount,
@@ -33,8 +40,116 @@ class ShimmerList extends StatelessWidget {
             return _buildFriendShimmer(isDark);
           case ShimmerListType.activity:
             return _buildActivityShimmer(isDark);
+          case ShimmerListType.dashboard:
+            return const SizedBox.shrink(); // handled above
         }
       },
+    );
+  }
+
+  /// Composite skeleton tailored to the dashboard layout — greeting,
+  /// balance pills, recent groups carousel, recent expenses list. Mirrors
+  /// the real screen's vertical rhythm so the swap to data feels seamless.
+  Widget _buildDashboardSkeleton(bool isDark) {
+    final block = AppColors.divider(isDark);
+    Widget bar(double w, double h, [double r = 6]) => Container(
+          width: w,
+          height: h,
+          decoration: BoxDecoration(
+            color: block,
+            borderRadius: BorderRadius.circular(r),
+          ),
+        );
+
+    return Shimmer.fromColors(
+      baseColor: AppColors.surface(isDark).withValues(alpha: 0.85),
+      highlightColor: AppColors.surface(isDark).withValues(alpha: 0.2),
+      child: SingleChildScrollView(
+        physics: const NeverScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Greeting
+            bar(120, 14),
+            const SizedBox(height: 8),
+            bar(180, 22),
+            const SizedBox(height: 20),
+            // Balance pills row
+            Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    height: 86,
+                    decoration: BoxDecoration(
+                      color: AppColors.cardBg(isDark),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Container(
+                    height: 86,
+                    decoration: BoxDecoration(
+                      color: AppColors.cardBg(isDark),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            // Overall balance hero
+            Container(
+              height: 110,
+              decoration: BoxDecoration(
+                color: AppColors.cardBg(isDark),
+                borderRadius: BorderRadius.circular(20),
+              ),
+            ),
+            const SizedBox(height: 24),
+            // Section title
+            bar(100, 14),
+            const SizedBox(height: 12),
+            // Groups carousel — horizontal row of 3 cards
+            SizedBox(
+              height: 130,
+              child: Row(
+                children: List.generate(3, (i) {
+                  return Padding(
+                    padding: EdgeInsets.only(right: i == 2 ? 0 : 12),
+                    child: Container(
+                      width: 150,
+                      decoration: BoxDecoration(
+                        color: AppColors.cardBg(isDark),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                  );
+                }),
+              ),
+            ),
+            const SizedBox(height: 24),
+            // Recent expenses section title
+            bar(140, 14),
+            const SizedBox(height: 12),
+            // Recent expenses — 3 rows
+            ...List.generate(3, (i) {
+              return Padding(
+                padding: EdgeInsets.only(bottom: i == 2 ? 0 : 12),
+                child: Container(
+                  height: 72,
+                  decoration: BoxDecoration(
+                    color: AppColors.cardBg(isDark),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
     );
   }
 
@@ -280,4 +395,7 @@ enum ShimmerListType {
   group,
   friend,
   activity,
+  /// Composite dashboard skeleton (greeting + balance pills + groups carousel
+  /// + recent expenses). Ignores [ShimmerList.itemCount].
+  dashboard,
 }
