@@ -7,18 +7,24 @@ import 'package:dio/io.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../constants/api_config.dart';
+import '../services/connectivity_service.dart';
 import '../services/token_storage.dart';
+import '../state/connectivity_provider.dart';
+import 'offline_interceptor.dart';
 
 final tokenStorageProvider = Provider<TokenStorage>((ref) => TokenStorage());
 
 final apiClientProvider = Provider<ApiClient>((ref) {
-  final client = ApiClient(ref.read(tokenStorageProvider));
+  final client = ApiClient(
+    ref.read(tokenStorageProvider),
+    ref.read(connectivityServiceProvider),
+  );
   ref.onDispose(client.dispose);
   return client;
 });
 
 class ApiClient {
-  ApiClient(this.tokens) {
+  ApiClient(this.tokens, this._connectivity) {
     dio = Dio(BaseOptions(
       baseUrl: ApiConfig.baseUrl,
       connectTimeout: ApiConfig.connectTimeout,
@@ -28,8 +34,13 @@ class ApiClient {
       validateStatus: (s) => s != null && s < 500,
     ));
     _installCertificatePinning();
+    // Offline interceptor runs FIRST so requests fail fast and don't
+    // bother going through the auth interceptor while we're offline.
+    dio.interceptors.add(OfflineInterceptor(_connectivity));
     dio.interceptors.add(_AuthInterceptor(this));
   }
+
+  final ConnectivityService _connectivity;
 
   /// Wire SHA-256 certificate pinning into the underlying HttpClient.
   /// No-op when [ApiConfig.certPinSha256] is empty (dev / staging) or when

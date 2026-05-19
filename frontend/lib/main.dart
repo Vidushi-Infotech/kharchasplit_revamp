@@ -7,9 +7,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'components/banners/offline_banner.dart';
 import 'core/services/app_logger.dart';
 import 'core/services/notification_router.dart';
 import 'core/services/push_service.dart';
+import 'core/state/connectivity_provider.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_provider.dart';
 import 'core/routing/app_router.dart';
@@ -103,6 +105,10 @@ class _KharchaSplitAppState extends ConsumerState<KharchaSplitApp> {
   @override
   Widget build(BuildContext context) {
     final themeMode = ref.watch(themeModeProvider);
+    // Kick the connectivity service awake — service starts listening on
+    // first read and survives for the app's lifetime via ref.onDispose.
+    ref.watch(connectivityServiceProvider);
+
     return MaterialApp.router(
       title: 'Kharcha Split',
       theme: AppTheme.lightTheme,
@@ -114,6 +120,9 @@ class _KharchaSplitAppState extends ConsumerState<KharchaSplitApp> {
       },
       routerConfig: appRouter,
       debugShowCheckedModeBanner: false,
+      // The banner overlays every route by wrapping the router's content.
+      builder: (context, child) =>
+          OfflineBanner(child: child ?? const SizedBox.shrink()),
     );
   }
 }

@@ -162,7 +162,7 @@ class _Body extends ConsumerWidget {
         const SizedBox(height: 16),
         Center(
           child: Text(
-            'KharchaSplit · v1.0',
+            'KharchaSplit · v3.0.0',
             style: AppTextStyles.caption(isDark).copyWith(
               color: AppColors.textSecondary(isDark),
             ),

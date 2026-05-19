@@ -1,11 +1,27 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../state/auth_provider.dart';
+
+/// Public legal URLs. Tapping "Terms" / "Privacy Policy" in the footer
+/// opens these in the user's browser.
+const String _termsUrl = 'https://kharchasplit.com/terms-conditions';
+const String _privacyUrl = 'https://kharchasplit.com/privacy-policy';
+
+/// Open [url] in the system browser. Falls back silently if the platform
+/// has no browser registered (extremely rare).
+Future<void> _openExternal(String url) async {
+  final uri = Uri.parse(url);
+  if (await canLaunchUrl(uri)) {
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+}
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -496,12 +512,39 @@ class _HelperText extends StatelessWidget {
   }
 }
 
-class _TermsFooter extends StatelessWidget {
+class _TermsFooter extends StatefulWidget {
   const _TermsFooter({required this.isDark});
   final bool isDark;
 
   @override
+  State<_TermsFooter> createState() => _TermsFooterState();
+}
+
+class _TermsFooterState extends State<_TermsFooter> {
+  // Tap recognizers must persist for the widget's lifetime — recreating
+  // them on every build leaks gesture arenas.
+  late final TapGestureRecognizer _termsTap;
+  late final TapGestureRecognizer _privacyTap;
+
+  @override
+  void initState() {
+    super.initState();
+    _termsTap = TapGestureRecognizer()
+      ..onTap = () => _openExternal(_termsUrl);
+    _privacyTap = TapGestureRecognizer()
+      ..onTap = () => _openExternal(_privacyUrl);
+  }
+
+  @override
+  void dispose() {
+    _termsTap.dispose();
+    _privacyTap.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final isDark = widget.isDark;
     final base = AppTextStyles.caption(isDark).copyWith(
       color: AppColors.textSecondary(isDark),
       fontSize: 11.5,
@@ -510,15 +553,27 @@ class _TermsFooter extends StatelessWidget {
     final link = base.copyWith(
       color: AppColors.tealDark,
       fontWeight: FontWeight.w600,
+      decoration: TextDecoration.underline,
+      decorationColor: AppColors.tealDark.withValues(alpha: 0.4),
     );
     return Center(
       child: Text.rich(
         TextSpan(
           children: [
             const TextSpan(text: 'By continuing you agree to our '),
-            TextSpan(text: 'Terms', style: link),
+            TextSpan(
+              text: 'Terms',
+              style: link,
+              recognizer: _termsTap,
+              semanticsLabel: 'Terms and conditions, opens in browser',
+            ),
             const TextSpan(text: ' and '),
-            TextSpan(text: 'Privacy Policy', style: link),
+            TextSpan(
+              text: 'Privacy Policy',
+              style: link,
+              recognizer: _privacyTap,
+              semanticsLabel: 'Privacy policy, opens in browser',
+            ),
             const TextSpan(text: '.'),
           ],
           style: base,

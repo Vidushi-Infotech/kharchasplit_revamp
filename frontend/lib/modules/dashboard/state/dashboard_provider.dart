@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/state/connectivity_provider.dart';
 import '../../../data/dashboard/dashboard_repository.dart';
 import '../../../models/expense_model.dart';
 import '../../../models/group_model.dart';
@@ -41,6 +42,10 @@ class DashboardNotifier extends AsyncNotifier<DashboardData> {
   @override
   Future<DashboardData> build() async {
     final user = ref.watch(authProvider).user;
+    // Auto-refresh on reconnect so balances/recents are fresh.
+    ref.listen(onReconnectStreamProvider, (_, __) {
+      refresh();
+    });
     if (user == null) return DashboardData.empty;
 
     // Surface the current groups list immediately, then layer the API
