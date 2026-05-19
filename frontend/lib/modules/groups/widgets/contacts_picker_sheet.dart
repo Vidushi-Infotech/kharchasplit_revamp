@@ -1,12 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../data/contacts/device_contacts_provider.dart';
 import '../../../data/users/users_repository.dart';
 import '../state/registered_users_provider.dart';
+
+/// Link surfaced by the Copy / Share buttons inside the invite bottom
+/// sheet. Intentionally NOT used inside the SMTP email template — the
+/// email already has its own Play Store / App Store badges.
+const String _kInviteShareUrl = 'https://kharchasplit.com/';
 
 /// Shows the device-contacts picker as a modal bottom sheet and resolves to
 /// the user's selection (empty if cancelled). Used by Create Group and the
@@ -74,6 +81,12 @@ class _ContactsPickerSheetState extends ConsumerState<ContactsPickerSheet> {
   Set<String> _registeredPhones = const {};
   bool _registrationLookupStarted = false;
 
+  /// Per-contact email entered via the "Add & Invite" popup. Keyed by
+  /// `contact.id`. Injected onto each contact's `emails` list right before
+  /// the sheet returns its selection, so callers can iterate
+  /// `c.emails.first.address` to drive the SMTP fallback invite.
+  final Map<String, String> _enteredEmails = {};
+
   @override
   void initState() {
     super.initState();
@@ -139,6 +152,16 @@ class _ContactsPickerSheetState extends ConsumerState<ContactsPickerSheet> {
                   final selected = allContacts
                       .where((c) => _selectedIds.contains(c.id))
                       .toList();
+                  // Attach the user-entered email (if any) so the caller can
+                  // run an SMTP invite alongside the WATI phone invite. We
+                  // prepend so the entered address wins over any device-book
+                  // email we might want to keep further down the list.
+                  for (final c in selected) {
+                    final extra = _enteredEmails[c.id];
+                    if (extra != null && extra.isNotEmpty) {
+                      c.emails = [Email(extra), ...c.emails];
+                    }
+                  }
                   Navigator.of(context).pop(selected);
                 },
                 isDark: isDark,
@@ -257,10 +280,20 @@ class _ContactsPickerSheetState extends ConsumerState<ContactsPickerSheet> {
         : (c.emails.isNotEmpty ? c.emails.first.address : '');
     final isRegistered =
         phone.isNotEmpty && _registeredPhones.contains(normalizePhone(phone));
+    // The "Add & Invite" path (unregistered + not already selected) goes
+    // through the email popup; everything else is a plain toggle.
+    void onCtaTap() {
+      if (isSelected || isRegistered) {
+        _toggle(c.id);
+      } else {
+        _handleInviteTap(c);
+      }
+    }
+
     return Opacity(
       opacity: alreadyMember ? 0.55 : 1.0,
       child: ListTile(
-        onTap: alreadyMember ? null : () => _toggle(c.id),
+        onTap: alreadyMember ? null : onCtaTap,
         title: Text(name),
         subtitle: subtitle.isEmpty ? null : Text(subtitle),
         leading: CircleAvatar(
@@ -275,7 +308,7 @@ class _ContactsPickerSheetState extends ConsumerState<ContactsPickerSheet> {
             : _buildActionButton(
                 isRegistered: isRegistered,
                 isSelected: isSelected,
-                onTap: () => _toggle(c.id),
+                onTap: onCtaTap,
               ),
       ),
     );
@@ -285,10 +318,44 @@ class _ContactsPickerSheetState extends ConsumerState<ContactsPickerSheet> {
     setState(() {
       if (_selectedIds.contains(id)) {
         _selectedIds.remove(id);
+        // Drop any email entered earlier — deselect should be a clean reset.
+        _enteredEmails.remove(id);
       } else {
         _selectedIds.add(id);
       }
     });
+  }
+
+  /// Tapped on the "Add & Invite" pill of an unregistered contact. Pops a
+  /// small dialog asking for the recipient's email so we can fall back to
+  /// SMTP (since WhatsApp/WATI isn't always viable). On submit the email
+  /// is stashed in [_enteredEmails] and the contact toggled selected. On
+  /// cancel nothing happens — the user can tap "Add & Invite" again.
+  Future<void> _handleInviteTap(Contact c) async {
+    final email = await _promptInviteEmail(c);
+    if (email == null) return; // cancelled
+    setState(() {
+      _enteredEmails[c.id] = email;
+      _selectedIds.add(c.id);
+    });
+  }
+
+  Future<String?> _promptInviteEmail(Contact c) {
+    return showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true, // lets the sheet rise above the keyboard
+      backgroundColor:
+          AppColors.surface(Theme.of(context).brightness == Brightness.dark),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => _InviteEmailDialog(
+        title: c.displayName.trim().isEmpty
+            ? 'Invite by email'
+            : 'Invite ${c.displayName.trim()}',
+        initialEmail: c.emails.isNotEmpty ? c.emails.first.address : '',
+      ),
+    );
   }
 
   Widget _buildActionButton({
@@ -543,6 +610,199 @@ class _ContactsError extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Bottom-sheet body for the "Add & Invite" flow. Wraps:
+///   - email entry (queued for SMTP send when the picker is Done'd)
+///   - Copy link / Share link buttons that surface the static
+///     [_kInviteShareUrl] (intentionally separate from the SMTP email,
+///     which has its own Play Store / App Store CTA buttons).
+///
+/// Lives as a real StatefulWidget so the TextEditingController is disposed
+/// inside the framework's normal mount/unmount cycle — disposing inline
+/// after `await showModalBottomSheet` previously triggered a
+/// `_dependents.isEmpty` assertion because the TextFormField hadn't
+/// finished unmounting yet.
+class _InviteEmailDialog extends StatefulWidget {
+  const _InviteEmailDialog({
+    required this.title,
+    required this.initialEmail,
+  });
+
+  final String title;
+  final String initialEmail;
+
+  @override
+  State<_InviteEmailDialog> createState() => _InviteEmailDialogState();
+}
+
+class _InviteEmailDialogState extends State<_InviteEmailDialog> {
+  late final TextEditingController _ctrl;
+  final _formKey = GlobalKey<FormState>();
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = TextEditingController(text: widget.initialEmail);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (_formKey.currentState!.validate()) {
+      Navigator.of(context).pop(_ctrl.text.trim());
+    }
+  }
+
+  Future<void> _copyLink() async {
+    await Clipboard.setData(const ClipboardData(text: _kInviteShareUrl));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Link copied to clipboard')),
+    );
+  }
+
+  Future<void> _shareLink() async {
+    // Share sheet uses the device's native sharing intent (WhatsApp,
+    // SMS, email, etc.). Lets the inviter use their own messaging app
+    // when they don't want to wait for the SMTP email to arrive.
+    await SharePlus.instance.share(
+      ShareParams(
+        text: 'Join me on KharchaSplit: $_kInviteShareUrl',
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    // Padding for the keyboard so the email field stays above it.
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, 12, 20, 20 + bottomInset),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Drag handle
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: AppColors.divider(isDark),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          Text(
+            widget.title,
+            style: AppTextStyles.body1(isDark)
+                .copyWith(fontWeight: FontWeight.w700, fontSize: 17),
+          ),
+          const SizedBox(height: 16),
+
+          // Email entry — queued for SMTP send on picker Done.
+          Form(
+            key: _formKey,
+            child: TextFormField(
+              controller: _ctrl,
+              autofocus: true,
+              keyboardType: TextInputType.emailAddress,
+              textInputAction: TextInputAction.send,
+              decoration: const InputDecoration(
+                labelText: 'Email',
+                hintText: 'name@example.com',
+                border: OutlineInputBorder(),
+              ),
+              validator: (v) {
+                final s = (v ?? '').trim();
+                if (s.isEmpty) return 'Email is required';
+                if (!s.contains('@') || !s.contains('.')) {
+                  return 'Enter a valid email';
+                }
+                return null;
+              },
+              onFieldSubmitted: (_) => _submit(),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: FilledButton(
+                  onPressed: _submit,
+                  child: const Text('Add'),
+                ),
+              ),
+            ],
+          ),
+
+          // Visual separator before the link-share section.
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            child: Row(
+              children: [
+                Expanded(child: Divider(color: AppColors.divider(isDark))),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  child: Text(
+                    'or share a link',
+                    style: AppTextStyles.caption(isDark).copyWith(
+                      color: AppColors.textSecondary(isDark),
+                    ),
+                  ),
+                ),
+                Expanded(child: Divider(color: AppColors.divider(isDark))),
+              ],
+            ),
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _copyLink,
+                  icon: const Icon(Icons.link_rounded),
+                  label: const Text('Copy'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    side: BorderSide(color: AppColors.brand),
+                    foregroundColor: AppColors.brand,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _shareLink,
+                  icon: const Icon(Icons.ios_share_rounded),
+                  label: const Text('Share'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    side: BorderSide(color: AppColors.brand),
+                    foregroundColor: AppColors.brand,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

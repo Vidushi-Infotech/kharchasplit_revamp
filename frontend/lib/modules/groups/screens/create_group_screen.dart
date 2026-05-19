@@ -418,14 +418,53 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
       ref.invalidate(groupsProvider);
     }
 
+    // 3. SMTP fallback — emails were collected via the popup that pops up
+    //    when the user taps "Add & Invite" inside the contacts picker. They
+    //    ride along on the Contact object's .emails list. Each one gets a
+    //    POST /groups/:id/invite-email — independent of WATI.
+    final emailRecipients = _selectedContacts
+        .where((c) => c.emails.isNotEmpty &&
+            c.emails.first.address.trim().isNotEmpty)
+        .toList();
+    int emailSent = 0;
+    final emailFailures = <String>[];
+    if (emailRecipients.isNotEmpty) {
+      final repo = ref.read(groupsRepositoryProvider);
+      for (final c in emailRecipients) {
+        final addr = c.emails.first.address.trim();
+        try {
+          await repo.inviteByEmail(
+            groupId: newGroup.id,
+            email: addr,
+            name: c.displayName,
+          );
+          emailSent++;
+        } catch (e) {
+          // Surface the actual SMTP / server error so users can spot
+          // typos like name@gmail.coms instead of a silent counter.
+          final msg = e is GroupsApiException ? e.message : e.toString();
+          emailFailures.add('$addr: $msg');
+        }
+      }
+    }
+    final emailFailed = emailFailures.length;
+
     if (!mounted) return;
     context.go('/home/groups');
-    final summary = invitable.isEmpty
-        ? 'Group "$name" created'
-        : failed == 0
-            ? 'Group "$name" created · $succeeded member${succeeded == 1 ? '' : 's'} invited'
-            : 'Group "$name" created · $succeeded invited, $failed failed';
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(summary)));
+    final parts = <String>['Group "$name" created'];
+    if (invitable.isNotEmpty) {
+      parts.add(failed == 0
+          ? '$succeeded member${succeeded == 1 ? '' : 's'} invited'
+          : '$succeeded invited, $failed failed');
+    }
+    if (emailRecipients.isNotEmpty) {
+      parts.add(emailFailed == 0
+          ? '$emailSent email${emailSent == 1 ? '' : 's'} sent'
+          : '$emailSent email${emailSent == 1 ? '' : 's'} sent, $emailFailed failed');
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(parts.join(' · '))),
+    );
   }
 
   @override

@@ -60,6 +60,20 @@ router.post(
 router.post('/:id/pending-members/:phoneNumber/resend', authenticate, groupController.resendPendingInvite);
 router.delete('/:id/pending-members/:phoneNumber', authenticate, groupController.removePendingMember);
 
+// Email-invite fallback. Independent of WATI / Twilio — sends an SMTP invite
+// with Play Store + App Store install links. Used when WhatsApp delivery
+// isn't viable. Does not modify group membership.
+router.post(
+  '/:id/invite-email',
+  authenticate,
+  [
+    body('email').isEmail().withMessage('A valid email address is required'),
+    body('name').optional().trim().isLength({ max: 255 }),
+  ],
+  validate,
+  groupController.inviteByEmail,
+);
+
 // Archive/Unarchive routes
 router.put('/:id/archive', authenticate, groupController.archiveGroup);
 router.put('/:id/unarchive', authenticate, groupController.unarchiveGroup);

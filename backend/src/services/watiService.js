@@ -14,7 +14,13 @@ class WatiService {
   }
 
   static get WATI_TEMPLATE_NAME() {
-    return process.env.WATI_TEMPLATE_NAME || 'kharchasplit_expense_notification';
+    // Default to the *invitation* template (MARKETING category, approved).
+    // The previous default — `kharchasplit_expense_notification` — is a
+    // UTILITY template; WhatsApp silently drops UTILITY messages sent to
+    // recipients without an active 24-hour customer-service window, so
+    // invites to brand-new users would be accepted by WATI (200/result:true)
+    // but never actually delivered. Inviting requires MARKETING category.
+    return process.env.WATI_TEMPLATE_NAME || 'kharchasplit_invitation';
   }
 
   /**

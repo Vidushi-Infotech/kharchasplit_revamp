@@ -189,13 +189,37 @@ class User {
       return existing;
     }
 
-    const result = await query(
-      `INSERT INTO users (phone_number, name, email, is_placeholder)
-       VALUES ($1, $2, $3, TRUE)
-       RETURNING id, phone_number, name, email, is_placeholder, created_at`,
-      [phoneNumber, name, email || null]
-    );
-    return result.rows[0];
+    try {
+      const result = await query(
+        `INSERT INTO users (phone_number, name, email, is_placeholder)
+         VALUES ($1, $2, $3, TRUE)
+         RETURNING id, phone_number, name, email, is_placeholder, created_at`,
+        [phoneNumber, name, email || null]
+      );
+      return result.rows[0];
+    } catch (err) {
+      // 23505 = unique_violation. The phone_number unique constraint applies
+      // to soft-deleted rows too, so a previously-deleted user with this
+      // number blocks the INSERT even though findByPhoneNumber returned null
+      // (it filters deleted_at IS NULL). Revive the soft-deleted row instead
+      // of failing the request.
+      if (err.code === '23505') {
+        const normalized = this.normalizePhoneForSearch(phoneNumber);
+        const revived = await query(
+          `UPDATE users
+              SET deleted_at = NULL,
+                  is_placeholder = TRUE,
+                  name = COALESCE(NULLIF($2, ''), name),
+                  email = COALESCE($3, email),
+                  updated_at = NOW()
+            WHERE RIGHT(REGEXP_REPLACE(phone_number, '[^0-9]', '', 'g'), 10) = $1
+            RETURNING id, phone_number, name, email, is_placeholder, created_at`,
+          [normalized, name, email || null]
+        );
+        if (revived.rows.length > 0) return revived.rows[0];
+      }
+      throw err;
+    }
   }
 
   /**

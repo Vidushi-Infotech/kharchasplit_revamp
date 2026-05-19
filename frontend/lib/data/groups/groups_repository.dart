@@ -161,6 +161,25 @@ class GroupsRepository {
     _ensureSuccess(res);
   }
 
+  /// Email-only invite fallback. Sends an SMTP "you were added to <group> by
+  /// <inviter>" email with install links. Does not modify group membership
+  /// on the backend — purely a delivery channel for when WhatsApp/WATI
+  /// isn't viable.
+  Future<void> inviteByEmail({
+    required String groupId,
+    required String email,
+    String? name,
+  }) async {
+    final res = await _client.dio.post(
+      '/groups/$groupId/invite-email',
+      data: {
+        'email': email.trim(),
+        if (name != null && name.trim().isNotEmpty) 'name': name.trim(),
+      },
+    );
+    _ensureSuccess(res);
+  }
+
   String _normalizePhone(String input) {
     final cleaned = input.trim().replaceAll(RegExp(r'\s+'), '');
     if (cleaned.startsWith('+')) return cleaned;

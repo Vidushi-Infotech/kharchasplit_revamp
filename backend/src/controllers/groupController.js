@@ -4,6 +4,7 @@ import GroupService from '../services/groupService.js';
 import ActivityService from '../services/activityService.js';
 import { NotificationService } from '../services/notificationService.js';
 import WatiService from '../services/watiService.js';
+import EmailService from '../services/emailService.js';
 import User from '../models/User.js';
 
 /**
@@ -550,11 +551,19 @@ const addPendingMember = async (req, res, next) => {
     // Log activity
     await ActivityService.logMemberAdded(id, req.user.id, group.name, `${name} (pending)`);
 
+    // The pending member is in the group either way — but be honest about
+    // whether WhatsApp delivery actually went out, so the UI doesn't claim
+    // success when WATI silently dropped the message.
+    const inviteMessage = watiResult.success
+      ? (hasPending
+          ? 'Invite resent via WhatsApp'
+          : 'Member added and WhatsApp invite sent')
+      : (hasPending
+          ? `Member kept in group, but WhatsApp resend failed: ${watiResult.error || 'unknown error'}`
+          : `Member added, but WhatsApp invite failed: ${watiResult.error || 'unknown error'}`);
     res.status(201).json({
       success: true,
-      message: hasPending
-        ? 'Invite resent successfully via WhatsApp'
-        : 'Pending member added to group and WhatsApp invite sent',
+      message: inviteMessage,
       data: {
         type: 'placeholder',
         member: {
@@ -1125,6 +1134,75 @@ const remindForBalance = async (req, res, next) => {
   }
 };
 
+/**
+ * Email-invite fallback (used when WhatsApp / WATI delivery isn't viable —
+ * e.g. WABA billing or BSP issues). Sends a "you were added to <group> by
+ * <inviter>" email via SMTP with install links to the Play Store / App Store.
+ *
+ * This intentionally does NOT add anyone to the group, because most early
+ * recipients are pre-registration. The caller can still use the existing
+ * /pending-members WATI flow when they know the recipient's phone.
+ *
+ * POST /api/v1/groups/:id/invite-email
+ * Body: { email: string, name?: string }
+ */
+const inviteByEmail = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { email, name } = req.body || {};
+
+    if (!email || typeof email !== 'string' || !email.includes('@')) {
+      return res.status(400).json({
+        success: false,
+        error: 'A valid email address is required',
+      });
+    }
+
+    // Caller must be in the group (matches the WATI invite flow's gating).
+    await GroupService.validateGroupAccess(id, req.user.id);
+
+    const [group, inviter] = await Promise.all([
+      Group.findById(id),
+      User.findById(req.user.id),
+    ]);
+    if (!group) {
+      return res.status(404).json({ success: false, error: 'Group not found' });
+    }
+
+    if (!EmailService.isConfigured()) {
+      return res.status(503).json({
+        success: false,
+        error: 'Email service not configured on the server (SMTP env vars missing).',
+      });
+    }
+
+    const result = await EmailService.sendInviteEmail({
+      toEmail: email.trim(),
+      recipientName: (name || '').trim() || email.split('@')[0],
+      inviterName: inviter?.name || 'A friend',
+      groupName: group.name || 'a KharchaSplit group',
+    });
+
+    if (!result.success) {
+      return res.status(502).json({
+        success: false,
+        error: result.error || 'Email could not be sent',
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Invite email sent to ${email.trim()}`,
+      data: { messageId: result.messageId },
+    });
+  } catch (error) {
+    if (error.message === 'User is not a member of this group') {
+      return res.status(403).json({ success: false, error: error.message });
+    }
+    next(error);
+  }
+};
+
 export default {
   getGroups,
   getGroup,
@@ -1143,4 +1221,5 @@ export default {
   unarchiveGroup,
   completeGroup,
   remindForBalance,
+  inviteByEmail,
 };

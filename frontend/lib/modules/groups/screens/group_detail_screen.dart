@@ -167,22 +167,46 @@ class GroupDetailScreen extends ConsumerWidget {
     int added = 0;
     final failures = <String>[];
 
+    int emailsSent = 0;
+    int emailsFailed = 0;
+
     for (final c in picked) {
       final phone = c.phones.isNotEmpty ? c.phones.first.number.trim() : '';
-      if (phone.isEmpty) {
-        failures.add('${c.displayName} (no phone)');
+      final email = c.emails.isNotEmpty ? c.emails.first.address.trim() : '';
+      final name = c.displayName.trim().isEmpty
+          ? (phone.isNotEmpty ? phone : email)
+          : c.displayName.trim();
+
+      if (phone.isNotEmpty) {
+        try {
+          await repo.invitePhone(
+            groupId: groupId,
+            name: name,
+            phoneNumber: phone,
+          );
+          added++;
+        } catch (e) {
+          failures.add('${c.displayName}: ${e is GroupsApiException ? e.message : e}');
+        }
+      } else if (email.isEmpty) {
+        // Neither phone nor email — nothing we can do.
+        failures.add('${c.displayName} (no phone or email)');
         continue;
       }
-      final name = c.displayName.trim().isEmpty ? phone : c.displayName.trim();
-      try {
-        await repo.invitePhone(
-          groupId: groupId,
-          name: name,
-          phoneNumber: phone,
-        );
-        added++;
-      } catch (e) {
-        failures.add('${c.displayName}: ${e is GroupsApiException ? e.message : e}');
+
+      // Email fallback — fires whenever the picker popup collected an
+      // email for this contact (regardless of whether WATI accepted it).
+      if (email.isNotEmpty) {
+        try {
+          await repo.inviteByEmail(
+            groupId: groupId,
+            email: email,
+            name: name,
+          );
+          emailsSent++;
+        } catch (_) {
+          emailsFailed++;
+        }
       }
     }
 
@@ -190,11 +214,20 @@ class GroupDetailScreen extends ConsumerWidget {
     ref.invalidate(groupsProvider);
 
     if (!context.mounted) return;
-    final msg = failures.isEmpty
-        ? (added == 1 ? '1 member added.' : '$added members added.')
-        : added == 0
-            ? 'Could not add: ${failures.join(', ')}'
-            : '$added added · ${failures.length} failed';
+    final parts = <String>[];
+    if (added > 0) {
+      parts.add('$added added');
+    }
+    if (emailsSent > 0) {
+      parts.add('$emailsSent email${emailsSent == 1 ? '' : 's'} sent');
+    }
+    if (failures.isNotEmpty) {
+      parts.add('${failures.length} failed');
+    }
+    if (emailsFailed > 0) {
+      parts.add('$emailsFailed email${emailsFailed == 1 ? '' : 's'} failed');
+    }
+    final msg = parts.isEmpty ? 'No changes' : parts.join(' · ');
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
@@ -601,15 +634,24 @@ class GroupDetailScreen extends ConsumerWidget {
           _HeroCard(detail: detail),
           const SizedBox(height: 18),
           Padding(
-            padding: const EdgeInsets.only(left: 4, bottom: 8),
-            child: Text(
-              'MEMBERS · ${detail.members.length}',
-              style: AppTextStyles.caption(isDark).copyWith(
-                color: AppColors.textSecondary(isDark),
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.3,
-                fontSize: 11,
-              ),
+            padding: const EdgeInsets.only(left: 4, right: 4, bottom: 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'MEMBERS · ${detail.members.length}',
+                    style: AppTextStyles.caption(isDark).copyWith(
+                      color: AppColors.textSecondary(isDark),
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.3,
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+                _AddMemberButton(
+                  onTap: () => _showInviteDialog(context, ref),
+                ),
+              ],
             ),
           ),
           _buildMembersList(context, isDark, detail, ref, myId, isAdmin),
@@ -694,6 +736,25 @@ class GroupDetailScreen extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 24),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'MEMBERS · ${detail.members.length}',
+                  style: AppTextStyles.caption(isDark).copyWith(
+                    color: AppColors.textSecondary(isDark),
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.3,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+              _AddMemberButton(
+                onTap: () => _showInviteDialog(context, ref),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
           // Members list
           _buildMembersList(context, isDark, detail, ref, myId, isAdmin),
         ],
@@ -934,9 +995,18 @@ class GroupDetailScreen extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Members (${detail.members.length})',
-          style: AppTextStyles.headline3(isDark),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Members (${detail.members.length})',
+                style: AppTextStyles.headline3(isDark),
+              ),
+            ),
+            _AddMemberButton(
+              onTap: () => _showInviteDialog(context, ref),
+            ),
+          ],
         ),
         const SizedBox(height: 12),
         ListView.builder(
@@ -1530,7 +1600,8 @@ class _DetailTopBar extends StatelessWidget implements PreferredSizeWidget {
                             ],
                           ),
                         ),
-                      // Add member: visible to everyone in the group.
+                      // Add member: also exposed as a "+ Add" pill next to the
+                      // MEMBERS header — kept here for discoverability.
                       PopupMenuItem(
                         value: 'add_member',
                         child: Row(
@@ -2212,6 +2283,44 @@ class _OutgoingSettlementTileState
                 : const Text('Cancel'),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Small pill-style "+ Add" button that lives next to the Members header.
+/// Replaces the (removed) "Add member" item from the 3-dot menu.
+class _AddMemberButton extends StatelessWidget {
+  const _AddMemberButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Material(
+      color: AppColors.brand.withValues(alpha: isDark ? 0.18 : 0.12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.add_rounded, size: 16, color: AppColors.brand),
+              const SizedBox(width: 4),
+              Text(
+                'Add',
+                style: AppTextStyles.caption(isDark).copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.brand,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
