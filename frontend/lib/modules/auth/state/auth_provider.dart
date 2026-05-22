@@ -24,9 +24,10 @@ class AuthData {
   final String? errorMessage;
   final String? successMessage;
 
-  /// Set true right after OTP verify if the user has no name on file (brand
-  /// new user, or existing user who never completed setup). The router
-  /// uses this to send them to ProfileSetupScreen instead of the dashboard.
+  /// Set true after register/login if the row is missing name or email
+  /// (brand new user, or existing user who never completed setup). The
+  /// router uses this to send them to ProfileSetupScreen instead of the
+  /// dashboard.
   final bool needsProfileSetup;
 
   bool get isAuthenticated => user != null;
@@ -78,11 +79,13 @@ class AuthNotifier extends Notifier<AuthData> {
     }
   }
 
-  /// Step 1 of registration: create the user record. Backend sends an OTP.
-  Future<bool> register({
-    required String name,
+  /// Register with phone + password. On success the backend signs the user
+  /// in immediately; we persist tokens and set `needsProfileSetup` so the
+  /// UI routes to /profile-setup before the dashboard.
+  Future<bool> registerWithPassword({
     required String phone,
-    String? email,
+    required String password,
+    required String confirmPassword,
   }) async {
     state = state.copyWith(
       state: AuthState.loading,
@@ -92,15 +95,12 @@ class AuthNotifier extends Notifier<AuthData> {
 
     try {
       final normalized = _normalizePhone(phone);
-      await _repo.register(
+      final result = await _repo.registerWithPassword(
         phoneNumber: normalized,
-        name: name.trim(),
-        email: email?.trim().isEmpty == true ? null : email?.trim(),
+        password: password,
+        confirmPassword: confirmPassword,
       );
-      state = state.copyWith(
-        state: AuthState.success,
-        successMessage: 'OTP sent to your phone',
-      );
+      await _persistAuthResult(result);
       return true;
     } catch (e) {
       state = state.copyWith(
@@ -111,8 +111,11 @@ class AuthNotifier extends Notifier<AuthData> {
     }
   }
 
-  /// Login step 1: request an OTP for an existing user.
-  Future<bool> requestLoginOtp(String phone) async {
+  /// Phone + password login.
+  Future<bool> loginWithPassword({
+    required String phone,
+    required String password,
+  }) async {
     state = state.copyWith(
       state: AuthState.loading,
       clearError: true,
@@ -121,10 +124,37 @@ class AuthNotifier extends Notifier<AuthData> {
 
     try {
       final normalized = _normalizePhone(phone);
-      await _repo.sendLoginOtp(normalized);
+      final result = await _repo.loginWithPassword(
+        phoneNumber: normalized,
+        password: password,
+      );
+      await _persistAuthResult(result);
+      return true;
+    } catch (e) {
+      state = state.copyWith(
+        state: AuthState.error,
+        errorMessage: _readableError(e),
+      );
+      return false;
+    }
+  }
+
+  /// Forgot-password step 1: ask backend to email an OTP.
+  /// Returns true on a successful network round-trip; the response is
+  /// intentionally generic ("if registered, a code was sent") so the user
+  /// can't enumerate accounts.
+  Future<bool> requestPasswordReset(String email) async {
+    state = state.copyWith(
+      state: AuthState.loading,
+      clearError: true,
+      clearSuccess: true,
+    );
+
+    try {
+      await _repo.requestPasswordReset(email.trim());
       state = state.copyWith(
         state: AuthState.success,
-        successMessage: 'OTP sent to your phone',
+        successMessage: 'If that email is registered, a code has been sent.',
       );
       return true;
     } catch (e) {
@@ -136,10 +166,13 @@ class AuthNotifier extends Notifier<AuthData> {
     }
   }
 
-  /// Step 2 (login or registration): verify OTP, persist tokens, set user.
-  Future<bool> verifyOtp({
-    required String phone,
+  /// Forgot-password step 2: verify the OTP and set the new password. On
+  /// success the backend issues a fresh token pair (auto-login).
+  Future<bool> resetPassword({
+    required String email,
     required String otp,
+    required String newPassword,
+    required String confirmPassword,
   }) async {
     state = state.copyWith(
       state: AuthState.loading,
@@ -148,30 +181,13 @@ class AuthNotifier extends Notifier<AuthData> {
     );
 
     try {
-      final normalized = _normalizePhone(phone);
-      final result = await _repo.verifyOtp(
-        phoneNumber: normalized,
+      final result = await _repo.resetPassword(
+        email: email.trim(),
         otp: otp.trim(),
+        newPassword: newPassword,
+        confirmPassword: confirmPassword,
       );
-      await _apiClient.tokens.saveTokens(
-        accessToken: result.accessToken,
-        refreshToken: result.refreshToken,
-      );
-      await _apiClient.tokens.saveUser(result.user);
-      final user = UserModel.fromJson(result.user);
-      state = AuthData(
-        state: AuthState.success,
-        user: user,
-        needsProfileSetup: result.needsProfileSetup,
-      );
-      // Register this device's FCM token with the backend so push works.
-      // Fire-and-forget so signin completes immediately.
-      if (PushService.isSupportedPlatform) {
-        unawaited(PushService.instance.registerWithBackend(
-          dio: _apiClient.dio,
-          userId: user.id,
-        ));
-      }
+      await _persistAuthResult(result);
       return true;
     } catch (e) {
       state = state.copyWith(
@@ -179,6 +195,27 @@ class AuthNotifier extends Notifier<AuthData> {
         errorMessage: _readableError(e),
       );
       return false;
+    }
+  }
+
+  /// Save tokens + user, then update state and kick off FCM registration.
+  Future<void> _persistAuthResult(AuthTokens result) async {
+    await _apiClient.tokens.saveTokens(
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
+    );
+    await _apiClient.tokens.saveUser(result.user);
+    final user = UserModel.fromJson(result.user);
+    state = AuthData(
+      state: AuthState.success,
+      user: user,
+      needsProfileSetup: result.needsProfileSetup,
+    );
+    if (PushService.isSupportedPlatform) {
+      unawaited(PushService.instance.registerWithBackend(
+        dio: _apiClient.dio,
+        userId: user.id,
+      ));
     }
   }
 
@@ -229,9 +266,10 @@ class AuthNotifier extends Notifier<AuthData> {
                   (payload['preferredCurrency'] as String?) ??
                       user.preferredCurrency,
             );
-      // Once a non-empty name is on file, the user is no longer in
-      // first-time-setup mode.
-      final clearedSetup = updated.name.trim().isNotEmpty;
+      // Profile setup is complete once both a name and an email are on
+      // file (email is required so the user can receive password-reset OTPs).
+      final clearedSetup = updated.name.trim().isNotEmpty &&
+          updated.email.trim().isNotEmpty;
       state = state.copyWith(
         state: AuthState.success,
         user: updated,

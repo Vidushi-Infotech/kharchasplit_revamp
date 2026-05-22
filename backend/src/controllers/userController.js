@@ -54,6 +54,33 @@ const updateUser = async (req, res, next) => {
       });
     }
 
+    // Enforce profile-setup completion: if the row is still missing a name
+    // or email, this PUT must supply both. Email is required so the user can
+    // receive password-reset OTPs.
+    const current = await User.findById(id);
+    if (current) {
+      const currentNameEmpty = !current.name || current.name.trim().length === 0;
+      const currentEmailEmpty = !current.email;
+      const isCompletingSetup = currentNameEmpty || currentEmailEmpty;
+
+      if (isCompletingSetup) {
+        const finalName = (name ?? current.name ?? '').toString().trim();
+        const finalEmail = (email ?? current.email ?? '').toString().trim();
+        if (finalName.length < 2) {
+          return res.status(400).json({
+            success: false,
+            error: 'Name is required to complete your profile',
+          });
+        }
+        if (!finalEmail) {
+          return res.status(400).json({
+            success: false,
+            error: 'Email is required to complete your profile (used for password reset)',
+          });
+        }
+      }
+    }
+
     const user = await User.update(id, {
       name,
       email,

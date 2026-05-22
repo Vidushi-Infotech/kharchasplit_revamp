@@ -156,10 +156,12 @@ class GroupDetailScreen extends ConsumerWidget {
             .where((p) => p.isNotEmpty) ??
         const <String>[];
 
+    final selfPhone = ref.read(authProvider).user?.phone ?? '';
     final picked = await showContactsPicker(
       context,
       doneLabel: 'Add',
       existingMemberPhones: existingPhones,
+      selfPhones: selfPhone.isEmpty ? const [] : [selfPhone],
     );
     if (picked.isEmpty || !context.mounted) return;
 

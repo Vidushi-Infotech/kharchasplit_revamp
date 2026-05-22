@@ -24,6 +24,9 @@ const String _kInviteShareUrl = 'https://kharchasplit.com/';
 /// [existingMemberPhones] are phone numbers (any format) of people already in
 /// the target group — they appear with a disabled "Added" chip and cannot be
 /// re-selected. Phones are normalized internally before comparison.
+/// [selfPhones] are the signed-in user's own phone numbers (any format). Their
+/// own contact entry will still appear in the list but shows a "You" chip
+/// instead of an Add button — they can't add themselves to their own group.
 Future<List<Contact>> showContactsPicker(
   BuildContext context, {
   List<Contact> initialSelected = const [],
@@ -31,6 +34,7 @@ Future<List<Contact>> showContactsPicker(
   String registeredCtaLabel = 'Add',
   String unregisteredCtaLabel = 'Add & Invite',
   Iterable<String> existingMemberPhones = const [],
+  Iterable<String> selfPhones = const [],
 }) async {
   final picked = await showModalBottomSheet<List<Contact>>(
     context: context,
@@ -48,6 +52,10 @@ Future<List<Contact>> showContactsPicker(
           .map((p) => normalizePhone(p.trim()))
           .where((p) => p.isNotEmpty)
           .toSet(),
+      selfPhones: selfPhones
+          .map((p) => normalizePhone(p.trim()))
+          .where((p) => p.isNotEmpty)
+          .toSet(),
     ),
   );
   return picked ?? const [];
@@ -59,6 +67,7 @@ class ContactsPickerSheet extends ConsumerStatefulWidget {
   final String registeredCtaLabel;
   final String unregisteredCtaLabel;
   final Set<String> existingMemberPhones;
+  final Set<String> selfPhones;
 
   const ContactsPickerSheet({
     super.key,
@@ -67,6 +76,7 @@ class ContactsPickerSheet extends ConsumerStatefulWidget {
     this.registeredCtaLabel = 'Add',
     this.unregisteredCtaLabel = 'Add & Invite',
     this.existingMemberPhones = const {},
+    this.selfPhones = const {},
   });
 
   @override
@@ -270,7 +280,20 @@ class _ContactsPickerSheetState extends ConsumerState<ContactsPickerSheet> {
     });
   }
 
+  /// True when this device contact resolves to the signed-in user themselves.
+  /// `normalizePhone` reduces both sides to the last 10 digits, so the check
+  /// works regardless of whether the contact is stored as `9999912345`,
+  /// `+919999912345`, `+91 99999 12345`, etc.
+  bool _isSelf(Contact c) {
+    if (widget.selfPhones.isEmpty) return false;
+    return c.phones.any((p) {
+      final t = p.number.trim();
+      return t.isNotEmpty && widget.selfPhones.contains(normalizePhone(t));
+    });
+  }
+
   Widget _buildContactTile(Contact c, bool isDark) {
+    final isSelf = _isSelf(c);
     final alreadyMember = _isAlreadyMember(c);
     final isSelected = _selectedIds.contains(c.id);
     final name = c.displayName.isEmpty ? 'Unknown' : c.displayName;
@@ -290,10 +313,25 @@ class _ContactsPickerSheetState extends ConsumerState<ContactsPickerSheet> {
       }
     }
 
+    // Self wins over alreadyMember — you can't add yourself, even if your
+    // own row also matches the "already in group" set.
+    final Widget trailing;
+    if (isSelf) {
+      trailing = const _SelfChip();
+    } else if (alreadyMember) {
+      trailing = _AlreadyAddedChip(isDark: isDark);
+    } else {
+      trailing = _buildActionButton(
+        isRegistered: isRegistered,
+        isSelected: isSelected,
+        onTap: onCtaTap,
+      );
+    }
+
     return Opacity(
-      opacity: alreadyMember ? 0.55 : 1.0,
+      opacity: (alreadyMember && !isSelf) ? 0.55 : 1.0,
       child: ListTile(
-        onTap: alreadyMember ? null : onCtaTap,
+        onTap: (isSelf || alreadyMember) ? null : onCtaTap,
         title: Text(name),
         subtitle: subtitle.isEmpty ? null : Text(subtitle),
         leading: CircleAvatar(
@@ -303,13 +341,7 @@ class _ContactsPickerSheetState extends ConsumerState<ContactsPickerSheet> {
             style: TextStyle(color: AppColors.brand),
           ),
         ),
-        trailing: alreadyMember
-            ? _AlreadyAddedChip(isDark: isDark)
-            : _buildActionButton(
-                isRegistered: isRegistered,
-                isSelected: isSelected,
-                onTap: onCtaTap,
-              ),
+        trailing: trailing,
       ),
     );
   }
@@ -393,6 +425,39 @@ class _ContactsPickerSheetState extends ConsumerState<ContactsPickerSheet> {
         padding: const EdgeInsets.symmetric(horizontal: 10),
       ),
       child: Text(widget.unregisteredCtaLabel),
+    );
+  }
+}
+
+/// Trailing badge shown on the signed-in user's own row. Visually distinct
+/// from "Added" so they can tell at a glance which contact is theirs.
+class _SelfChip extends StatelessWidget {
+  const _SelfChip();
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = AppColors.brand;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: fg.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.person_rounded, size: 14, color: fg),
+          const SizedBox(width: 4),
+          Text(
+            'You',
+            style: TextStyle(
+              color: fg,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

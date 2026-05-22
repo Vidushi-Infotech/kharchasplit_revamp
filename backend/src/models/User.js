@@ -1,5 +1,8 @@
+import bcrypt from 'bcryptjs';
 import { query  } from '../config/database.js';
 import { cache, TTL } from '../services/cacheService.js';
+
+const BCRYPT_ROUNDS = 10;
 
 class User {
   /**
@@ -102,14 +105,81 @@ class User {
    * Create new user
    */
   static async create(userData) {
-    const { phoneNumber, name, email, profileImageBase64, preferredCurrency } = userData;
+    const { phoneNumber, name, email, profileImageBase64, preferredCurrency, passwordHash } = userData;
     const result = await query(
-      `INSERT INTO users (phone_number, name, email, profile_image_base64, preferred_currency)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO users (phone_number, name, email, profile_image_base64, preferred_currency, password_hash)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING id, phone_number, name, email, profile_image_base64, preferred_currency, created_at`,
-      [phoneNumber, name, email || null, profileImageBase64 || null, preferredCurrency || 'INR']
+      [phoneNumber, name, email || null, profileImageBase64 || null, preferredCurrency || 'INR', passwordHash || null]
     );
     return result.rows[0];
+  }
+
+  /**
+   * Find user by email (case-insensitive). Used for forgot-password lookup.
+   */
+  static async findByEmail(email) {
+    if (!email) return null;
+    const result = await query(
+      `SELECT id, phone_number, name, email, profile_image_base64, preferred_currency, password_hash, created_at, updated_at
+         FROM users
+        WHERE LOWER(email) = LOWER($1)
+          AND deleted_at IS NULL
+          AND (is_placeholder = FALSE OR is_placeholder IS NULL)
+        LIMIT 1`,
+      [email]
+    );
+    return result.rows[0] || null;
+  }
+
+  /**
+   * Find user (including password_hash) by phone — needed for password login.
+   * Kept separate from findByPhoneNumber so the hash never leaks into cached
+   * profile reads.
+   */
+  static async findByPhoneForAuth(phoneNumber) {
+    const normalizedPhone = this.normalizePhoneForSearch(phoneNumber);
+    const result = await query(
+      `SELECT id, phone_number, name, email, profile_image_base64, preferred_currency, password_hash, created_at, updated_at
+         FROM users
+        WHERE RIGHT(REGEXP_REPLACE(phone_number, '[^0-9]', '', 'g'), 10) = $1
+          AND deleted_at IS NULL
+          AND (is_placeholder = FALSE OR is_placeholder IS NULL)
+        LIMIT 1`,
+      [normalizedPhone]
+    );
+    return result.rows[0] || null;
+  }
+
+  /**
+   * Hash a plaintext password.
+   */
+  static async hashPassword(plain) {
+    return bcrypt.hash(plain, BCRYPT_ROUNDS);
+  }
+
+  /**
+   * Update a user's password_hash from a plaintext password.
+   */
+  static async setPassword(userId, plainPassword) {
+    const hash = await bcrypt.hash(plainPassword, BCRYPT_ROUNDS);
+    const result = await query(
+      `UPDATE users
+          SET password_hash = $1, updated_at = NOW()
+        WHERE id = $2 AND deleted_at IS NULL
+        RETURNING id`,
+      [hash, userId]
+    );
+    if (result.rows[0]) this.invalidateUser(userId);
+    return result.rows.length > 0;
+  }
+
+  /**
+   * Compare a plaintext password to a stored hash.
+   */
+  static async verifyPassword(plainPassword, hash) {
+    if (!plainPassword || !hash) return false;
+    return bcrypt.compare(plainPassword, hash);
   }
 
   /**
@@ -249,19 +319,20 @@ class User {
    */
   static async convertPlaceholderToReal(phoneNumber, userData) {
     const normalizedPhone = this.normalizePhoneForSearch(phoneNumber);
-    const { name, email } = userData;
+    const { name, email, passwordHash } = userData;
 
     const result = await query(
       `UPDATE users
        SET name = COALESCE($2, name),
            email = COALESCE($3, email),
+           password_hash = COALESCE($4, password_hash),
            is_placeholder = FALSE,
            updated_at = NOW()
        WHERE RIGHT(REGEXP_REPLACE(phone_number, '[^0-9]', '', 'g'), 10) = $1
        AND is_placeholder = TRUE
        AND deleted_at IS NULL
        RETURNING id, phone_number, name, email, is_placeholder, created_at, updated_at`,
-      [normalizedPhone, name, email]
+      [normalizedPhone, name, email, passwordHash || null]
     );
     return result.rows[0] || null;
   }

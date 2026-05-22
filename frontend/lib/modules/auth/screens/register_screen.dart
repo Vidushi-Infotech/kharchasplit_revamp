@@ -19,36 +19,43 @@ Future<void> _openExternal(String url) async {
   }
 }
 
-class LoginScreen extends ConsumerStatefulWidget {
-  const LoginScreen({super.key});
+class RegisterScreen extends ConsumerStatefulWidget {
+  const RegisterScreen({super.key});
 
   @override
-  ConsumerState<LoginScreen> createState() => _LoginScreenState();
+  ConsumerState<RegisterScreen> createState() => _RegisterScreenState();
 }
 
-class _LoginScreenState extends ConsumerState<LoginScreen> {
+class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmController = TextEditingController();
   final _phoneFocus = FocusNode();
   final _passwordFocus = FocusNode();
+  final _confirmFocus = FocusNode();
   String? _error;
   bool _obscurePassword = true;
+  bool _obscureConfirm = true;
 
   @override
   void initState() {
     super.initState();
     _phoneController.addListener(_onFieldChanged);
     _passwordController.addListener(_onFieldChanged);
+    _confirmController.addListener(_onFieldChanged);
   }
 
   @override
   void dispose() {
     _phoneController.removeListener(_onFieldChanged);
     _passwordController.removeListener(_onFieldChanged);
+    _confirmController.removeListener(_onFieldChanged);
     _phoneController.dispose();
     _passwordController.dispose();
+    _confirmController.dispose();
     _phoneFocus.dispose();
     _passwordFocus.dispose();
+    _confirmFocus.dispose();
     super.dispose();
   }
 
@@ -66,36 +73,39 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     return RegExp(r'^\d{10}$').hasMatch(v);
   }
 
-  bool get _passwordValid => _passwordController.text.length >= 6;
+  bool get _passwordLongEnough => _passwordController.text.length >= 6;
+  bool get _passwordsMatch =>
+      _passwordController.text == _confirmController.text;
+  bool get _canSubmit =>
+      _phoneValid && _passwordLongEnough && _passwordsMatch;
 
-  bool get _canSubmit => _phoneValid && _passwordValid;
-
-  Future<void> _handleLogin() async {
-    if (!_canSubmit) {
-      setState(() => _error = !_phoneValid
-          ? 'Enter a 10-digit number or +country code'
-          : 'Password must be at least 6 characters');
+  Future<void> _handleRegister() async {
+    if (!_phoneValid) {
+      setState(
+          () => _error = 'Enter a 10-digit number or +country code');
       return;
     }
-    final ok = await ref.read(authProvider.notifier).loginWithPassword(
+    if (!_passwordLongEnough) {
+      setState(() => _error = 'Password must be at least 6 characters');
+      return;
+    }
+    if (!_passwordsMatch) {
+      setState(() => _error = 'Passwords do not match');
+      return;
+    }
+    final ok = await ref.read(authProvider.notifier).registerWithPassword(
           phone: _phoneController.text.trim(),
           password: _passwordController.text,
+          confirmPassword: _confirmController.text,
         );
     if (!mounted) return;
     if (!ok) {
       setState(() => _error =
-          ref.read(authProvider).errorMessage ?? 'Could not sign in');
+          ref.read(authProvider).errorMessage ?? 'Could not register');
       return;
     }
-    // Router redirects based on needsProfileSetup; SplashScreen handles
-    // first launch, but a successful in-app login should go straight to
-    // the right place.
-    final auth = ref.read(authProvider);
-    if (auth.needsProfileSetup) {
-      context.go('/profile-setup');
-    } else {
-      context.go('/home/dashboard');
-    }
+    // Backend signed us in already; profile setup is required next.
+    context.go('/profile-setup');
   }
 
   @override
@@ -141,6 +151,35 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
             ),
           ),
+          Positioned(
+            top: 0,
+            left: 0,
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.only(left: 8, top: 8),
+                child: Material(
+                  color: Colors.transparent,
+                  shape: const CircleBorder(),
+                  clipBehavior: Clip.antiAlias,
+                  child: IconButton(
+                    icon: Icon(
+                      Icons.arrow_back_rounded,
+                      color: AppColors.textPrimary(isDark),
+                    ),
+                    onPressed: loading
+                        ? null
+                        : () {
+                            if (context.canPop()) {
+                              context.pop();
+                            } else {
+                              context.go('/login');
+                            }
+                          },
+                  ),
+                ),
+              ),
+            ),
+          ),
           SafeArea(
             child: Center(
               child: ConstrainedBox(
@@ -148,11 +187,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   maxWidth: screenWidth < 1100 ? 460 : 520,
                 ),
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+                  padding: const EdgeInsets.fromLTRB(24, 56, 24, 24),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const SizedBox(height: 24),
                       _Hero(isDark: isDark),
                       const SizedBox(height: 36),
                       _SectionLabel(isDark: isDark, text: 'PHONE NUMBER'),
@@ -171,37 +209,35 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         controller: _passwordController,
                         focusNode: _passwordFocus,
                         isDark: isDark,
-                        hasError: _error != null && _phoneValid && !_passwordValid,
+                        hasError: _error != null &&
+                            _phoneValid &&
+                            !_passwordLongEnough,
                         obscure: _obscurePassword,
+                        hint: 'At least 6 characters',
                         onToggleObscure: () => setState(
                             () => _obscurePassword = !_obscurePassword),
-                        onSubmitted: (_) =>
-                            _canSubmit && !loading ? _handleLogin() : null,
+                        onSubmitted: (_) => _confirmFocus.requestFocus(),
                       ),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton(
-                          onPressed:
-                              loading ? null : () => context.push('/forgot-password'),
-                          style: TextButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 4, vertical: 4),
-                            minimumSize: const Size(0, 0),
-                            tapTargetSize:
-                                MaterialTapTargetSize.shrinkWrap,
-                          ),
-                          child: Text(
-                            'Forgot password?',
-                            style: AppTextStyles.caption(isDark).copyWith(
-                              color: AppColors.tealDark,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 12.5,
-                            ),
-                          ),
-                        ),
+                      const SizedBox(height: 18),
+                      _SectionLabel(
+                          isDark: isDark, text: 'CONFIRM PASSWORD'),
+                      const SizedBox(height: 8),
+                      _PasswordField(
+                        controller: _confirmController,
+                        focusNode: _confirmFocus,
+                        isDark: isDark,
+                        hasError: _error != null &&
+                            _passwordLongEnough &&
+                            !_passwordsMatch,
+                        obscure: _obscureConfirm,
+                        hint: 'Re-enter your password',
+                        onToggleObscure: () => setState(
+                            () => _obscureConfirm = !_obscureConfirm),
+                        onSubmitted: (_) =>
+                            _canSubmit && !loading ? _handleRegister() : null,
                       ),
                       if (_error != null) ...[
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 10),
                         Row(
                           children: [
                             Icon(
@@ -213,7 +249,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             Expanded(
                               child: Text(
                                 _error!,
-                                style: AppTextStyles.caption(isDark).copyWith(
+                                style:
+                                    AppTextStyles.caption(isDark).copyWith(
                                   color: AppColors.warning,
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -222,20 +259,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ],
                         ),
                       ],
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 24),
                       _ContinueButton(
                         isDark: isDark,
                         enabled: _canSubmit && !loading,
                         loading: loading,
-                        label: 'Sign in',
-                        onPressed: _handleLogin,
+                        label: 'Create account',
+                        onPressed: _handleRegister,
                       ),
                       const SizedBox(height: 18),
-                      _RegisterLink(
+                      _LoginLink(
                         isDark: isDark,
-                        onTap: loading
-                            ? null
-                            : () => context.push('/register'),
+                        onTap: loading ? null : () => context.go('/login'),
                       ),
                       const SizedBox(height: 32),
                       _TermsFooter(isDark: isDark),
@@ -253,7 +288,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 }
 
 // --------------------------------------------------------------------------
-// Hero (logo + welcome text)
+// Hero
 // --------------------------------------------------------------------------
 
 class _Hero extends StatelessWidget {
@@ -277,7 +312,8 @@ class _Hero extends StatelessWidget {
             ),
             boxShadow: [
               BoxShadow(
-                color: AppColors.tealDark.withValues(alpha: isDark ? 0.18 : 0.10),
+                color: AppColors.tealDark
+                    .withValues(alpha: isDark ? 0.18 : 0.10),
                 blurRadius: 24,
                 offset: const Offset(0, 8),
                 spreadRadius: -4,
@@ -291,9 +327,9 @@ class _Hero extends StatelessWidget {
         ),
         const SizedBox(height: 22),
         Text(
-          'Welcome back',
+          'Create your account',
           style: AppTextStyles.headline1(isDark).copyWith(
-            fontSize: 30,
+            fontSize: 28,
             fontWeight: FontWeight.w800,
             letterSpacing: -0.6,
             height: 1.1,
@@ -302,7 +338,7 @@ class _Hero extends StatelessWidget {
         ),
         const SizedBox(height: 6),
         Text(
-          'Sign in with your phone number and password.',
+          'Sign up with your phone number and choose a password.',
           style: AppTextStyles.body2(isDark).copyWith(
             color: AppColors.textSecondary(isDark),
             height: 1.4,
@@ -342,7 +378,7 @@ class _SectionLabel extends StatelessWidget {
 }
 
 // --------------------------------------------------------------------------
-// Phone field (+91 segment + 10-digit input)
+// Phone field
 // --------------------------------------------------------------------------
 
 class _PhoneField extends StatelessWidget {
@@ -447,6 +483,7 @@ class _PasswordField extends StatelessWidget {
     required this.isDark,
     required this.hasError,
     required this.obscure,
+    required this.hint,
     required this.onToggleObscure,
     required this.onSubmitted,
   });
@@ -456,6 +493,7 @@ class _PasswordField extends StatelessWidget {
   final bool isDark;
   final bool hasError;
   final bool obscure;
+  final String hint;
   final VoidCallback onToggleObscure;
   final ValueChanged<String> onSubmitted;
 
@@ -486,7 +524,7 @@ class _PasswordField extends StatelessWidget {
               controller: controller,
               focusNode: focusNode,
               obscureText: obscure,
-              textInputAction: TextInputAction.go,
+              textInputAction: TextInputAction.next,
               onSubmitted: onSubmitted,
               style: AppTextStyles.body1(isDark).copyWith(
                 fontWeight: FontWeight.w600,
@@ -497,7 +535,7 @@ class _PasswordField extends StatelessWidget {
                 isCollapsed: true,
                 border: InputBorder.none,
                 contentPadding: const EdgeInsets.fromLTRB(0, 16, 8, 16),
-                hintText: 'Your password',
+                hintText: hint,
                 hintStyle: AppTextStyles.body1(isDark).copyWith(
                   color: AppColors.textSecondary(isDark).withValues(alpha: 0.7),
                   fontWeight: FontWeight.w500,
@@ -525,7 +563,7 @@ class _PasswordField extends StatelessWidget {
 }
 
 // --------------------------------------------------------------------------
-// Continue / Sign in button
+// Continue / Create account button
 // --------------------------------------------------------------------------
 
 class _ContinueButton extends StatelessWidget {
@@ -621,11 +659,11 @@ class _ContinueButton extends StatelessWidget {
 }
 
 // --------------------------------------------------------------------------
-// Register link
+// Login link
 // --------------------------------------------------------------------------
 
-class _RegisterLink extends StatelessWidget {
-  const _RegisterLink({required this.isDark, required this.onTap});
+class _LoginLink extends StatelessWidget {
+  const _LoginLink({required this.isDark, required this.onTap});
   final bool isDark;
   final VoidCallback? onTap;
 
@@ -635,7 +673,7 @@ class _RegisterLink extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Text(
-          "Don't have an account? ",
+          'Already have an account? ',
           style: AppTextStyles.caption(isDark).copyWith(
             color: AppColors.textSecondary(isDark),
             fontSize: 13,
@@ -644,7 +682,7 @@ class _RegisterLink extends StatelessWidget {
         InkWell(
           onTap: onTap,
           child: Text(
-            'Sign up',
+            'Sign in',
             style: AppTextStyles.caption(isDark).copyWith(
               color: AppColors.tealDark,
               fontWeight: FontWeight.w700,
@@ -707,7 +745,7 @@ class _TermsFooterState extends State<_TermsFooter> {
       child: Text.rich(
         TextSpan(
           children: [
-            const TextSpan(text: 'By continuing you agree to our '),
+            const TextSpan(text: 'By signing up you agree to our '),
             TextSpan(
               text: 'Terms',
               style: link,

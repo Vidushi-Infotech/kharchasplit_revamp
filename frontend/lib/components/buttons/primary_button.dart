@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/services/haptic_service.dart';
 import '../../core/theme/app_colors.dart';
 
 /// Primary action button with teal background
@@ -27,7 +28,12 @@ class PrimaryButton extends StatelessWidget {
       width: width ?? double.infinity,
       height: height,
       child: ElevatedButton(
-        onPressed: isLoading ? null : onPressed,
+        onPressed: isLoading || onPressed == null
+            ? null
+            : () {
+                HapticService.instance.tap();
+                onPressed!();
+              },
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.brand,
           foregroundColor: Colors.white,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/state/haptic_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../state/notification_prefs_provider.dart';
@@ -56,6 +57,24 @@ class NotificationsSettingsScreen extends ConsumerWidget {
                       value: prefs.emailEnabled,
                       onChanged: (v) => notifier
                           .update((p) => p.copyWith(emailEnabled: v)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 22),
+                _SectionLabel(label: 'DEVICE FEEDBACK', isDark: isDark),
+                const SizedBox(height: 8),
+                _ToggleGroup(
+                  isDark: isDark,
+                  items: [
+                    _ToggleItem(
+                      icon: Icons.vibration_rounded,
+                      title: 'Haptic feedback',
+                      subtitle:
+                          'Subtle vibrations when you tap, swipe, or confirm. '
+                          'Subject to your phone\'s haptic settings.',
+                      value: ref.watch(hapticEnabledProvider),
+                      onChanged: (v) =>
+                          ref.read(hapticEnabledProvider.notifier).setEnabled(v),
                     ),
                   ],
                 ),

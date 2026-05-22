@@ -1,5 +1,4 @@
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/network/api_client.dart';
@@ -27,12 +26,12 @@ class AuthTokens {
   final String refreshToken;
   final Map<String, dynamic> user;
 
-  /// True when verify-otp auto-created the user row.
+  /// True when register/verify just created the user row.
   final bool isNewUser;
 
   /// True when the client should route to the profile-setup screen
-  /// before showing the main app (covers both brand-new users and
-  /// existing users with an empty name).
+  /// before showing the main app (brand-new user, or existing row missing
+  /// name/email).
   final bool needsProfileSetup;
 }
 
@@ -40,40 +39,20 @@ class AuthRepository {
   AuthRepository(this._client);
   final ApiClient _client;
 
-  Future<void> register({
+  /// Register with phone + password. Backend returns tokens immediately;
+  /// `needsProfileSetup` will be true so the UI routes to /profile-setup.
+  Future<AuthTokens> registerWithPassword({
     required String phoneNumber,
-    required String name,
-    String? email,
+    required String password,
+    required String confirmPassword,
   }) async {
+    final device = await DeviceInfoService.describe();
     final res = await _client.dio.post(
       '/auth/register',
       data: {
         'phoneNumber': phoneNumber,
-        'name': name,
-        if (email != null && email.isNotEmpty) 'email': email,
-      },
-    );
-    _ensureSuccess(res);
-  }
-
-  Future<void> sendLoginOtp(String phoneNumber) async {
-    final res = await _client.dio.post(
-      '/auth/send-otp',
-      data: {'phoneNumber': phoneNumber},
-    );
-    _ensureSuccess(res);
-  }
-
-  Future<AuthTokens> verifyOtp({
-    required String phoneNumber,
-    required String otp,
-  }) async {
-    final device = await DeviceInfoService.describe();
-    final res = await _client.dio.post(
-      '/auth/verify-otp',
-      data: {
-        'phoneNumber': phoneNumber,
-        'otp': otp,
+        'password': password,
+        'confirmPassword': confirmPassword,
         if (device.isNotEmpty) 'device': device,
       },
     );
@@ -81,20 +60,51 @@ class AuthRepository {
     return _tokensFromData(data);
   }
 
-  /// Dev-only no-OTP login. Disabled in release builds — release callers
-  /// would otherwise leak this even if the backend route is open.
-  Future<AuthTokens> simpleLogin(String phoneNumber) async {
-    if (kReleaseMode) {
-      throw AuthException(
-        'Simple login is disabled in release builds.',
-        statusCode: 404,
-      );
-    }
+  /// Phone + password login. Returns tokens + user on success.
+  Future<AuthTokens> loginWithPassword({
+    required String phoneNumber,
+    required String password,
+  }) async {
     final device = await DeviceInfoService.describe();
     final res = await _client.dio.post(
-      '/auth/simple-login',
+      '/auth/login',
       data: {
         'phoneNumber': phoneNumber,
+        'password': password,
+        if (device.isNotEmpty) 'device': device,
+      },
+    );
+    final data = _ensureSuccess(res);
+    return _tokensFromData(data);
+  }
+
+  /// Request a password-reset OTP via email. The backend always returns a
+  /// generic success message — we never tell the caller whether the email
+  /// is registered, so no enumeration is possible from this response.
+  Future<void> requestPasswordReset(String email) async {
+    final res = await _client.dio.post(
+      '/auth/forgot-password/request',
+      data: {'email': email},
+    );
+    _ensureSuccess(res);
+  }
+
+  /// Verify the OTP + set the new password. On success the backend
+  /// auto-logs in and returns a fresh token pair.
+  Future<AuthTokens> resetPassword({
+    required String email,
+    required String otp,
+    required String newPassword,
+    required String confirmPassword,
+  }) async {
+    final device = await DeviceInfoService.describe();
+    final res = await _client.dio.post(
+      '/auth/forgot-password/verify',
+      data: {
+        'email': email,
+        'otp': otp,
+        'newPassword': newPassword,
+        'confirmPassword': confirmPassword,
         if (device.isNotEmpty) 'device': device,
       },
     );

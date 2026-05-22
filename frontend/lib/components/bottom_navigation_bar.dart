@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/services/haptic_service.dart';
 import '../core/theme/app_colors.dart';
 
 /// Custom bottom navigation bar
@@ -29,7 +30,12 @@ class CustomBottomNavigationBar extends StatelessWidget {
         ),
         child: BottomNavigationBar(
           currentIndex: selectedIndex,
-          onTap: onItemSelected,
+          onTap: (i) {
+            // Only buzz when the tab actually changes — re-tapping the
+            // current tab shouldn't fire a haptic.
+            if (i != selectedIndex) HapticService.instance.selection();
+            onItemSelected(i);
+          },
           type: BottomNavigationBarType.fixed,
           backgroundColor: AppColors.surface(isDark),
           selectedItemColor: AppColors.tealDark,

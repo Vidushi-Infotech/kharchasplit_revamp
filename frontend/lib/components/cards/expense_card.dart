@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/services/haptic_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/utils/date_formatter.dart';
@@ -192,7 +193,11 @@ class ExpenseCard extends ConsumerWidget {
             key: Key(expense.id),
             direction: DismissDirection.endToStart,
             confirmDismiss: (_) async {
-              return await showDialog<bool>(
+              // Fire the threshold haptic the instant the swipe commits —
+              // before the modal animation runs — so the user feels the
+              // gesture engaged.
+              HapticService.instance.thresholdCrossed();
+              final confirmed = await showDialog<bool>(
                     context: context,
                     builder: (ctx) => AlertDialog(
                       title: const Text('Delete expense?'),
@@ -216,6 +221,9 @@ class ExpenseCard extends ConsumerWidget {
                     ),
                   ) ??
                   false;
+              // Destructive confirm — heavier haptic to underline gravity.
+              if (confirmed) HapticService.instance.destructive();
+              return confirmed;
             },
             onDismissed: (_) => onDelete?.call(),
             background: Container(

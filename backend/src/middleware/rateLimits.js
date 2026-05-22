@@ -29,6 +29,16 @@ const TOO_MANY_EXPENSES = {
   error: 'Too many expenses created in a short window. Slow down a moment.',
 };
 
+const TOO_MANY_LOGINS = {
+  success: false,
+  error: 'Too many login attempts. Try again in a few minutes.',
+};
+
+const TOO_MANY_RESETS = {
+  success: false,
+  error: 'Too many password reset requests for this email. Try again later.',
+};
+
 /**
  * 5 OTP requests per phone every 15 minutes. Keys on the *body* phone
  * number rather than IP so a real victim isn't locked out by an attacker
@@ -45,6 +55,40 @@ export const otpRateLimit = rateLimit({
     // If phone is missing the validator will reject with 400; bucket those
     // by IP so we still throttle bare requests.
     return phone || `ip:${req.ip}`;
+  },
+});
+
+/**
+ * 10 login attempts per phone every 15 min. Keyed on the body phone number
+ * so a victim of credential stuffing isn't locked out by an attacker on the
+ * same NAT.
+ */
+export const loginRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: TOO_MANY_LOGINS,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    const phone = (req.body?.phoneNumber || '').toString().trim();
+    return phone || `ip:${req.ip}`;
+  },
+});
+
+/**
+ * 5 password-reset requests per email every 15 min. Email-keyed for the
+ * same reason as the phone-keyed OTP limiter — fairness across users
+ * behind a shared IP, and per-email cost cap for SMTP.
+ */
+export const passwordResetRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: TOO_MANY_RESETS,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    const email = (req.body?.email || '').toString().trim().toLowerCase();
+    return email || `ip:${req.ip}`;
   },
 });
 

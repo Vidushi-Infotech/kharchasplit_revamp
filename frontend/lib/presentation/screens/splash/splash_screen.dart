@@ -23,9 +23,12 @@ class SplashScreen extends ConsumerWidget {
             if (!context.mounted) return;
             final name =
                 (storedUser?['name'] as String?)?.trim() ?? '';
-            context.go(name.isEmpty
-                ? '/profile-setup'
-                : '/home/dashboard');
+            final email =
+                (storedUser?['email'] as String?)?.trim() ?? '';
+            // Profile is complete only when both name and email are set;
+            // email is required so the user can receive password-reset OTPs.
+            final needsSetup = name.isEmpty || email.isEmpty;
+            context.go(needsSetup ? '/profile-setup' : '/home/dashboard');
           });
           break;
         case SplashState.unauthenticated:

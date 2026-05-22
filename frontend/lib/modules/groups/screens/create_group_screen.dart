@@ -14,6 +14,7 @@ import '../../../core/services/app_logger.dart';
 import '../../../core/services/image_processor_service.dart';
 import '../../../data/contacts/device_contacts_provider.dart';
 import '../../../data/groups/groups_repository.dart';
+import '../../auth/state/auth_provider.dart';
 import '../state/groups_provider.dart';
 import '../widgets/contacts_picker_sheet.dart';
 
@@ -65,9 +66,11 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
   }
 
   Future<void> _pickContacts() async {
+    final selfPhone = ref.read(authProvider).user?.phone ?? '';
     final picked = await showContactsPicker(
       context,
       initialSelected: _selectedContacts,
+      selfPhones: selfPhone.isEmpty ? const [] : [selfPhone],
     );
     setState(() {
       _selectedContacts

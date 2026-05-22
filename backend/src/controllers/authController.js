@@ -1,9 +1,9 @@
-import { query  } from '../config/database.js';
-import { generateAccessToken, generateRefreshToken, verifyRefreshToken  } from '../utils/jwt.js';
-import { generateOTP, getOTPExpiry, sendOTPviaSMS  } from '../utils/otp.js';
+import { query } from '../config/database.js';
+import { generateAccessToken, generateRefreshToken, verifyRefreshToken } from '../utils/jwt.js';
+import { generateOTP, getOTPExpiry } from '../utils/otp.js';
 import Group from '../models/Group.js';
 import User from '../models/User.js';
-import TwilioService from '../services/twilioService.js';
+import EmailService from '../services/emailService.js';
 
 /**
  * Pull device metadata for a refresh-token row out of the request body
@@ -29,118 +29,146 @@ function extractDeviceInfo(req) {
 }
 
 /**
- * Register new user
+ * Issue an access + refresh token pair for `userId` and persist the refresh
+ * token (with device metadata) so it can be revoked from the Sessions UI.
+ */
+async function issueTokens(userId, req) {
+  const accessToken = generateAccessToken(userId);
+  const refreshToken = generateRefreshToken(userId);
+
+  const refreshExpiresAt = new Date();
+  refreshExpiresAt.setDate(refreshExpiresAt.getDate() + 30);
+
+  const device = extractDeviceInfo(req);
+  await query(
+    `INSERT INTO refresh_tokens
+      (user_id, token, expires_at,
+       device_name, platform, os_version, app_version, ip_address, user_agent,
+       last_used_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())`,
+    [
+      userId,
+      refreshToken,
+      refreshExpiresAt,
+      device.deviceName,
+      device.platform,
+      device.osVersion,
+      device.appVersion,
+      device.ipAddress,
+      device.userAgent,
+    ],
+  );
+
+  return { accessToken, refreshToken };
+}
+
+function userPayload(row) {
+  return {
+    id: row.id,
+    phoneNumber: row.phone_number,
+    name: row.name,
+    email: row.email,
+    profileImageBase64: row.profile_image_base64 || null,
+    preferredCurrency: row.preferred_currency || 'INR',
+  };
+}
+
+/**
+ * Register a new user with phone + password.
  * POST /api/v1/auth/register
+ *
+ * Body: { phoneNumber, password, confirmPassword, device? }
+ *
+ * Email + name come later via the profile-setup flow. On success the user
+ * is signed in immediately (tokens returned) and `needsProfileSetup: true`
+ * tells the client to route to /profile-setup before the dashboard.
  */
 const register = async (req, res, next) => {
   try {
-    const { phoneNumber, name, email } = req.body;
+    const { phoneNumber, password, confirmPassword } = req.body;
 
-    // Check if user already exists (non-placeholder)
-    const existingUser = await query(
+    if (password !== confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        error: 'Passwords do not match',
+      });
+    }
+
+    const passwordHash = await User.hashPassword(password);
+
+    // Check for existing row (placeholder OR real) on this phone.
+    const existing = await query(
       'SELECT id, is_placeholder FROM users WHERE phone_number = $1 AND deleted_at IS NULL',
-      [phoneNumber]
+      [phoneNumber],
     );
 
     let user;
     let convertedFromPlaceholder = false;
 
-    if (existingUser.rows.length > 0) {
-      const existing = existingUser.rows[0];
-
-      if (existing.is_placeholder) {
-        // Convert placeholder user to real user
-        console.log(`[Auth] Converting placeholder user ${existing.id} to real user`);
-        const convertedUser = await User.convertPlaceholderToReal(phoneNumber, { name, email });
-
-        if (convertedUser) {
-          user = convertedUser;
-          convertedFromPlaceholder = true;
-          console.log(`[Auth] Successfully converted placeholder user ${user.id}`);
-        } else {
-          // Fallback - shouldn't happen but handle gracefully
-          return res.status(409).json({
-            success: false,
-            error: 'User with this phone number already exists',
-          });
-        }
-      } else {
-        // Real user already exists
+    if (existing.rows.length > 0) {
+      const row = existing.rows[0];
+      if (!row.is_placeholder) {
         return res.status(409).json({
           success: false,
-          error: 'User with this phone number already exists',
+          error: 'An account with this phone number already exists',
         });
       }
+      // Placeholder → convert to real user, attach password hash.
+      const converted = await User.convertPlaceholderToReal(phoneNumber, {
+        name: '',
+        email: null,
+        passwordHash,
+      });
+      if (!converted) {
+        return res.status(409).json({
+          success: false,
+          error: 'An account with this phone number already exists',
+        });
+      }
+      user = converted;
+      convertedFromPlaceholder = true;
     } else {
-      // Create new user
-      const result = await query(
-        `INSERT INTO users (phone_number, name, email)
-         VALUES ($1, $2, $3)
-         RETURNING id, phone_number, name, email, created_at`,
-        [phoneNumber, name, email || null]
-      );
-      user = result.rows[0];
+      user = await User.create({
+        phoneNumber,
+        name: '',
+        email: null,
+        passwordHash,
+      });
     }
 
-    // Clean up pending invites for this phone number
-    // (User is already in groups if they were a placeholder, but we should clean up invite records)
+    // Process any pending invites this phone had received.
     let addedGroups = [];
     try {
       if (convertedFromPlaceholder) {
-        // For placeholder users, just delete pending invite records and get group names
         const pendingInvites = await Group.getPendingInvitesByPhone(phoneNumber);
         if (pendingInvites.length > 0) {
-          addedGroups = pendingInvites.map(invite => ({
+          addedGroups = pendingInvites.map((invite) => ({
             groupId: invite.group_id,
             groupName: invite.group_name,
           }));
-          // Batch delete all pending invites in a single query
-          await Group.deletePendingInvitesByIds(pendingInvites.map(i => i.id));
-          console.log(`[Auth] Cleaned up ${addedGroups.length} pending invite records for converted placeholder user ${user.id}`);
+          await Group.deletePendingInvitesByIds(pendingInvites.map((i) => i.id));
         }
       } else {
-        // For new users, process pending invites normally
-        addedGroups = await Group.processPendingInvitesForUser(user.id, phoneNumber, name);
-        if (addedGroups.length > 0) {
-          console.log(`[Auth] Auto-added new user ${user.id} to ${addedGroups.length} groups from pending invites`);
-        }
+        addedGroups = await Group.processPendingInvitesForUser(user.id, phoneNumber, '');
       }
-    } catch (pendingError) {
-      console.error('[Auth] Error processing pending invites:', pendingError);
-      // Don't fail registration if pending invites fail
+    } catch (err) {
+      // Pending-invite processing is best-effort; don't block registration.
+      console.error('[Auth] pending invite processing failed:', err);
     }
 
-    // Generate OTP (use test OTP for test phone number)
-    const otp = phoneNumber === '+919822192700' ? '123456' : generateOTP();
-    const expiresAt = getOTPExpiry();
-
-    // Save OTP
-    await query(
-      'INSERT INTO otps (phone_number, otp, expires_at) VALUES ($1, $2, $3)',
-      [phoneNumber, otp, expiresAt]
-    );
-
-    // Send OTP (skip WATI for test phone number since it will fail anyway)
-    if (phoneNumber !== '+919822192700') {
-      await sendOTPviaSMS(phoneNumber, otp);
-    }
+    const { accessToken, refreshToken } = await issueTokens(user.id, req);
 
     res.status(201).json({
       success: true,
-      message: convertedFromPlaceholder
-        ? `Welcome! Your account has been activated. You're already in ${addedGroups.length} group(s). OTP sent to your phone.`
-        : addedGroups.length > 0
-          ? `User registered successfully. You've been added to ${addedGroups.length} group(s). OTP sent to your phone.`
-          : 'User registered successfully. OTP sent to your phone.',
+      message: 'Registration successful',
       data: {
-        user: {
-          id: user.id,
-          phoneNumber: user.phone_number,
-          name: user.name,
-          email: user.email,
-        },
-        addedGroups: addedGroups.length > 0 ? addedGroups : undefined,
+        user: userPayload(user),
+        accessToken,
+        refreshToken,
+        isNewUser: true,
+        needsProfileSetup: true,
         convertedFromPlaceholder,
+        addedGroups: addedGroups.length > 0 ? addedGroups : undefined,
       },
     });
   } catch (error) {
@@ -149,167 +177,192 @@ const register = async (req, res, next) => {
 };
 
 /**
- * Send OTP for unified login/signup.
- * POST /api/v1/auth/send-otp
+ * Login with phone + password.
+ * POST /api/v1/auth/login
  *
- * Triggers a Twilio Verify SMS to the given phone number. Does NOT
- * require the user to exist yet — a new user is auto-created on
- * verifyOTP if the number isn't on file.
+ * Body: { phoneNumber, password, device? }
  */
-const sendOTP = async (req, res, next) => {
+const login = async (req, res, next) => {
   try {
-    const { phoneNumber } = req.body;
-    if (!phoneNumber) {
-      return res.status(400).json({
+    const { phoneNumber, password } = req.body;
+
+    const user = await User.findByPhoneForAuth(phoneNumber);
+    if (!user) {
+      return res.status(401).json({
         success: false,
-        error: 'Phone number is required',
+        error: 'Invalid phone number or password',
       });
     }
 
-    if (!TwilioService.isConfigured()) {
-      return res.status(500).json({
+    // Reject password-less rows — legacy users would land here; they must
+    // use forgot-password to set one before signing in.
+    if (!user.password_hash) {
+      return res.status(401).json({
         success: false,
-        error: 'OTP service not configured on the server',
+        error: 'Password not set on this account. Use "Forgot password" to set one.',
       });
     }
 
-    await TwilioService.sendVerification(phoneNumber);
+    const ok = await User.verifyPassword(password, user.password_hash);
+    if (!ok) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid phone number or password',
+      });
+    }
+
+    const { accessToken, refreshToken } = await issueTokens(user.id, req);
+
+    // A user with an empty name (or no email) hasn't completed profile
+    // setup yet — push them through it before the dashboard.
+    const needsProfileSetup =
+      !user.name || user.name.trim().length === 0 || !user.email;
 
     res.json({
       success: true,
-      message: 'OTP sent successfully',
+      message: 'Login successful',
+      data: {
+        user: userPayload(user),
+        accessToken,
+        refreshToken,
+        needsProfileSetup,
+      },
     });
   } catch (error) {
-    // Surface Twilio errors meaningfully so the client can show a useful
-    // message (invalid number, unverified trial recipient, etc.).
-    if (error?.status && error?.message) {
-      return res.status(error.status === 400 ? 400 : 502).json({
-        success: false,
-        error: error.message,
-        code: error.code,
-      });
-    }
     next(error);
   }
 };
 
 /**
- * Verify OTP and login
- * POST /api/v1/auth/verify-otp
+ * Request a password-reset OTP via email.
+ * POST /api/v1/auth/forgot-password/request
+ *
+ * Body: { email }
+ *
+ * Always returns 200 with a generic "if the email is registered, we sent a
+ * code" message so the endpoint can't be used to enumerate accounts.
  */
-const verifyOTP = async (req, res, next) => {
+const forgotPasswordRequest = async (req, res, next) => {
   try {
-    const { phoneNumber, otp } = req.body;
+    const { email } = req.body;
+    const generic = {
+      success: true,
+      message: 'If that email is registered, a reset code has been sent.',
+    };
 
-    if (!phoneNumber || !otp) {
+    const user = await User.findByEmail(email);
+    if (!user) {
+      return res.json(generic);
+    }
+
+    const otp = generateOTP();
+    const expiresAt = getOTPExpiry(10);
+
+    await query(
+      `INSERT INTO otps (email, phone_number, otp, expires_at, purpose, verified)
+       VALUES ($1, NULL, $2, $3, 'password_reset', FALSE)`,
+      [email.toLowerCase(), otp, expiresAt],
+    );
+
+    const sent = await EmailService.sendPasswordResetEmail({
+      toEmail: user.email,
+      recipientName: user.name,
+      otp,
+      expiresInMinutes: 10,
+    });
+
+    if (!sent.success) {
+      console.error('[Auth] password reset email failed:', sent.error);
+      // Don't leak that the email exists — still return generic 200.
+      // (In dev, SMTP errors will be visible in the server log.)
+    }
+
+    res.json(generic);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Verify a password-reset OTP and set the new password.
+ * POST /api/v1/auth/forgot-password/verify
+ *
+ * Body: { email, otp, newPassword, confirmPassword, device? }
+ *
+ * On success: marks OTP as used, updates the hash, and returns fresh tokens
+ * so the client can route straight to the dashboard.
+ */
+const forgotPasswordVerify = async (req, res, next) => {
+  try {
+    const { email, otp, newPassword, confirmPassword } = req.body;
+
+    if (newPassword !== confirmPassword) {
       return res.status(400).json({
         success: false,
-        error: 'Phone number and OTP are required',
+        error: 'Passwords do not match',
       });
     }
 
-    if (!TwilioService.isConfigured()) {
-      return res.status(500).json({
-        success: false,
-        error: 'OTP service not configured on the server',
-      });
-    }
+    const otpRow = await query(
+      `SELECT id, expires_at, verified
+         FROM otps
+        WHERE LOWER(email) = LOWER($1)
+          AND otp = $2
+          AND purpose = 'password_reset'
+        ORDER BY created_at DESC
+        LIMIT 1`,
+      [email, otp],
+    );
 
-    // Verify the code with Twilio Verify.
-    let approved = false;
-    try {
-      const result = await TwilioService.checkVerification(phoneNumber, otp);
-      approved = result.approved;
-    } catch (err) {
-      // Twilio returns 404 if the verification has already been
-      // consumed/expired and no longer exists. Treat that as an invalid
-      // code rather than a 500.
-      if (err?.status === 404) {
-        return res.status(401).json({
-          success: false,
-          error: 'OTP expired. Please request a new one.',
-        });
-      }
-      throw err;
-    }
-
-    if (!approved) {
+    if (otpRow.rows.length === 0) {
       return res.status(401).json({
         success: false,
-        error: 'Invalid OTP',
+        error: 'Invalid reset code',
       });
     }
 
-    // Look up the user; auto-create a placeholder row if this is their
-    // first time. Profile-setup screen on the client will fill in name +
-    // email + photo right after the redirect.
-    let userRow;
-    let isNewUser = false;
-    const existing = await query(
-      'SELECT id, phone_number, name, email, profile_image_base64, preferred_currency FROM users WHERE phone_number = $1 AND deleted_at IS NULL',
-      [phoneNumber],
-    );
-    if (existing.rows.length > 0) {
-      userRow = existing.rows[0];
-    } else {
-      const created = await query(
-        `INSERT INTO users (phone_number, name, email, preferred_currency)
-         VALUES ($1, '', NULL, 'INR')
-         RETURNING id, phone_number, name, email, profile_image_base64, preferred_currency`,
-        [phoneNumber],
-      );
-      userRow = created.rows[0];
-      isNewUser = true;
+    const row = otpRow.rows[0];
+    if (row.verified) {
+      return res.status(401).json({
+        success: false,
+        error: 'This reset code has already been used',
+      });
+    }
+    if (new Date(row.expires_at) < new Date()) {
+      return res.status(401).json({
+        success: false,
+        error: 'Reset code has expired. Please request a new one.',
+      });
     }
 
-    // A user with a blank name (e.g. auto-created earlier but never
-    // completed setup) should be treated as "new" on the client so it
-    // pushes them through the profile-setup flow.
-    const needsProfileSetup =
-      isNewUser || !userRow.name || userRow.name.trim().length === 0;
+    const user = await User.findByEmail(email);
+    if (!user) {
+      // OTP existed but the user is gone — treat as invalid.
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid reset code',
+      });
+    }
 
-    // Issue tokens
-    const accessToken = generateAccessToken(userRow.id);
-    const refreshToken = generateRefreshToken(userRow.id);
+    await User.setPassword(user.id, newPassword);
 
-    const refreshExpiresAt = new Date();
-    refreshExpiresAt.setDate(refreshExpiresAt.getDate() + 30);
-
-    const device = extractDeviceInfo(req);
     await query(
-      `INSERT INTO refresh_tokens
-        (user_id, token, expires_at,
-         device_name, platform, os_version, app_version, ip_address, user_agent,
-         last_used_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())`,
-      [
-        userRow.id,
-        refreshToken,
-        refreshExpiresAt,
-        device.deviceName,
-        device.platform,
-        device.osVersion,
-        device.appVersion,
-        device.ipAddress,
-        device.userAgent,
-      ],
+      'UPDATE otps SET verified = TRUE WHERE id = $1',
+      [row.id],
     );
+
+    // Auto-login after reset.
+    const { accessToken, refreshToken } = await issueTokens(user.id, req);
+    const needsProfileSetup =
+      !user.name || user.name.trim().length === 0 || !user.email;
 
     res.json({
       success: true,
-      message: isNewUser ? 'Account created' : 'Login successful',
+      message: 'Password updated',
       data: {
-        user: {
-          id: userRow.id,
-          phoneNumber: userRow.phone_number,
-          name: userRow.name,
-          email: userRow.email,
-          profileImageBase64: userRow.profile_image_base64,
-          preferredCurrency: userRow.preferred_currency,
-        },
+        user: userPayload(user),
         accessToken,
         refreshToken,
-        isNewUser,
         needsProfileSetup,
       },
     });
@@ -333,7 +386,6 @@ const refreshAccessToken = async (req, res, next) => {
       });
     }
 
-    // Verify refresh token
     let decoded;
     try {
       decoded = verifyRefreshToken(refreshToken);
@@ -344,13 +396,12 @@ const refreshAccessToken = async (req, res, next) => {
       });
     }
 
-    // Check if refresh token exists and is not expired
     const tokenResult = await query(
       `SELECT * FROM refresh_tokens
        WHERE token = $1
        AND expires_at > NOW()
        LIMIT 1`,
-      [refreshToken]
+      [refreshToken],
     );
 
     if (tokenResult.rows.length === 0) {
@@ -360,20 +411,16 @@ const refreshAccessToken = async (req, res, next) => {
       });
     }
 
-    // Bump last_used_at so the Active Sessions list stays accurate.
     await query(
       'UPDATE refresh_tokens SET last_used_at = NOW() WHERE token = $1',
-      [refreshToken]
+      [refreshToken],
     );
 
-    // Generate new access token
     const accessToken = generateAccessToken(decoded.userId);
 
     res.json({
       success: true,
-      data: {
-        accessToken,
-      },
+      data: { accessToken },
     });
   } catch (error) {
     next(error);
@@ -387,96 +434,10 @@ const refreshAccessToken = async (req, res, next) => {
 const logout = async (req, res, next) => {
   try {
     const { refreshToken } = req.body;
-
     if (refreshToken) {
-      // Delete refresh token
       await query('DELETE FROM refresh_tokens WHERE token = $1', [refreshToken]);
     }
-
-    res.json({
-      success: true,
-      message: 'Logged out successfully',
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-/**
- * Simple login with just phone number (no OTP)
- * POST /api/v1/auth/simple-login
- */
-const simpleLogin = async (req, res, next) => {
-  try {
-    const { phoneNumber } = req.body;
-
-    if (!phoneNumber) {
-      return res.status(400).json({
-        success: false,
-        error: 'Phone number is required',
-      });
-    }
-
-    // Check if user exists
-    const userResult = await query(
-      'SELECT id, phone_number, name, email, profile_image_base64, preferred_currency, created_at FROM users WHERE phone_number = $1 AND deleted_at IS NULL',
-      [phoneNumber]
-    );
-
-    if (userResult.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        error: 'User not found. Please complete registration first.',
-      });
-    }
-
-    const user = userResult.rows[0];
-
-    // Generate tokens
-    const accessToken = generateAccessToken(user.id);
-    const refreshToken = generateRefreshToken(user.id);
-
-    // Save refresh token
-    const refreshExpiresAt = new Date();
-    refreshExpiresAt.setDate(refreshExpiresAt.getDate() + 30);
-
-    const device = extractDeviceInfo(req);
-    await query(
-      `INSERT INTO refresh_tokens
-        (user_id, token, expires_at,
-         device_name, platform, os_version, app_version, ip_address, user_agent,
-         last_used_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())`,
-      [
-        user.id,
-        refreshToken,
-        refreshExpiresAt,
-        device.deviceName,
-        device.platform,
-        device.osVersion,
-        device.appVersion,
-        device.ipAddress,
-        device.userAgent,
-      ]
-    );
-
-    res.json({
-      success: true,
-      message: 'Login successful',
-      data: {
-        user: {
-          id: user.id,
-          phoneNumber: user.phone_number,
-          name: user.name,
-          email: user.email,
-          profileImageBase64: user.profile_image_base64,
-          preferredCurrency: user.preferred_currency,
-          createdAt: user.created_at,
-        },
-        accessToken,
-        refreshToken,
-      },
-    });
+    res.json({ success: true, message: 'Logged out successfully' });
   } catch (error) {
     next(error);
   }
@@ -501,7 +462,7 @@ const listSessions = async (req, res, next) => {
        FROM refresh_tokens
        WHERE user_id = $1 AND expires_at > NOW()
        ORDER BY COALESCE(last_used_at, created_at) DESC`,
-      [userId]
+      [userId],
     );
 
     const sessions = result.rows.map((row) => ({
@@ -533,7 +494,7 @@ const revokeSession = async (req, res, next) => {
     const { id } = req.params;
     const result = await query(
       'DELETE FROM refresh_tokens WHERE id = $1 AND user_id = $2 RETURNING id',
-      [id, userId]
+      [id, userId],
     );
     if (result.rowCount === 0) {
       return res.status(404).json({
@@ -561,12 +522,12 @@ const revokeAllSessions = async (req, res, next) => {
     if (keepToken) {
       result = await query(
         'DELETE FROM refresh_tokens WHERE user_id = $1 AND token != $2 RETURNING id',
-        [userId, keepToken]
+        [userId, keepToken],
       );
     } else {
       result = await query(
         'DELETE FROM refresh_tokens WHERE user_id = $1 RETURNING id',
-        [userId]
+        [userId],
       );
     }
     res.json({
@@ -581,11 +542,11 @@ const revokeAllSessions = async (req, res, next) => {
 
 export default {
   register,
-  sendOTP,
-  verifyOTP,
+  login,
+  forgotPasswordRequest,
+  forgotPasswordVerify,
   refreshAccessToken,
   logout,
-  simpleLogin,
   listSessions,
   revokeSession,
   revokeAllSessions,

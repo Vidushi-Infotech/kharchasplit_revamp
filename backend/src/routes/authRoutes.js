@@ -2,73 +2,98 @@ import express from 'express';
 import { body } from 'express-validator';
 import { validate } from '../middleware/validation.js';
 import { authenticate } from '../middleware/auth.js';
-import { otpRateLimit } from '../middleware/rateLimits.js';
+import {
+  loginRateLimit,
+  passwordResetRateLimit,
+} from '../middleware/rateLimits.js';
 import authController from '../controllers/authController.js';
 
 const router = express.Router();
 
+const phoneValidator = body('phoneNumber')
+  .matches(/^\+?[1-9]\d{1,14}$/)
+  .withMessage('Invalid phone number format');
+
+const passwordValidator = body('password')
+  .isString()
+  .isLength({ min: 6, max: 128 })
+  .withMessage('Password must be at least 6 characters');
+
+const confirmPasswordValidator = body('confirmPassword')
+  .isString()
+  .isLength({ min: 6, max: 128 })
+  .withMessage('Confirm password is required');
+
+const newPasswordValidator = body('newPassword')
+  .isString()
+  .isLength({ min: 6, max: 128 })
+  .withMessage('Password must be at least 6 characters');
+
 /**
  * @route   POST /api/v1/auth/register
- * @desc    Register a new user
+ * @desc    Register a new user with phone + password
  * @access  Public
  */
 router.post(
   '/register',
-  // Same per-phone bucket as /send-otp — register also issues an OTP.
-  otpRateLimit,
+  loginRateLimit,
+  [phoneValidator, passwordValidator, confirmPasswordValidator],
+  validate,
+  authController.register,
+);
+
+/**
+ * @route   POST /api/v1/auth/login
+ * @desc    Login with phone + password
+ * @access  Public
+ */
+router.post(
+  '/login',
+  loginRateLimit,
+  [phoneValidator, passwordValidator],
+  validate,
+  authController.login,
+);
+
+/**
+ * @route   POST /api/v1/auth/forgot-password/request
+ * @desc    Request a password-reset OTP via email
+ * @access  Public
+ */
+router.post(
+  '/forgot-password/request',
+  passwordResetRateLimit,
   [
-    body('phoneNumber')
-      .matches(/^\+?[1-9]\d{1,14}$/)
-      .withMessage('Invalid phone number format'),
-    body('name')
-      .trim()
-      .isLength({ min: 2, max: 255 })
-      .withMessage('Name must be between 2 and 255 characters'),
     body('email')
-      .optional()
       .isEmail()
-      .withMessage('Invalid email format'),
+      .withMessage('Invalid email format')
+      .normalizeEmail(),
   ],
   validate,
-  authController.register
+  authController.forgotPasswordRequest,
 );
 
 /**
- * @route   POST /api/v1/auth/send-otp
- * @desc    Send OTP to phone number
+ * @route   POST /api/v1/auth/forgot-password/verify
+ * @desc    Verify OTP and set new password (auto-login on success)
  * @access  Public
  */
 router.post(
-  '/send-otp',
-  // Per-phone limit before validation so a malformed payload still costs
-  // a slot and we can't be probed for free.
-  otpRateLimit,
+  '/forgot-password/verify',
+  passwordResetRateLimit,
   [
-    body('phoneNumber')
-      .matches(/^\+?[1-9]\d{1,14}$/)
-      .withMessage('Invalid phone number format'),
-  ],
-  validate,
-  authController.sendOTP
-);
-
-/**
- * @route   POST /api/v1/auth/verify-otp
- * @desc    Verify OTP and login
- * @access  Public
- */
-router.post(
-  '/verify-otp',
-  [
-    body('phoneNumber')
-      .matches(/^\+?[1-9]\d{1,14}$/)
-      .withMessage('Invalid phone number format'),
+    body('email').isEmail().withMessage('Invalid email format'),
     body('otp')
       .isLength({ min: 4, max: 10 })
       .withMessage('Invalid OTP'),
+    newPasswordValidator,
+    body('confirmPassword')
+      .isString()
+      .isLength({ min: 6, max: 128 })
+      .withMessage('Confirm password is required'),
   ],
   validate,
-  authController.verifyOTP
+  authController.forgotPasswordVerify,
 );
 
 /**
@@ -84,7 +109,7 @@ router.post(
       .withMessage('Refresh token is required'),
   ],
   validate,
-  authController.refreshAccessToken
+  authController.refreshAccessToken,
 );
 
 /**
@@ -93,22 +118,6 @@ router.post(
  * @access  Public
  */
 router.post('/logout', authController.logout);
-
-/**
- * @route   POST /api/v1/auth/simple-login
- * @desc    Simple login with just phone number (no OTP)
- * @access  Public
- */
-router.post(
-  '/simple-login',
-  [
-    body('phoneNumber')
-      .matches(/^\+?[1-9]\d{1,14}$/)
-      .withMessage('Invalid phone number format'),
-  ],
-  validate,
-  authController.simpleLogin
-);
 
 /**
  * @route   GET /api/v1/auth/sessions
