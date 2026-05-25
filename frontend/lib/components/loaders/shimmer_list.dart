@@ -117,13 +117,14 @@ class ShimmerList extends StatelessWidget {
               height: 130,
               child: Row(
                 children: List.generate(3, (i) {
-                  return Padding(
-                    padding: EdgeInsets.only(right: i == 2 ? 0 : 12),
-                    child: Container(
-                      width: 150,
-                      decoration: BoxDecoration(
-                        color: AppColors.cardBg(isDark),
-                        borderRadius: BorderRadius.circular(16),
+                  return Expanded(
+                    child: Padding(
+                      padding: EdgeInsets.only(right: i == 2 ? 0 : 12),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: AppColors.cardBg(isDark),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
                       ),
                     ),
                   );

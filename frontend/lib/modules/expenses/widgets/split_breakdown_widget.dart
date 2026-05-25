@@ -1,5 +1,6 @@
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
+import '../../../components/avatar/avatar_widget.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../models/models.dart';
@@ -472,17 +473,10 @@ class _SplitBreakdownWidgetState extends State<SplitBreakdownWidget> {
             ),
           const SizedBox(width: 8),
           // Avatar
-          CircleAvatar(
+          AvatarWidget(
+            name: member.name,
+            imageUrl: member.avatarUrl,
             radius: 16,
-            backgroundColor: AppColors.brand.withValues(alpha: 0.2),
-            child: Text(
-              member.name.split(' ').map((e) => e[0]).join().toUpperCase(),
-              style: TextStyle(
-                color: AppColors.brand,
-                fontWeight: FontWeight.w600,
-                fontSize: 11,
-              ),
-            ),
           ),
           const SizedBox(width: 8),
           // Name + (Unequally only) status caption

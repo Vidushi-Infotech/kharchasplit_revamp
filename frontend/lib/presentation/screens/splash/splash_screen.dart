@@ -23,11 +23,15 @@ class SplashScreen extends ConsumerWidget {
             if (!context.mounted) return;
             final name =
                 (storedUser?['name'] as String?)?.trim() ?? '';
-            final email =
-                (storedUser?['email'] as String?)?.trim() ?? '';
-            // Profile is complete only when both name and email are set;
-            // email is required so the user can receive password-reset OTPs.
-            final needsSetup = name.isEmpty || email.isEmpty;
+            // On cold start we only gate on `name` — without a name the
+            // dashboard UI has nothing to render. Email enforcement is
+            // already handled at register/login time (the post-auth router
+            // sends users to /profile-setup when `needsProfileSetup` is
+            // true) and shouldn't re-trigger here just because the cached
+            // user payload happens to lack an `email` field. Otherwise a
+            // user who legitimately reached the dashboard could be bounced
+            // back to setup on every relaunch.
+            final needsSetup = name.isEmpty;
             context.go(needsSetup ? '/profile-setup' : '/home/dashboard');
           });
           break;

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../components/avatar/avatar_widget.dart';
@@ -160,14 +161,7 @@ class _Body extends ConsumerWidget {
           onTap: () => _confirmLogout(context, ref),
         ),
         const SizedBox(height: 16),
-        Center(
-          child: Text(
-            'KharchaSplit · v3.0.0',
-            style: AppTextStyles.caption(isDark).copyWith(
-              color: AppColors.textSecondary(isDark),
-            ),
-          ),
-        ),
+        Center(child: _VersionFooter(isDark: isDark)),
       ],
     );
   }
@@ -1262,6 +1256,32 @@ class _GradientButton extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Reads the running app's marketing version + build number from
+/// `package_info_plus` so the footer always reflects whatever was bundled
+/// into the APK / IPA — no hardcoded string to drift each release.
+class _VersionFooter extends StatelessWidget {
+  const _VersionFooter({required this.isDark});
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<PackageInfo>(
+      future: PackageInfo.fromPlatform(),
+      builder: (context, snap) {
+        final label = snap.hasData
+            ? 'KharchaSplit · v${snap.data!.version} (${snap.data!.buildNumber})'
+            : 'KharchaSplit';
+        return Text(
+          label,
+          style: AppTextStyles.caption(isDark).copyWith(
+            color: AppColors.textSecondary(isDark),
+          ),
+        );
+      },
     );
   }
 }

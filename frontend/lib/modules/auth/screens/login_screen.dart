@@ -101,12 +101,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final screenWidth = MediaQuery.of(context).size.width;
+    final mq = MediaQuery.of(context);
+    final screenWidth = mq.size.width;
+    final bottomInset = mq.viewInsets.bottom;
     final authState = ref.watch(authProvider);
     final loading = authState.state == AuthState.loading;
 
     return Scaffold(
       backgroundColor: AppColors.background(isDark),
+      resizeToAvoidBottomInset: false,
       body: Stack(
         children: [
           Positioned(
@@ -148,7 +151,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   maxWidth: screenWidth < 1100 ? 460 : 520,
                 ),
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: EdgeInsets.fromLTRB(
+                      24, 24, 24, 24 + bottomInset),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [

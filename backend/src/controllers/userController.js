@@ -1,5 +1,6 @@
 import { query } from '../config/database.js';
 import User from '../models/User.js';
+import Group from '../models/Group.js';
 import { NotificationService } from '../services/notificationService.js';
 
 /**
@@ -94,6 +95,15 @@ const updateUser = async (req, res, next) => {
         error: 'User not found',
       });
     }
+
+    // Invalidate group member caches so updated name/avatar propagates
+    // to all groups the user belongs to.
+    try {
+      const groups = await Group.findByUserId(id, 200, 0);
+      for (const g of groups) {
+        Group.invalidateMembers(g.id, id);
+      }
+    } catch (_) { /* best-effort — don't fail the profile update */ }
 
     res.json({
       success: true,

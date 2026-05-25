@@ -1,13 +1,12 @@
-import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:image_picker/image_picker.dart';
 
 import '../../../components/avatar/avatar_widget.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/utils/avatar_picker.dart';
 import '../../auth/state/auth_provider.dart';
 
 class EditProfileScreen extends ConsumerStatefulWidget {
@@ -48,21 +47,15 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     if (_pickingImage) return;
     setState(() => _pickingImage = true);
     try {
-      final picker = ImagePicker();
-      final picked = await picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 80,
-        maxWidth: 800,
-        maxHeight: 800,
-      );
-      if (picked == null) return;
-      final bytes = await picked.readAsBytes();
+      final result = await pickAndCropAvatar(context);
+      if (result == null) return;
       if (!mounted) return;
       setState(() {
-        _newAvatarBytes = bytes;
-        _newAvatarBase64 = base64Encode(bytes);
+        _newAvatarBytes = result.bytes;
+        _newAvatarBase64 = result.base64;
       });
     } catch (e) {
+      if (!mounted) return;
       _showSnack('Could not pick image: $e', success: false);
     } finally {
       if (mounted) setState(() => _pickingImage = false);

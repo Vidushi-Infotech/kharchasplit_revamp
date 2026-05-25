@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../components/avatar/avatar_widget.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/currency_formatter.dart';
@@ -1005,24 +1006,12 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               ),
               const SizedBox(width: 10),
               // Avatar tile
-              Container(
-                width: 32,
-                height: 32,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: AppColors.tealDark
-                      .withValues(alpha: dim ? 0.06 : 0.14),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  initials,
-                  style: AppTextStyles.caption(isDark).copyWith(
-                    color: dim
-                        ? AppColors.textSecondary(isDark)
-                        : AppColors.tealDark,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 12,
-                  ),
+              Opacity(
+                opacity: dim ? 0.5 : 1.0,
+                child: AvatarWidget(
+                  name: member.name,
+                  imageUrl: member.avatarUrl,
+                  radius: 16,
                 ),
               ),
               const SizedBox(width: 10),
@@ -1101,17 +1090,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               ),
               child: Row(
                 children: [
-                  CircleAvatar(
+                  AvatarWidget(
+                    name: payer?.name ?? 'Me',
+                    imageUrl: isMe ? me?.avatarUrl : payer?.avatarUrl,
                     radius: 16,
-                    backgroundColor: AppColors.brand.withValues(alpha: 0.2),
-                    child: Text(
-                      initial,
-                      style: TextStyle(
-                        color: AppColors.brand,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                      ),
-                    ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -1161,12 +1143,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                     return groupMembers.map((member) {
                       final isMe = me != null && member.id == me.id;
                       final label = isMe ? '${member.name} (Me)' : member.name;
-                      final initials = member.name
-                          .split(' ')
-                          .where((p) => p.isNotEmpty)
-                          .map((p) => p[0])
-                          .join()
-                          .toUpperCase();
+                      final imageUrl = isMe ? me?.avatarUrl : member.avatarUrl;
                       // Selected when explicit pick matches, OR when nothing
                       // is picked yet and this is the current user (default).
                       final selected = state.paidBy == null
@@ -1175,7 +1152,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                       return _buildMemberListItem(
                         isDark,
                         label,
-                        initials,
+                        imageUrl: imageUrl,
                         isSelected: selected,
                         onTap: () {
                           ref.read(addExpenseProvider.notifier).state =
@@ -1197,8 +1174,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   Widget _buildMemberListItem(
     bool isDark,
     String name,
-    String initials,
-    {required bool isSelected, required VoidCallback onTap}
+    {String? imageUrl, required bool isSelected, required VoidCallback onTap}
   ) {
     return Semantics(
       button: true,
@@ -1211,17 +1187,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Row(
             children: [
-              CircleAvatar(
+              AvatarWidget(
+                name: name,
+                imageUrl: imageUrl,
                 radius: 20,
-                backgroundColor: AppColors.brand.withValues(alpha: 0.2),
-                child: Text(
-                  initials,
-                  style: TextStyle(
-                    color: AppColors.brand,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                  ),
-                ),
               ),
               const SizedBox(width: 12),
               Expanded(

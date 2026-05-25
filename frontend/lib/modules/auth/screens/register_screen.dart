@@ -111,12 +111,15 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final screenWidth = MediaQuery.of(context).size.width;
+    final mq = MediaQuery.of(context);
+    final screenWidth = mq.size.width;
+    final bottomInset = mq.viewInsets.bottom;
     final authState = ref.watch(authProvider);
     final loading = authState.state == AuthState.loading;
 
     return Scaffold(
       backgroundColor: AppColors.background(isDark),
+      resizeToAvoidBottomInset: false,
       body: Stack(
         children: [
           Positioned(
@@ -151,35 +154,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               ),
             ),
           ),
-          Positioned(
-            top: 0,
-            left: 0,
-            child: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.only(left: 8, top: 8),
-                child: Material(
-                  color: Colors.transparent,
-                  shape: const CircleBorder(),
-                  clipBehavior: Clip.antiAlias,
-                  child: IconButton(
-                    icon: Icon(
-                      Icons.arrow_back_rounded,
-                      color: AppColors.textPrimary(isDark),
-                    ),
-                    onPressed: loading
-                        ? null
-                        : () {
-                            if (context.canPop()) {
-                              context.pop();
-                            } else {
-                              context.go('/login');
-                            }
-                          },
-                  ),
-                ),
-              ),
-            ),
-          ),
           SafeArea(
             child: Center(
               child: ConstrainedBox(
@@ -187,7 +161,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   maxWidth: screenWidth < 1100 ? 460 : 520,
                 ),
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(24, 56, 24, 24),
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: EdgeInsets.fromLTRB(
+                      24, 56, 24, 24 + bottomInset),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -276,6 +253,35 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       _TermsFooter(isDark: isDark),
                       const SizedBox(height: 16),
                     ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 0,
+            left: 0,
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.only(left: 8, top: 8),
+                child: Material(
+                  color: Colors.transparent,
+                  shape: const CircleBorder(),
+                  clipBehavior: Clip.antiAlias,
+                  child: IconButton(
+                    icon: Icon(
+                      Icons.arrow_back_rounded,
+                      color: AppColors.textPrimary(isDark),
+                    ),
+                    onPressed: loading
+                        ? null
+                        : () {
+                            if (context.canPop()) {
+                              context.pop();
+                            } else {
+                              context.go('/login');
+                            }
+                          },
                   ),
                 ),
               ),

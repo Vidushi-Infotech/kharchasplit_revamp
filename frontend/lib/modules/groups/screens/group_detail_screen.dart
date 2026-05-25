@@ -519,6 +519,7 @@ class GroupDetailScreen extends ConsumerWidget {
   ) {
     // Compact: <600px - full width, single column, tight spacing (16-20px)
     return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
       child: Column(
         children: [
           _buildCompactHeader(context, isDark, detail, ref, myId, isAdmin),
@@ -543,6 +544,7 @@ class GroupDetailScreen extends ConsumerWidget {
   ) {
     // Standard: 600-1100px - improved spacing (24-32px), better grouped layout
     return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
       child: Column(
         children: [
           _buildStandardHeader(context, isDark, detail, ref, myId, isAdmin),

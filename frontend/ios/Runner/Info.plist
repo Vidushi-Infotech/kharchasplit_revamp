@@ -49,16 +49,12 @@
 			<string>UIInterfaceOrientationLandscapeLeft</string>
 			<string>UIInterfaceOrientationLandscapeRight</string>
 		</array>
-		<!-- ATS is left at iOS defaults (HTTPS only) for production safety.
-	     If you need local dev against http://localhost, TEMPORARILY add
-	     the block below back, then REMOVE before any release / TestFlight
-	     / App Store build:
-	         <key>NSAppTransportSecurity</key>
-	         <dict>
-	             <key>NSAllowsLocalNetworking</key>
-	             <true/>
-	         </dict>
-	     -->
+		<!-- LOCAL DEV ONLY — remove before release / TestFlight / App Store -->
+		<key>NSAppTransportSecurity</key>
+		<dict>
+			<key>NSAllowsLocalNetworking</key>
+			<true/>
+		</dict>
 		<!-- Required so iOS lets the app receive remote notifications while in background. -->
 		<key>UIBackgroundModes</key>
 		<array>

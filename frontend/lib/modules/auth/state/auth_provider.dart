@@ -254,18 +254,18 @@ class AuthNotifier extends Notifier<AuthData> {
       );
       final body = res.data;
       final data = body is Map ? body['data'] : null;
-      if (data is Map<String, dynamic>) {
-        await _apiClient.tokens.saveUser(data);
-      }
       final updated = data is Map<String, dynamic>
           ? UserModel.fromJson(data)
           : user.copyWith(
               name: (payload['name'] as String?) ?? user.name,
               email: (payload['email'] as String?) ?? user.email,
+              avatarUrl: (payload['profileImageBase64'] as String?) ??
+                  user.avatarUrl,
               preferredCurrency:
                   (payload['preferredCurrency'] as String?) ??
                       user.preferredCurrency,
             );
+      await _apiClient.tokens.saveUser(updated.toJson());
       // Profile setup is complete once both a name and an email are on
       // file (email is required so the user can receive password-reset OTPs).
       final clearedSetup = updated.name.trim().isNotEmpty &&

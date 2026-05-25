@@ -1,13 +1,11 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:image_picker/image_picker.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/utils/avatar_picker.dart';
 import '../state/auth_provider.dart';
 
 /// First-time profile setup screen. Shown after a new user verifies their
@@ -70,19 +68,12 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     if (_picking) return;
     setState(() => _picking = true);
     try {
-      final picker = ImagePicker();
-      final picked = await picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 80,
-        maxWidth: 800,
-        maxHeight: 800,
-      );
-      if (picked == null) return;
-      final bytes = await picked.readAsBytes();
+      final result = await pickAndCropAvatar(context);
+      if (result == null) return;
       if (!mounted) return;
       setState(() {
-        _avatarBytes = bytes;
-        _avatarBase64 = base64Encode(bytes);
+        _avatarBytes = result.bytes;
+        _avatarBase64 = result.base64;
       });
     } catch (e) {
       if (!mounted) return;
@@ -138,12 +129,14 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final screenWidth = MediaQuery.of(context).size.width;
+    final mq = MediaQuery.of(context);
+    final screenWidth = mq.size.width;
+    final bottomInset = mq.viewInsets.bottom;
     final canContinue = _isValid && !_saving;
 
     return Scaffold(
       backgroundColor: AppColors.background(isDark),
-      // No back / app bar — this is a forced step.
+      resizeToAvoidBottomInset: false,
       body: Stack(
         children: [
           // Decorative blobs — same as login + OTP for visual continuity
@@ -184,7 +177,10 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                   maxWidth: screenWidth < 1100 ? 460 : 520,
                 ),
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: EdgeInsets.fromLTRB(
+                      24, 24, 24, 24 + bottomInset),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [

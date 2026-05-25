@@ -130,22 +130,26 @@ class _ForgotPasswordScreenState
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final screenWidth = MediaQuery.of(context).size.width;
+    final mq = MediaQuery.of(context);
+    final screenWidth = mq.size.width;
+    final bottomInset = mq.viewInsets.bottom;
     final loading =
         ref.watch(authProvider).state == AuthState.loading;
 
     return Scaffold(
       backgroundColor: AppColors.background(isDark),
+      resizeToAvoidBottomInset: false,
       body: screenWidth < 1100
-          ? _buildMobileLayout(isDark, loading)
+          ? _buildMobileLayout(isDark, loading, bottomInset)
           : _buildWebLayout(isDark, loading),
     );
   }
 
-  Widget _buildMobileLayout(bool isDark, bool loading) {
+  Widget _buildMobileLayout(bool isDark, bool loading, double bottomInset) {
     return SafeArea(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + bottomInset),
         child: Column(
           children: [
             Align(
