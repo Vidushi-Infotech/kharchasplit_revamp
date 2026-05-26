@@ -68,12 +68,18 @@ class ExpenseDetailScreen extends ConsumerWidget {
             message: 'Unable to fetch expense details. Please try again.',
             onRetry: () {},
           ),
-          data: (expense) => Center(
+          data: (expense) => RefreshIndicator(
+            onRefresh: () async {
+              ref.invalidate(expenseDetailProvider(expenseId));
+              await ref.read(expenseDetailProvider(expenseId).future);
+            },
+            child: Center(
             child: ConstrainedBox(
               constraints: BoxConstraints(
                 maxWidth: screenWidth < 1100 ? 720 : 900,
               ),
               child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
                 children: [
                   _Hero(expense: expense, isDark: isDark),
@@ -122,6 +128,7 @@ class ExpenseDetailScreen extends ConsumerWidget {
                 ],
               ),
             ),
+          ),
           ),
         ),
       ),

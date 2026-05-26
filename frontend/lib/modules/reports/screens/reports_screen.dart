@@ -32,13 +32,18 @@ class ReportsScreen extends ConsumerWidget {
           onRetry: () => ref.invalidate(reportsProvider),
         ),
         data: (report) {
-          if (screenWidth < 600) {
-            return _buildCompactLayout(context, isDark, report, period, ref);
-          } else if (screenWidth < 1100) {
-            return _buildStandardLayout(context, isDark, report, period, ref);
-          } else {
-            return _buildLargeLayout(context, isDark, report, period, ref);
-          }
+          final body = screenWidth < 600
+              ? _buildCompactLayout(context, isDark, report, period, ref)
+              : screenWidth < 1100
+                  ? _buildStandardLayout(context, isDark, report, period, ref)
+                  : _buildLargeLayout(context, isDark, report, period, ref);
+          return RefreshIndicator(
+            onRefresh: () async {
+              ref.invalidate(reportsProvider);
+              await ref.read(reportsProvider.future);
+            },
+            child: body,
+          );
         },
       ),
     );
@@ -52,6 +57,7 @@ class ReportsScreen extends ConsumerWidget {
     WidgetRef ref,
   ) {
     return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
       child: Column(
         children: [
           _buildPeriodSelector(context, isDark, period, ref),

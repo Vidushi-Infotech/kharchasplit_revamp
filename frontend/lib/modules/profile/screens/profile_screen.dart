@@ -56,9 +56,11 @@ class _Body extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return ListView(
+    return RefreshIndicator(
+      onRefresh: () => ref.read(authProvider.notifier).refreshProfile(),
+      child: ListView(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
-      physics: const BouncingScrollPhysics(),
+      physics: const AlwaysScrollableScrollPhysics(),
       children: [
         _Header(isDark: isDark),
         const SizedBox(height: 20),
@@ -163,6 +165,7 @@ class _Body extends ConsumerWidget {
         const SizedBox(height: 16),
         Center(child: _VersionFooter(isDark: isDark)),
       ],
+    ),
     );
   }
 

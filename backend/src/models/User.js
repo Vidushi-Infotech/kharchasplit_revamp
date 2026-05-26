@@ -331,7 +331,7 @@ class User {
        WHERE RIGHT(REGEXP_REPLACE(phone_number, '[^0-9]', '', 'g'), 10) = $1
        AND is_placeholder = TRUE
        AND deleted_at IS NULL
-       RETURNING id, phone_number, name, email, is_placeholder, created_at, updated_at`,
+       RETURNING id, phone_number, name, email, profile_image_base64, preferred_currency, is_placeholder, created_at, updated_at`,
       [normalizedPhone, name, email, passwordHash || null]
     );
     return result.rows[0] || null;

@@ -27,7 +27,7 @@ const getUser = async (req, res, next) => {
         phoneNumber: user.phone_number,
         name: user.name,
         email: user.email,
-        profileImage: user.profile_image_base64,
+        profileImageBase64: user.profile_image_base64,
         preferredCurrency: user.preferred_currency,
         createdAt: user.created_at,
         updatedAt: user.updated_at,
@@ -113,7 +113,7 @@ const updateUser = async (req, res, next) => {
         phoneNumber: user.phone_number,
         name: user.name,
         email: user.email,
-        profileImage: user.profile_image_base64,
+        profileImageBase64: user.profile_image_base64,
         preferredCurrency: user.preferred_currency,
         updatedAt: user.updated_at,
       },
@@ -181,7 +181,7 @@ const getUserByPhone = async (req, res, next) => {
         phoneNumber: user.phone_number,
         name: user.name,
         email: user.email,
-        profileImage: user.profile_image_base64,
+        profileImageBase64: user.profile_image_base64,
         preferredCurrency: user.preferred_currency,
         createdAt: user.created_at,
         updatedAt: user.updated_at,
@@ -218,7 +218,7 @@ const checkRegisteredUsers = async (req, res, next) => {
       userId: user.id,
       name: user.name,
       email: user.email,
-      profileImage: user.profile_image_base64 || null,
+      profileImageBase64: user.profile_image_base64 || null,
     }));
 
     // Find unregistered numbers
@@ -497,7 +497,7 @@ const getDashboard = async (req, res, next) => {
             id: e.paid_by,
             name: e.paid_by_name,
             phoneNumber: e.paid_by_phone,
-            profileImage: e.paid_by_image,
+            profileImageBase64: e.paid_by_image,
           }
         : null,
       splitType: e.split_type,

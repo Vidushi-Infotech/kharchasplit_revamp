@@ -1,12 +1,15 @@
 import 'dart:async';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_client.dart';
 import '../../../core/services/push_service.dart';
 import '../../../data/auth/auth_repository.dart';
 import '../../../models/user_model.dart';
+import '../../groups/state/group_detail_provider.dart';
+import '../../groups/state/groups_provider.dart';
 
 enum AuthState { initial, loading, success, error }
 
@@ -73,10 +76,36 @@ class AuthNotifier extends Notifier<AuthData> {
     try {
       final user = UserModel.fromJson(stored);
       state = state.copyWith(user: user);
+      // Fetch fresh data from server in background to sync across devices.
+      unawaited(_refreshFromServer(user.id));
     } catch (_) {
       // Stored payload no longer matches model — drop it silently.
       await _apiClient.tokens.clear();
     }
+  }
+
+  /// Fetches the latest user profile from the backend and updates
+  /// local storage + state. Keeps profile data in sync across devices.
+  Future<void> _refreshFromServer(String userId) async {
+    try {
+      final res = await _apiClient.dio.get('/users/$userId');
+      final body = res.data;
+      final data = body is Map ? body['data'] : null;
+      if (data is Map<String, dynamic>) {
+        final fresh = UserModel.fromJson(data);
+        await _apiClient.tokens.saveUser(fresh.toJson());
+        state = state.copyWith(user: fresh);
+      }
+    } catch (_) {
+      // Best-effort — don't break the app if server is unreachable.
+    }
+  }
+
+  /// Public refresh for pull-to-refresh on profile screen.
+  Future<void> refreshProfile() async {
+    final user = state.user;
+    if (user == null) return;
+    await _refreshFromServer(user.id);
   }
 
   /// Register with phone + password. On success the backend signs the user
@@ -276,6 +305,12 @@ class AuthNotifier extends Notifier<AuthData> {
         successMessage: 'Profile updated',
         needsProfileSetup: clearedSetup ? false : null,
       );
+      // Invalidate group caches so member avatars/names refresh.
+      // Deferred to avoid re-entrant build (groupsProvider watches authProvider).
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        ref.invalidate(groupsProvider);
+        ref.invalidate(groupDetailProvider);
+      });
       return true;
     } catch (e) {
       state = state.copyWith(

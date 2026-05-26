@@ -1,7 +1,9 @@
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../widgets/edit_group_sheet.dart';
 import '../widgets/group_cover_thumb.dart';
 import '../../../core/theme/app_colors.dart';
@@ -18,6 +20,16 @@ import '../../settlements/state/pending_settlements_provider.dart';
 import '../state/group_detail_provider.dart';
 import '../state/groups_provider.dart';
 import '../widgets/contacts_picker_sheet.dart';
+
+const String _kPlayStoreUrl =
+    'https://play.google.com/store/apps/details?id=com.kharchasplit';
+const String _kAppStoreUrl =
+    'https://apps.apple.com/in/app/kharchasplit/id6754237285';
+const String _kInviteMessage =
+    "Hey! You've been added to a group on KharchaSplit — the easiest way to "
+    "split expenses with friends. Download the app to get started!\n\n"
+    "Android: $_kPlayStoreUrl\n"
+    "iOS: $_kAppStoreUrl";
 
 class GroupDetailScreen extends ConsumerWidget {
   final String groupId;
@@ -294,6 +306,84 @@ class GroupDetailScreen extends ConsumerWidget {
                     ),
                   ],
                 ),
+                if (member.isPlaceholder) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: AppColors.warning.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.schedule_rounded,
+                            size: 14, color: AppColors.warning),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Not yet on KharchaSplit',
+                          style: AppTextStyles.caption(isDark).copyWith(
+                            color: AppColors.warning,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  _SheetAction(
+                    icon: Icons.email_outlined,
+                    label: 'Invite on Mail',
+                    color: AppColors.brand,
+                    isDark: isDark,
+                    onTap: () {
+                      Navigator.pop(sheetCtx);
+                      _showEmailInviteDialog(
+                          context, ref, member);
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  if (member.phone.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: _SheetAction(
+                        icon: Icons.message_rounded,
+                        label: 'Invite on WhatsApp',
+                        color: const Color(0xFF25D366),
+                        isDark: isDark,
+                        onTap: () {
+                          Navigator.pop(sheetCtx);
+                          final phone = member.phone
+                              .replaceAll('+', '')
+                              .replaceAll(' ', '');
+                          final encoded =
+                              Uri.encodeComponent(_kInviteMessage);
+                          launchUrl(
+                            Uri.parse(
+                                'https://wa.me/$phone?text=$encoded'),
+                            mode: LaunchMode.externalApplication,
+                          );
+                        },
+                      ),
+                    ),
+                  _SheetAction(
+                    icon: Icons.copy_rounded,
+                    label: 'Copy Invite Link',
+                    color: AppColors.textSecondary(isDark),
+                    isDark: isDark,
+                    onTap: () {
+                      Clipboard.setData(
+                          const ClipboardData(text: _kInviteMessage));
+                      Navigator.pop(sheetCtx);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                            content: Text(
+                                'Invite message copied to clipboard')),
+                      );
+                    },
+                  ),
+                ],
                 if (canRemove) ...[
                   const SizedBox(height: 16),
                   SizedBox(
@@ -354,6 +444,45 @@ class GroupDetailScreen extends ConsumerWidget {
           behavior: SnackBarBehavior.floating,
         ),
       );
+    }
+  }
+
+  Future<void> _showEmailInviteDialog(
+    BuildContext context,
+    WidgetRef ref,
+    UserModel member,
+  ) async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final email = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface(isDark),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => _EmailInviteSheet(
+        memberName: member.name,
+        isDark: isDark,
+      ),
+    );
+    if (email == null || email.isEmpty || !context.mounted) return;
+    try {
+      await ref.read(groupsRepositoryProvider).inviteByEmail(
+            groupId: groupId,
+            email: email,
+            name: member.name,
+          );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Invite sent to $email')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to send invite: $e')),
+        );
+      }
     }
   }
 
@@ -961,17 +1090,45 @@ class GroupDetailScreen extends ConsumerWidget {
               ),
               child: Column(
                 children: [
-                  AvatarWidget(
-                    imageUrl: member.avatarUrl,
-                    name: member.name,
-                    radius: 24,
+                  Stack(
+                    children: [
+                      Opacity(
+                        opacity: member.isPlaceholder ? 0.5 : 1.0,
+                        child: AvatarWidget(
+                          imageUrl: member.avatarUrl,
+                          name: member.name,
+                          radius: 24,
+                        ),
+                      ),
+                      if (member.isPlaceholder)
+                        Positioned(
+                          right: 0,
+                          bottom: 0,
+                          child: Container(
+                            padding: const EdgeInsets.all(2),
+                            decoration: BoxDecoration(
+                              color: AppColors.background(isDark),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.schedule_rounded,
+                              size: 14,
+                              color: AppColors.warning,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                   const SizedBox(height: 6),
                   SizedBox(
                     width: 56,
                     child: Text(
                       member.name.split(' ')[0],
-                      style: AppTextStyles.caption(isDark),
+                      style: AppTextStyles.caption(isDark).copyWith(
+                        color: member.isPlaceholder
+                            ? AppColors.textSecondary(isDark)
+                            : null,
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.center,
@@ -2324,6 +2481,147 @@ class _AddMemberButton extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EmailInviteSheet extends StatefulWidget {
+  const _EmailInviteSheet({
+    required this.memberName,
+    required this.isDark,
+  });
+
+  final String memberName;
+  final bool isDark;
+
+  @override
+  State<_EmailInviteSheet> createState() => _EmailInviteSheetState();
+}
+
+class _EmailInviteSheetState extends State<_EmailInviteSheet> {
+  late final TextEditingController _ctrl;
+  final _formKey = GlobalKey<FormState>();
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (_formKey.currentState!.validate()) {
+      Navigator.of(context).pop(_ctrl.text.trim());
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, 12, 20, 20 + bottomInset),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: AppColors.divider(widget.isDark),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          Text(
+            'Invite ${widget.memberName}',
+            style: AppTextStyles.body1(widget.isDark)
+                .copyWith(fontWeight: FontWeight.w700, fontSize: 17),
+          ),
+          const SizedBox(height: 16),
+          Form(
+            key: _formKey,
+            child: TextFormField(
+              controller: _ctrl,
+              autofocus: true,
+              keyboardType: TextInputType.emailAddress,
+              textInputAction: TextInputAction.send,
+              decoration: const InputDecoration(
+                labelText: 'Email',
+                hintText: 'name@example.com',
+                border: OutlineInputBorder(),
+              ),
+              validator: (v) {
+                final s = (v ?? '').trim();
+                if (s.isEmpty) return 'Email is required';
+                if (!s.contains('@') || !s.contains('.')) {
+                  return 'Enter a valid email';
+                }
+                return null;
+              },
+              onFieldSubmitted: (_) => _submit(),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: FilledButton(
+                  onPressed: _submit,
+                  child: const Text('Send Invite'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SheetAction extends StatelessWidget {
+  const _SheetAction({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: onTap,
+        icon: Icon(icon, size: 18),
+        label: Text(label),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: color,
+          side: BorderSide(color: color.withValues(alpha: 0.3)),
+          padding: const EdgeInsets.symmetric(vertical: 12),
         ),
       ),
     );

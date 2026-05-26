@@ -216,7 +216,8 @@ const login = async (req, res, next) => {
     // A user with an empty name (or no email) hasn't completed profile
     // setup yet — push them through it before the dashboard.
     const needsProfileSetup =
-      !user.name || user.name.trim().length === 0 || !user.email;
+      !user.name || user.name.trim().length === 0 ||
+      !user.email || user.email.trim().length === 0;
 
     res.json({
       success: true,
@@ -354,7 +355,8 @@ const forgotPasswordVerify = async (req, res, next) => {
     // Auto-login after reset.
     const { accessToken, refreshToken } = await issueTokens(user.id, req);
     const needsProfileSetup =
-      !user.name || user.name.trim().length === 0 || !user.email;
+      !user.name || user.name.trim().length === 0 ||
+      !user.email || user.email.trim().length === 0;
 
     res.json({
       success: true,

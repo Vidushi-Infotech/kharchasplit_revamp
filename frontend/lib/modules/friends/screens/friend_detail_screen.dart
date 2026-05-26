@@ -39,13 +39,18 @@ class FriendDetailScreen extends ConsumerWidget {
           },
         ),
         data: (detail) {
-          if (screenWidth < 600) {
-            return _buildCompactLayout(context, isDark, detail);
-          } else if (screenWidth < 1100) {
-            return _buildStandardLayout(context, isDark, detail);
-          } else {
-            return _buildLargeLayout(context, isDark, detail);
-          }
+          final body = screenWidth < 600
+              ? _buildCompactLayout(context, isDark, detail)
+              : screenWidth < 1100
+                  ? _buildStandardLayout(context, isDark, detail)
+                  : _buildLargeLayout(context, isDark, detail);
+          return RefreshIndicator(
+            onRefresh: () async {
+              ref.invalidate(friendDetailProvider(friendId));
+              await ref.read(friendDetailProvider(friendId).future);
+            },
+            child: body,
+          );
         },
       ),
     );
@@ -53,6 +58,7 @@ class FriendDetailScreen extends ConsumerWidget {
 
   Widget _buildCompactLayout(BuildContext context, bool isDark, FriendDetail detail) {
     return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
       child: Column(
         children: [
           _buildHeader(context, isDark, detail),

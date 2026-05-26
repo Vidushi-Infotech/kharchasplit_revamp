@@ -11,6 +11,7 @@ class UserModel extends Equatable {
   final double totalOwed;
   final double totalOwing;
   final DateTime createdAt;
+  final bool isPlaceholder;
 
   const UserModel({
     required this.id,
@@ -22,6 +23,7 @@ class UserModel extends Equatable {
     this.totalOwed = 0,
     this.totalOwing = 0,
     required this.createdAt,
+    this.isPlaceholder = false,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -42,6 +44,7 @@ class UserModel extends Equatable {
       totalOwed: (json['totalOwed'] as num?)?.toDouble() ?? 0,
       totalOwing: (json['totalOwing'] as num?)?.toDouble() ?? 0,
       createdAt: created is String ? DateTime.parse(created) : DateTime.now(),
+      isPlaceholder: (json['isPlaceholder'] ?? json['is_placeholder'] ?? false) as bool,
     );
   }
 
@@ -49,12 +52,13 @@ class UserModel extends Equatable {
         'id': id,
         'name': name,
         'email': email,
-        'phone': phone,
-        if (avatarUrl != null) 'avatarUrl': avatarUrl,
+        'phoneNumber': phone,
+        if (avatarUrl != null) 'profileImageBase64': avatarUrl,
         'preferredCurrency': preferredCurrency,
         'totalOwed': totalOwed,
         'totalOwing': totalOwing,
         'createdAt': createdAt.toIso8601String(),
+        'isPlaceholder': isPlaceholder,
       };
 
   UserModel copyWith({
@@ -67,6 +71,7 @@ class UserModel extends Equatable {
     double? totalOwed,
     double? totalOwing,
     DateTime? createdAt,
+    bool? isPlaceholder,
   }) {
     return UserModel(
       id: id ?? this.id,
@@ -78,6 +83,7 @@ class UserModel extends Equatable {
       totalOwed: totalOwed ?? this.totalOwed,
       totalOwing: totalOwing ?? this.totalOwing,
       createdAt: createdAt ?? this.createdAt,
+      isPlaceholder: isPlaceholder ?? this.isPlaceholder,
     );
   }
 
@@ -92,5 +98,6 @@ class UserModel extends Equatable {
         totalOwed,
         totalOwing,
         createdAt,
+        isPlaceholder,
       ];
 }
