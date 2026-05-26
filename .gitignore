@@ -98,3 +98,4 @@ frontend/web/build/
 *.seed
 *.pid.lock
 .claude/
+KharchaSplit_MVP_Document.xlsx
