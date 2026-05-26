@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Auto-Backup rules for KharchaSplit.
+  We disable backup at the application level (allowBackup="false"), but
+  Android still requires this file to exist when fullBackupContent is set,
+  in case the policy is ever flipped.
+
+  Even if backup were re-enabled, EVERY storage type that holds a token,
+  PII, or API state is excluded here so Google's auto-backup never grabs
+  it from the device and uploads to Google Drive.
+-->
+<full-backup-content>
+    <!-- Block flutter_secure_storage's backing files. -->
+    <exclude domain="sharedpref" path="FlutterSecureStorage" />
+
+    <!-- Block app SharedPreferences (theme, wallet sources, onboarding flag). -->
+    <exclude domain="sharedpref" path="FlutterSharedPreferences.xml" />
+
+    <!-- Block Hive boxes. -->
+    <exclude domain="file" path="hive/." />
+
+    <!-- Block any cached receipt images / api responses. -->
+    <exclude domain="file" path="cache/." />
+</full-backup-content>

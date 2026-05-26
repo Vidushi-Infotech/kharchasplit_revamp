@@ -1,0 +1,10 @@
+node_modules/
+.env
+*.log
+__MACOSX/
+.DS_Store
+
+# Firebase Admin secrets — never commit
+firebase-service-account.json
+firebase-service-account*.json
+*service-account*.json

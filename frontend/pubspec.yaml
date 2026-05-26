@@ -1,0 +1,131 @@
+name: kharchasplit
+description: "A Flutter expense-splitting app for groups and settlements."
+publish_to: 'none'
+
+version: 3.2.1+20
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State Management
+  flutter_riverpod: ^3.2.1
+  riverpod: ^3.2.1
+
+  # Navigation
+  go_router: ^17.1.0
+
+  # UI & Components
+  cached_network_image: ^3.3.0
+  shimmer: ^3.0.0
+
+  # Formatting & Localization
+  intl: ^0.20.2
+
+  # Local Storage
+  hive: ^2.2.0
+  hive_flutter: ^1.1.0
+
+  # HTTP Client
+  dio: ^5.3.0
+
+  # Utilities
+  flutter_svg: ^2.0.0
+
+  # File & Image Handling
+  image_picker: ^1.1.2
+
+  # Contacts
+  flutter_contacts: ^1.1.9+2
+
+  # Local Storage
+  shared_preferences: ^2.2.3
+
+  # Data Modeling
+  equatable: ^2.0.5
+  uuid: ^4.4.0
+  collection: ^1.18.0  # firstWhereOrNull, etc.
+  crypto: ^3.0.3       # SHA-256 for certificate pinning
+
+  # Charts & Visualization
+  fl_chart: ^1.2.0
+
+  # Offline & Connectivity
+  connectivity_plus: ^7.0.0
+
+  # Sharing & Export
+  share_plus: ^12.0.1
+  path_provider: ^2.1.3
+  pdf: ^3.11.1
+
+  # Emoji Support
+  emoji_picker_flutter: ^4.4.0
+
+  # Image Processing & Compression
+  flutter_image_compress: ^2.1.0
+  image: ^4.0.0
+  http: ^1.1.0
+  flutter_secure_storage: ^10.2.0
+  liquid_glass_renderer: ^0.2.0-dev.4
+  device_info_plus: ^12.4.0
+  package_info_plus: ^9.0.1
+  url_launcher: ^6.3.2
+
+  # Push Notifications (Firebase Cloud Messaging)
+  firebase_core: ^4.2.0
+  firebase_messaging: ^16.2.2
+  flutter_local_notifications: ^20.0.0
+  smart_auth: ^3.2.0
+
+  # Crash reporting
+  firebase_crashlytics: ^5.0.2
+  crop_your_image: ^2.0.0
+
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^6.0.0
+  build_runner: ^2.13.1
+  flutter_launcher_icons: ^0.14.4
+  flutter_native_splash: ^2.4.7
+
+# App-icon generation (Android + iOS launcher icons).
+# Run after changing logo.png:  dart run flutter_launcher_icons
+flutter_launcher_icons:
+  android: "ic_launcher"
+  ios: true
+  image_path: "assets/images/logo.png"
+  min_sdk_android: 21
+  remove_alpha_ios: true
+  # Adaptive icon for Android 8+: white background + the logo as
+  # foreground so the system can apply circle / squircle masks.
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/images/logo.png"
+
+# Native splash screen (the brief white flash before Dart wakes up).
+# Run after changing logo.png:  dart run flutter_native_splash:create
+flutter_native_splash:
+  color: "#FFFFFF"
+  color_dark: "#0B0F14"
+  image: assets/images/logo.png
+  image_dark: assets/images/logo.png
+  android: true
+  ios: true
+  fullscreen: false
+  android_12:
+    image: assets/images/logo.png
+    image_dark: assets/images/logo.png
+    color: "#FFFFFF"
+    color_dark: "#0B0F14"
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+    - assets/icons/

@@ -1,0 +1,99 @@
+# ─── OS / archive cruft ──────────────────────────────────────────────────
+.DS_Store
+__MACOSX/
+Thumbs.db
+*.zip
+*.tar.gz
+
+# ─── Editor / IDE ────────────────────────────────────────────────────────
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+*~
+
+# ─── Claude Code (keep skills + agents, ignore per-machine settings) ─────
+.claude/settings.local.json
+
+# ─── Logs ────────────────────────────────────────────────────────────────
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+
+# ─── Deployment snapshots (handed off to ops team, not source of truth) ──
+production_*/
+
+# ─── Secrets / env ───────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ─── Backend (Node) ──────────────────────────────────────────────────────
+backend/node_modules/
+backend/coverage/
+backend/dist/
+backend/.cache/
+backend/.env
+backend/.env.*
+!backend/.env.example
+
+# ─── Flutter / Dart (generated / cache) ──────────────────────────────────
+# Catch frontend-relative paths AND any stragglers if commands accidentally
+# get run at the monorepo root.
+frontend/.dart_tool/
+frontend/.flutter-plugins
+frontend/.flutter-plugins-dependencies
+frontend/.packages
+frontend/.pub-cache/
+frontend/.pub/
+frontend/build/
+frontend/coverage/
+frontend/.metadata
+frontend/lib/generated_plugin_registrant.dart
+# Stragglers
+.dart_tool/
+.flutter-plugins-dependencies
+build/
+
+# ─── Flutter — Android ───────────────────────────────────────────────────
+frontend/android/.gradle/
+frontend/android/local.properties
+frontend/android/key.properties
+*.jks
+*.keystore
+frontend/android/**/GeneratedPluginRegistrant.java
+frontend/android/app/debug
+frontend/android/app/profile
+frontend/android/app/release
+frontend/android/.idea/
+frontend/android/captures/
+frontend/android/.kotlin/
+
+# ─── Flutter — iOS ───────────────────────────────────────────────────────
+frontend/ios/Pods/
+frontend/ios/.symlinks/
+frontend/ios/Flutter/App.framework/
+frontend/ios/Flutter/Flutter.framework/
+frontend/ios/Flutter/Flutter.podspec
+frontend/ios/Flutter/Generated.xcconfig
+frontend/ios/Flutter/app.flx
+frontend/ios/Flutter/app.zip
+frontend/ios/Flutter/flutter_assets/
+frontend/ios/Flutter/flutter_export_environment.sh
+frontend/ios/ServiceDefinitions.json
+frontend/ios/Runner/GeneratedPluginRegistrant.*
+
+# ─── Flutter — desktop / web ─────────────────────────────────────────────
+frontend/macos/Flutter/GeneratedPluginRegistrant.swift
+frontend/linux/flutter/generated_*
+frontend/windows/flutter/generated_*
+frontend/web/build/
+
+# ─── Misc ────────────────────────────────────────────────────────────────
+*.pid
+*.seed
+*.pid.lock

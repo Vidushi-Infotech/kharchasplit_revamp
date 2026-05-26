@@ -1,0 +1,121 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../core/theme/app_colors.dart';
+import 'shell_state.dart';
+
+/// Tablet shell with NavigationRail
+class TabletShell extends ConsumerWidget {
+  final Widget child;
+
+  const TabletShell({
+    Key? key,
+    required this.child,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final selectedIndex = ref.watch(selectedNavIndexProvider);
+
+    return Scaffold(
+      body: Row(
+        children: [
+          // NavigationRail
+          NavigationRail(
+            selectedIndex: selectedIndex,
+            onDestinationSelected: (index) {
+              ref.read(selectedNavIndexProvider.notifier).state = index;
+              _navigateToTab(context, index);
+            },
+            backgroundColor: AppColors.surface(isDark),
+            indicatorColor: AppColors.brand.withValues(alpha: 0.2),
+            leading: Padding(
+              padding: const EdgeInsets.only(top: 16, bottom: 16),
+              child: Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: [AppColors.brand, AppColors.tealDark],
+                  ),
+                ),
+                child: const Icon(Icons.receipt_rounded, color: Colors.white),
+              ),
+            ),
+            destinations: [
+              const NavigationRailDestination(
+                icon: Icon(Icons.home_rounded),
+                selectedIcon: Icon(Icons.home_rounded),
+                label: Text('Home'),
+              ),
+              const NavigationRailDestination(
+                icon: Icon(Icons.group_rounded),
+                selectedIcon: Icon(Icons.group_rounded),
+                label: Text('Groups'),
+              ),
+              NavigationRailDestination(
+                icon: Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      colors: [AppColors.brand, AppColors.tealDark],
+                    ),
+                  ),
+                  child: const Icon(Icons.add_rounded, color: Colors.white),
+                ),
+                selectedIcon: Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      colors: [AppColors.brand, AppColors.tealDark],
+                    ),
+                  ),
+                  child: const Icon(Icons.add_rounded, color: Colors.white),
+                ),
+                label: Text('Create'),
+              ),
+              const NavigationRailDestination(
+                icon: Icon(Icons.account_balance_wallet_rounded),
+                selectedIcon: Icon(Icons.account_balance_wallet_rounded),
+                label: Text('Personal'),
+              ),
+              const NavigationRailDestination(
+                icon: Icon(Icons.person_outline_rounded),
+                selectedIcon: Icon(Icons.person_rounded),
+                label: Text('Profile'),
+              ),
+            ],
+          ),
+          // Main content
+          Expanded(child: child),
+        ],
+      ),
+    );
+  }
+
+  void _navigateToTab(BuildContext context, int index) {
+    switch (index) {
+      case 0:
+        context.go('/home/dashboard');
+        break;
+      case 1:
+        context.go('/home/groups');
+        break;
+      case 2:
+        context.go('/add-expense');
+        break;
+      case 3:
+        context.go('/home/personal');
+        break;
+      case 4:
+        context.go('/home/profile');
+        break;
+    }
+  }
+}
