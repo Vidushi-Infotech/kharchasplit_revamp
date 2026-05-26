@@ -97,3 +97,4 @@ frontend/web/build/
 *.pid
 *.seed
 *.pid.lock
+.claude/
