@@ -93,6 +93,15 @@ class AuthNotifier extends Notifier<AuthData> {
       final data = body is Map ? body['data'] : null;
       if (data is Map<String, dynamic>) {
         final fresh = UserModel.fromJson(data);
+        final current = state.user;
+        // Don't overwrite richer local data with empty server data.
+        // This guards against the case where a profile update was saved
+        // locally but the server didn't receive it (e.g. proxy blocking PUT).
+        if (current != null &&
+            current.name.trim().isNotEmpty &&
+            fresh.name.trim().isEmpty) {
+          return;
+        }
         await _apiClient.tokens.saveUser(fresh.toJson());
         state = state.copyWith(user: fresh);
       }

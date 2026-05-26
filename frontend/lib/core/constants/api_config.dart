@@ -13,7 +13,7 @@
 class ApiConfig {
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://192.168.8.197:3000/api/v1',
+    defaultValue: 'https://api.kharchasplit.com/api/v1',
   );
 
   static const Duration connectTimeout = Duration(seconds: 10);
