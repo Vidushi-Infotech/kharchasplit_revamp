@@ -99,3 +99,4 @@ frontend/web/build/
 *.pid.lock
 .claude/
 KharchaSplit_MVP_Document.xlsx
+qa/

@@ -13,7 +13,11 @@
 class ApiConfig {
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'https://api.kharchasplit.com/api/v1',
+    // Production:
+    // defaultValue: 'https://api.kharchasplit.com/api/v1',
+    // Local dev (Mac LAN IP — phone + Mac must share the same Wi-Fi,
+    // and the backend must listen on 0.0.0.0, not just 127.0.0.1):
+    defaultValue: 'http://192.168.8.197:3000/api/v1',
   );
 
   static const Duration connectTimeout = Duration(seconds: 10);

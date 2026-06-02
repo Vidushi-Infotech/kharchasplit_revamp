@@ -7,12 +7,17 @@ class AmountInputWidget extends StatefulWidget {
   final double amount;
   final String currency;
   final Function(double) onChanged;
+  /// When true, the input claims focus and pops the keyboard on first
+  /// build. Use for fresh "Add expense" so the user can type immediately;
+  /// leave false for edit mode where the form is already populated.
+  final bool autoFocus;
 
   const AmountInputWidget({
     Key? key,
     required this.amount,
     required this.currency,
     required this.onChanged,
+    this.autoFocus = false,
   }) : super(key: key);
 
   @override
@@ -83,6 +88,7 @@ class _AmountInputWidgetState extends State<AmountInputWidget> {
             Expanded(
               child: TextField(
                 controller: _controller,
+                autofocus: widget.autoFocus,
                 keyboardType: TextInputType.number,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 textAlign: TextAlign.center,

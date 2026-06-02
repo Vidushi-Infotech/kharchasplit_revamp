@@ -32,12 +32,31 @@ class PickGroupForExpenseSheet extends ConsumerStatefulWidget {
 class _PickGroupForExpenseSheetState
     extends ConsumerState<PickGroupForExpenseSheet> {
   final _searchController = TextEditingController();
+  final _searchFocus = FocusNode();
   String _query = '';
+  bool _searching = false;
 
   @override
   void dispose() {
     _searchController.dispose();
+    _searchFocus.dispose();
     super.dispose();
+  }
+
+  void _toggleSearch() {
+    setState(() {
+      _searching = !_searching;
+      if (!_searching) {
+        _searchController.clear();
+        _query = '';
+        _searchFocus.unfocus();
+      }
+    });
+    if (_searching) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _searchFocus.requestFocus();
+      });
+    }
   }
 
   List<GroupModel> _filter(List<GroupModel> groups) {
@@ -104,88 +123,91 @@ class _PickGroupForExpenseSheetState
                         ],
                       ),
                     ),
-                    Material(
-                      color: Colors.transparent,
-                      shape: const CircleBorder(),
-                      clipBehavior: Clip.antiAlias,
-                      child: InkWell(
-                        onTap: () => Navigator.of(context).pop(),
-                        customBorder: const CircleBorder(),
-                        child: Container(
-                          width: 34,
-                          height: 34,
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: AppColors.cardBg(isDark),
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: AppColors.divider(isDark),
-                            ),
-                          ),
-                          child: Icon(
-                            Icons.close_rounded,
-                            size: 18,
-                            color: AppColors.textPrimary(isDark),
-                          ),
-                        ),
-                      ),
+                    _CircleIconButton(
+                      isDark: isDark,
+                      icon: _searching
+                          ? Icons.search_off_rounded
+                          : Icons.search_rounded,
+                      semanticLabel: _searching
+                          ? 'Close search'
+                          : 'Search groups',
+                      onTap: _toggleSearch,
+                    ),
+                    const SizedBox(width: 8),
+                    _CircleIconButton(
+                      isDark: isDark,
+                      icon: Icons.close_rounded,
+                      semanticLabel: 'Close',
+                      onTap: () => Navigator.of(context).pop(),
                     ),
                   ],
                 ),
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
-                child: TextField(
-                  controller: _searchController,
-                  onChanged: (q) => setState(() => _query = q),
-                  textInputAction: TextInputAction.search,
-                  style: AppTextStyles.body2(isDark).copyWith(fontSize: 14),
-                  decoration: InputDecoration(
-                    filled: true,
-                    fillColor: AppColors.cardBg(isDark),
-                    isDense: true,
-                    hintText: 'Search groups',
-                    hintStyle: AppTextStyles.body2(isDark).copyWith(
-                      color: AppColors.textSecondary(isDark),
-                      fontSize: 14,
-                    ),
-                    prefixIcon: Icon(
-                      Icons.search_rounded,
-                      size: 18,
-                      color: AppColors.textSecondary(isDark),
-                    ),
-                    prefixIconConstraints:
-                        const BoxConstraints(minWidth: 40, minHeight: 40),
-                    suffixIcon: _query.isEmpty
-                        ? null
-                        : IconButton(
-                            icon: const Icon(Icons.close_rounded, size: 16),
+                child: _searching
+                    ? TextField(
+                        controller: _searchController,
+                        focusNode: _searchFocus,
+                        onChanged: (q) => setState(() => _query = q),
+                        textInputAction: TextInputAction.search,
+                        style: AppTextStyles.body2(isDark)
+                            .copyWith(fontSize: 14),
+                        decoration: InputDecoration(
+                          filled: true,
+                          fillColor: AppColors.cardBg(isDark),
+                          isDense: true,
+                          hintText: 'Search groups',
+                          hintStyle: AppTextStyles.body2(isDark).copyWith(
                             color: AppColors.textSecondary(isDark),
-                            onPressed: () {
-                              _searchController.clear();
-                              setState(() => _query = '');
-                            },
+                            fontSize: 14,
                           ),
-                    contentPadding:
-                        const EdgeInsets.symmetric(vertical: 12),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide:
-                          BorderSide(color: AppColors.divider(isDark)),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide:
-                          BorderSide(color: AppColors.divider(isDark)),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(
-                        color: AppColors.tealDark.withValues(alpha: 0.45),
+                          prefixIcon: Icon(
+                            Icons.search_rounded,
+                            size: 18,
+                            color: AppColors.textSecondary(isDark),
+                          ),
+                          prefixIconConstraints: const BoxConstraints(
+                              minWidth: 40, minHeight: 40),
+                          suffixIcon: _query.isEmpty
+                              ? null
+                              : IconButton(
+                                  icon: const Icon(Icons.close_rounded,
+                                      size: 16),
+                                  color: AppColors.textSecondary(isDark),
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    setState(() => _query = '');
+                                  },
+                                ),
+                          contentPadding:
+                              const EdgeInsets.symmetric(vertical: 12),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide:
+                                BorderSide(color: AppColors.divider(isDark)),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide:
+                                BorderSide(color: AppColors.divider(isDark)),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(
+                              color: AppColors.tealDark
+                                  .withValues(alpha: 0.45),
+                            ),
+                          ),
+                        ),
+                      )
+                    : _CreateGroupCta(
+                        isDark: isDark,
+                        onTap: () {
+                          Navigator.of(context).pop();
+                          context.push('/home/create-group');
+                        },
                       ),
-                    ),
-                  ),
-                ),
               ),
               Expanded(
                 child: groupsAsync.when(
@@ -232,14 +254,6 @@ class _PickGroupForExpenseSheetState
                               },
                             ),
                           ),
-                        const SizedBox(height: 6),
-                        _CreateGroupCta(
-                          isDark: isDark,
-                          onTap: () {
-                            Navigator.of(context).pop();
-                            context.push('/home/create-group');
-                          },
-                        ),
                       ],
                     );
                   },
@@ -249,6 +263,52 @@ class _PickGroupForExpenseSheetState
           ),
         );
       },
+    );
+  }
+}
+
+class _CircleIconButton extends StatelessWidget {
+  const _CircleIconButton({
+    required this.isDark,
+    required this.icon,
+    required this.onTap,
+    this.semanticLabel,
+  });
+
+  final bool isDark;
+  final IconData icon;
+  final VoidCallback onTap;
+  final String? semanticLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: semanticLabel,
+      child: Material(
+        color: Colors.transparent,
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          customBorder: const CircleBorder(),
+          child: Container(
+            width: 34,
+            height: 34,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppColors.cardBg(isDark),
+              shape: BoxShape.circle,
+              border: Border.all(color: AppColors.divider(isDark)),
+            ),
+            child: Icon(
+              icon,
+              size: 18,
+              color: AppColors.textPrimary(isDark),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

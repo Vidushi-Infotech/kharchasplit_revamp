@@ -30,15 +30,15 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
   late TextEditingController _groupNameController;
   late TextEditingController _descriptionController;
   late FocusNode _groupNameFocus;
+  late FocusNode _descriptionFocus;
   GroupCategory _selectedCategory = GroupCategory.other;
   XFile? _selectedImageFile;
-  /// Compressed bytes of the picked cover image. Used both for the
-  /// in-screen preview and for the base64 payload sent to the backend
-  /// on _createGroup().
+  /// Compressed bytes of the picked cover image. Sent as base64 on submit.
   Uint8List? _coverBytes;
   bool _isProcessing = false;
-  String? _processingStatus;
-  double _uploadProgress = 0.0;
+  bool _isCreating = false;
+  bool _isNameValid = false;
+  bool _showDescription = false;
   final List<Contact> _selectedContacts = [];
 
   final ImagePicker _imagePicker = ImagePicker();
@@ -49,6 +49,8 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
     _groupNameController = TextEditingController();
     _descriptionController = TextEditingController();
     _groupNameFocus = FocusNode();
+    _descriptionFocus = FocusNode();
+    _groupNameController.addListener(_onNameChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _groupNameFocus.requestFocus();
       // Pre-warm device contacts in the background. By the time the user
@@ -59,10 +61,19 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
 
   @override
   void dispose() {
+    _groupNameController.removeListener(_onNameChanged);
     _groupNameController.dispose();
     _descriptionController.dispose();
     _groupNameFocus.dispose();
+    _descriptionFocus.dispose();
     super.dispose();
+  }
+
+  void _onNameChanged() {
+    final isValid = _groupNameController.text.trim().isNotEmpty;
+    if (isValid != _isNameValid) {
+      setState(() => _isNameValid = isValid);
+    }
   }
 
   Future<void> _pickContacts() async {
@@ -88,14 +99,9 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
 
       if (pickedFile == null) return;
 
-      // Start processing
-      setState(() {
-        _isProcessing = true;
-        _processingStatus = 'Processing image...';
-      });
+      setState(() => _isProcessing = true);
 
       try {
-        // Step 1: Validate image
         final validation =
             await ImageProcessorService.validateImage(pickedFile.path);
         if (!validation.isValid) {
@@ -108,60 +114,27 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
         }
 
         if (!mounted) return;
-        setState(() => _processingStatus = 'Compressing image...');
 
-        // Step 3: Compress image to WebP
         final compressedBytes =
             await ImageProcessorService.compressImageToWebP(pickedFile.path);
 
-        // Persist the bytes we'll actually send. On web/desktop the
-        // compressor may return null/empty (no-op), in which case we
-        // fall back to reading the picked file directly so the cover
-        // photo still gets uploaded.
-        Uint8List? bytesForUpload = (compressedBytes != null &&
-                compressedBytes.isNotEmpty)
-            ? compressedBytes
-            : null;
+        // On web/desktop the compressor may return null/empty — fall back to
+        // reading the picked file directly so the cover still gets uploaded.
+        Uint8List? bytesForUpload =
+            (compressedBytes != null && compressedBytes.isNotEmpty)
+                ? compressedBytes
+                : null;
         bytesForUpload ??= await pickedFile.readAsBytes();
-
-        // Calculate compression percentage (handle null/empty bytes on web)
-        String compressionPercent = '0';
-        if (compressedBytes != null && compressedBytes.isNotEmpty) {
-          try {
-            final originalSize = await File(pickedFile.path).length();
-            compressionPercent =
-                ImageProcessorService.getCompressionPercentage(
-              originalSize,
-              compressedBytes.length,
-            );
-          } catch (e, st) {
-            AppLogger.warn('Could not calculate compression',
-                tag: 'create_group', error: e, stackTrace: st);
-          }
-        }
 
         if (!mounted) return;
         setState(() {
           _selectedImageFile = pickedFile;
           _coverBytes = bytesForUpload;
           _isProcessing = false;
-          _processingStatus = null;
-          _uploadProgress = 0.0;
         });
-
-        // Show upload progress dialog
-        if (!mounted) return;
-        _showUploadProgressDialog(
-          context,
-          pickedFile,
-          validation.dimensionsDisplay,
-          compressionPercent,
-        );
       } catch (processingError, st) {
         AppLogger.error('Image processing error',
             tag: 'create_group', error: processingError, stackTrace: st);
-        // On web or any error, still allow image to be used — read raw
-        // bytes so _createGroup still has something to upload.
         Uint8List? fallbackBytes;
         try {
           fallbackBytes = await pickedFile.readAsBytes();
@@ -171,18 +144,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
           _selectedImageFile = pickedFile;
           _coverBytes = fallbackBytes;
           _isProcessing = false;
-          _processingStatus = null;
-          _uploadProgress = 0.0;
         });
-
-        // Show upload dialog anyway
-        if (!mounted) return;
-        _showUploadProgressDialog(
-          context,
-          pickedFile,
-          'Unknown',
-          '0',
-        );
       }
     } catch (e) {
       setState(() => _isProcessing = false);
@@ -193,187 +155,14 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
     }
   }
 
-  /// Show upload progress dialog with preview
-  Future<void> _showUploadProgressDialog(
-    BuildContext context,
-    XFile imageFile,
-    String dimensions,
-    String compressionPercent,
-  ) async {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setState) {
-          Future.microtask(() async {
-            final success = await _uploadImage();
-            if (!success || !mounted) return;
-            // Both contexts (dialog + outer) need their own mounted check
-            // because the dialog may be torn down before this completes.
-            if (!dialogContext.mounted) return;
-            Navigator.of(dialogContext).pop();
-            if (!context.mounted) return;
-            ScaffoldMessenger.of(this.context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  'Image uploaded! Compressed $dimensions by $compressionPercent%',
-                ),
-                backgroundColor: Colors.green,
-                duration: const Duration(seconds: 3),
-              ),
-            );
-          });
-
-          return Dialog(
-            backgroundColor: AppColors.cardBg(isDark),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  // Title
-                  Text(
-                    'Uploading Image',
-                    style: AppTextStyles.headline3(isDark),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Image Preview
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: Container(
-                      width: 150,
-                      height: 150,
-                      color: AppColors.surface(isDark),
-                      child: kIsWeb
-                          ? Image.network(
-                              imageFile.path,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Icon(
-                                Icons.image_rounded,
-                                size: 60,
-                                color: AppColors.textSecondary(isDark),
-                              ),
-                            )
-                          : Image.file(
-                              File(imageFile.path),
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Icon(
-                                Icons.image_rounded,
-                                size: 60,
-                                color: AppColors.textSecondary(isDark),
-                              ),
-                            ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Progress Bar
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Uploading...',
-                            style: AppTextStyles.body2(isDark),
-                          ),
-                          Text(
-                            '${(_uploadProgress * 100).toStringAsFixed(0)}%',
-                            style: AppTextStyles.body2(isDark).copyWith(
-                              color: AppColors.brand,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: LinearProgressIndicator(
-                          value: _uploadProgress,
-                          minHeight: 8,
-                          backgroundColor: AppColors.surface(isDark),
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            AppColors.brand,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Info Text
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AppColors.brand.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.info_rounded,
-                          color: AppColors.brand,
-                          size: 18,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            'Image scanned & compressed. Upload starting...',
-                            style: AppTextStyles.caption(isDark).copyWith(
-                              color: AppColors.brand,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  /// Simulate uploading image with progress tracking
-  Future<bool> _uploadImage() async {
-    try {
-      if (_selectedImageFile == null) return true;
-
-      // Simulate upload with progress
-      for (int i = 0; i <= 100; i += 10) {
-        if (!mounted) return false;
-        setState(() => _uploadProgress = i / 100);
-        await Future.delayed(const Duration(milliseconds: 150));
-      }
-
-      return true;
-    } catch (e, st) {
-      AppLogger.error('Upload error',
-          tag: 'create_group', error: e, stackTrace: st);
-      return false;
-    }
-  }
-
   Future<void> _createGroup() async {
-    final name = _groupNameController.text.trim();
-    if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a group name')),
-      );
-      return;
-    }
+    // Re-entrancy guard. The sticky button also blocks taps via [enabled],
+    // but the flag protects against any other path (Enter key, semantics
+    // action, hot reload triggering another tap event).
+    if (_isCreating) return;
+    setState(() => _isCreating = true);
 
+    final name = _groupNameController.text.trim();
     // 1. Create the group (creator is added as the only member by the backend).
     GroupModel newGroup;
     try {
@@ -384,6 +173,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
           );
     } catch (e) {
       if (!mounted) return;
+      setState(() => _isCreating = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Could not create group: $e')),
       );
@@ -391,11 +181,11 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
     }
 
     // 2. Invite every selected contact via /groups/:id/pending-members.
-    //    The backend transparently adds registered users directly and creates
-    //    a placeholder + WhatsApp invite for the rest.
+    //    Backend transparently adds registered users directly and creates a
+    //    placeholder + WhatsApp invite for the rest.
     final invitable = _selectedContacts
-        .where((c) => c.phones.isNotEmpty &&
-            c.phones.first.number.trim().isNotEmpty)
+        .where((c) =>
+            c.phones.isNotEmpty && c.phones.first.number.trim().isNotEmpty)
         .toList();
     int succeeded = 0;
     int failed = 0;
@@ -417,17 +207,13 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
       );
       succeeded = results.where((r) => r).length;
       failed = results.length - succeeded;
-      // Refresh the groups list so memberCount reflects the new members.
       ref.invalidate(groupsProvider);
     }
 
-    // 3. SMTP fallback — emails were collected via the popup that pops up
-    //    when the user taps "Add & Invite" inside the contacts picker. They
-    //    ride along on the Contact object's .emails list. Each one gets a
-    //    POST /groups/:id/invite-email — independent of WATI.
+    // 3. SMTP fallback for emails collected via the contacts picker.
     final emailRecipients = _selectedContacts
-        .where((c) => c.emails.isNotEmpty &&
-            c.emails.first.address.trim().isNotEmpty)
+        .where((c) =>
+            c.emails.isNotEmpty && c.emails.first.address.trim().isNotEmpty)
         .toList();
     int emailSent = 0;
     final emailFailures = <String>[];
@@ -443,8 +229,6 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
           );
           emailSent++;
         } catch (e) {
-          // Surface the actual SMTP / server error so users can spot
-          // typos like name@gmail.coms instead of a silent counter.
           final msg = e is GroupsApiException ? e.message : e.toString();
           emailFailures.add('$addr: $msg');
         }
@@ -475,6 +259,17 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final screenWidth = MediaQuery.of(context).size.width;
 
+    final double maxFormWidth = screenWidth < 600
+        ? double.infinity
+        : screenWidth < 1100
+            ? 600
+            : 700;
+    final double horizontalPad = screenWidth < 600
+        ? 16
+        : screenWidth < 1100
+            ? 24
+            : 32;
+
     return Scaffold(
       backgroundColor: AppColors.background(isDark),
       appBar: _TopBar(
@@ -484,378 +279,202 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
       ),
       body: SafeArea(
         top: false,
-        child: screenWidth < 600
-            ? _buildCompactLayout(isDark)
-            : screenWidth < 1100
-                ? _buildStandardLayout(isDark)
-                : _buildLargeLayout(isDark),
-      ),
-    );
-  }
-
-  Widget _buildCompactLayout(bool isDark) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: _buildForm(isDark),
-    );
-  }
-
-  Widget _buildStandardLayout(bool isDark) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 600),
-          child: _buildForm(isDark),
+        bottom: false,
+        child: Column(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(
+                  horizontalPad,
+                  horizontalPad,
+                  horizontalPad,
+                  20,
+                ),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: maxFormWidth),
+                    child: _buildFormBody(isDark),
+                  ),
+                ),
+              ),
+            ),
+            _StickyCreateBar(
+              isDark: isDark,
+              enabled: _isNameValid && !_isCreating,
+              loading: _isCreating,
+              horizontalPad: horizontalPad,
+              maxFormWidth: maxFormWidth,
+              onTap: _createGroup,
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildLargeLayout(bool isDark) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(32),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 700),
-          child: _buildForm(isDark),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildForm(bool isDark) {
+  Widget _buildFormBody(bool isDark) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Semantics(
-          label: 'Group name input',
+        _buildCoverAndNameRow(isDark),
+        const SizedBox(height: 28),
+        _SectionTitle(label: 'Category', isDark: isDark),
+        const SizedBox(height: 10),
+        _buildCategorySelector(isDark),
+        const SizedBox(height: 28),
+        _SectionTitle(
+          label: 'Members',
+          isDark: isDark,
+          trailing: _selectedContacts.isEmpty
+              ? null
+              : Text(
+                  '${_selectedContacts.length}',
+                  style: AppTextStyles.caption(isDark).copyWith(
+                    color: AppColors.textSecondary(isDark),
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
+                ),
+        ),
+        const SizedBox(height: 10),
+        _buildMembersSection(isDark),
+        const SizedBox(height: 24),
+        _buildDescriptionToggle(isDark),
+      ],
+    );
+  }
+
+  Widget _buildCoverAndNameRow(bool isDark) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        _buildCircularCover(isDark),
+        const SizedBox(width: 14),
+        Expanded(
           child: AppTextField(
             controller: _groupNameController,
             focusNode: _groupNameFocus,
             hint: 'e.g., Goa Trip',
-            label: 'Group Name',
-          ),
-        ),
-        const SizedBox(height: 32),
-
-        _SectionTitle(label: 'GROUP COVER', isDark: isDark),
-        const SizedBox(height: 10),
-        _buildCoverSelector(isDark),
-        const SizedBox(height: 28),
-
-        _SectionTitle(label: 'CATEGORY', isDark: isDark),
-        const SizedBox(height: 10),
-        _buildCategorySelector(isDark),
-        const SizedBox(height: 28),
-
-        _SectionTitle(label: 'MEMBERS', isDark: isDark),
-        const SizedBox(height: 10),
-        _buildMembersSection(isDark),
-        const SizedBox(height: 28),
-
-        Semantics(
-          label: 'Group description input',
-          child: AppTextField(
-            controller: _descriptionController,
-            hint: 'Add notes about this group...',
-            label: 'Description (Optional)',
-            maxLines: 3,
-          ),
-        ),
-        const SizedBox(height: 32),
-
-        Semantics(
-          button: true,
-          label: 'Create group button',
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: _createGroup,
-              borderRadius: BorderRadius.circular(14),
-              child: Ink(
-                height: 54,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [AppColors.tealLight, AppColors.tealDark],
-                  ),
-                  borderRadius: BorderRadius.circular(14),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.tealDark.withValues(alpha: 0.35),
-                      blurRadius: 14,
-                      offset: const Offset(0, 6),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(
-                      Icons.check_rounded,
-                      size: 18,
-                      color: Colors.white,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Create group',
-                      style: AppTextStyles.body1(isDark).copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 15,
-                        letterSpacing: -0.1,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+            label: 'Group name',
           ),
         ),
       ],
     );
   }
 
-  Widget _buildMembersSection(bool isDark) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (_selectedContacts.isNotEmpty) ...[
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _selectedContacts.map((c) {
-              final name = c.displayName.isEmpty ? 'Unknown' : c.displayName;
-              return Chip(
-                label: Text(name),
-                onDeleted: () => setState(() => _selectedContacts.remove(c)),
-                deleteIconColor: AppColors.errorText(isDark),
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: 12),
-        ],
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: _pickContacts,
-            icon: const Icon(Icons.contacts_rounded),
-            label: Text(
-              _selectedContacts.isEmpty
-                  ? 'Add Members from Contacts'
-                  : 'Edit Members',
-            ),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              side: BorderSide(color: AppColors.brand),
-              foregroundColor: AppColors.brand,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-          ),
+  Widget _buildCircularCover(bool isDark) {
+    const size = 72.0;
+    Widget content;
+    if (_isProcessing) {
+      content = SizedBox(
+        width: 22,
+        height: 22,
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          valueColor: AlwaysStoppedAnimation(AppColors.tealDark),
         ),
-      ],
-    );
-  }
+      );
+    } else if (_selectedImageFile != null) {
+      content = ClipOval(
+        child: SizedBox(
+          width: size,
+          height: size,
+          child: kIsWeb
+              ? Image.network(_selectedImageFile!.path, fit: BoxFit.cover)
+              : Image.file(File(_selectedImageFile!.path), fit: BoxFit.cover),
+        ),
+      );
+    } else {
+      content = Icon(
+        Icons.add_a_photo_outlined,
+        size: 24,
+        color: AppColors.tealDark,
+      );
+    }
 
-  Widget _buildCoverSelector(bool isDark) {
-    return _buildImagePicker(isDark);
-  }
-
-  Widget _buildImagePicker(bool isDark) {
-    if (_isProcessing) return _buildPickerProcessing(isDark);
-    if (_selectedImageFile != null) return _buildPickerPreview(isDark);
-    return _buildPickerEmpty(isDark);
-  }
-
-  Widget _buildPickerEmpty(bool isDark) {
     return Semantics(
       button: true,
-      label: 'Add cover image',
+      label: _selectedImageFile == null
+          ? 'Add cover image'
+          : 'Change cover image',
       child: Material(
         color: Colors.transparent,
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
         child: InkWell(
-          onTap: _pickImage,
-          borderRadius: BorderRadius.circular(16),
-          child: Ink(
-            height: 168,
+          onTap: _isProcessing ? null : _pickImage,
+          customBorder: const CircleBorder(),
+          child: Container(
+            width: size,
+            height: size,
+            alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: AppColors.cardBg(isDark),
-              borderRadius: BorderRadius.circular(16),
+              color: _selectedImageFile == null
+                  ? AppColors.tealDark.withValues(alpha: 0.10)
+                  : AppColors.cardBg(isDark),
+              shape: BoxShape.circle,
               border: Border.all(
-                color: AppColors.divider(isDark),
+                color: _selectedImageFile == null
+                    ? AppColors.tealDark.withValues(alpha: 0.35)
+                    : AppColors.divider(isDark),
+                width: _selectedImageFile == null ? 1.5 : 1,
               ),
             ),
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: AppColors.tealDark.withValues(alpha: 0.10),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(
-                      Icons.image_outlined,
-                      size: 22,
-                      color: AppColors.tealDark,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    'Add a cover image',
-                    style: AppTextStyles.body1(isDark).copyWith(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'PNG or JPG · auto-compressed',
-                    style: AppTextStyles.caption(isDark).copyWith(
-                      color: AppColors.textSecondary(isDark),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            child: content,
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildPickerProcessing(bool isDark) {
-    return Container(
-      height: 168,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: AppColors.cardBg(isDark),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.divider(isDark)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox(
-            width: 22,
-            height: 22,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              valueColor: AlwaysStoppedAnimation(AppColors.tealDark),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            _processingStatus ?? 'Processing image…',
-            style: AppTextStyles.caption(isDark).copyWith(
-              color: AppColors.textSecondary(isDark),
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPickerPreview(bool isDark) {
-    final imageProvider = kIsWeb
-        ? NetworkImage(_selectedImageFile!.path) as ImageProvider
-        : FileImage(File(_selectedImageFile!.path));
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.divider(isDark)),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Stack(
-        children: [
-          AspectRatio(
-            aspectRatio: 16 / 9,
-            child: Image(image: imageProvider, fit: BoxFit.cover),
-          ),
-          Positioned(
-            top: 10,
-            right: 10,
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: _pickImage,
-                borderRadius: BorderRadius.circular(999),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 7,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.55),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: const [
-                      Icon(Icons.edit_rounded, color: Colors.white, size: 14),
-                      SizedBox(width: 6),
-                      Text(
-                        'Change',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
 
   Widget _buildCategorySelector(bool isDark) {
     return Wrap(
-      spacing: 12,
-      runSpacing: 12,
+      spacing: 8,
+      runSpacing: 10,
       children: GroupCategory.values.map((category) {
         final isSelected = category == _selectedCategory;
-        final categoryName = category.toString().split('.').last;
+        final name = _categoryLabel(category);
+        final emoji = _categoryEmoji(category);
 
         return Semantics(
           button: true,
-          label: 'Category $categoryName',
+          label: 'Category $name',
+          selected: isSelected,
           child: GestureDetector(
             onTap: () => setState(() => _selectedCategory = category),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 140),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 9,
+              ),
               decoration: BoxDecoration(
                 color: isSelected
-                    ? AppColors.brand
-                    : AppColors.surface(isDark),
-                borderRadius: BorderRadius.circular(20),
+                    ? AppColors.tealDark
+                    : AppColors.cardBg(isDark),
+                borderRadius: BorderRadius.circular(999),
                 border: Border.all(
                   color: isSelected
-                      ? AppColors.brand
+                      ? AppColors.tealDark
                       : AppColors.divider(isDark),
-                  width: 1,
                 ),
               ),
-              child: Text(
-                categoryName[0].toUpperCase() + categoryName.substring(1),
-                style: AppTextStyles.body2(isDark).copyWith(
-                  color: isSelected
-                      ? Colors.white
-                      : AppColors.textPrimary(isDark),
-                  fontWeight: FontWeight.w500,
-                ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(emoji, style: const TextStyle(fontSize: 14)),
+                  const SizedBox(width: 6),
+                  Text(
+                    name,
+                    style: AppTextStyles.body2(isDark).copyWith(
+                      color: isSelected
+                          ? Colors.white
+                          : AppColors.textPrimary(isDark),
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -863,10 +482,205 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
       }).toList(),
     );
   }
+
+  String _categoryEmoji(GroupCategory c) {
+    switch (c) {
+      case GroupCategory.trip:
+        return '✈️';
+      case GroupCategory.home:
+        return '🏠';
+      case GroupCategory.couple:
+        return '💑';
+      case GroupCategory.work:
+        return '💼';
+      case GroupCategory.other:
+        return '🏷️';
+    }
+  }
+
+  String _categoryLabel(GroupCategory c) {
+    final s = c.toString().split('.').last;
+    return s[0].toUpperCase() + s.substring(1);
+  }
+
+  Widget _buildMembersSection(bool isDark) {
+    if (_selectedContacts.isEmpty) {
+      return Semantics(
+        button: true,
+        label: 'Add members from contacts',
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: _pickContacts,
+            borderRadius: BorderRadius.circular(14),
+            child: Ink(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 14,
+              ),
+              decoration: BoxDecoration(
+                color: AppColors.cardBg(isDark),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: AppColors.tealDark.withValues(alpha: 0.35),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: AppColors.tealDark.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(11),
+                    ),
+                    child: Icon(
+                      Icons.person_add_alt_1_rounded,
+                      size: 18,
+                      color: AppColors.tealDark,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Add members',
+                          style: AppTextStyles.body1(isDark).copyWith(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                            color: AppColors.tealDark,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Pick from your contacts',
+                          style: AppTextStyles.caption(isDark).copyWith(
+                            color: AppColors.textSecondary(isDark),
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    size: 18,
+                    color: AppColors.tealDark,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.cardBg(isDark),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.divider(isDark)),
+      ),
+      child: Row(
+        children: [
+          _AvatarStack(
+            contacts: _selectedContacts,
+            isDark: isDark,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              _membersPreviewText(),
+              style: AppTextStyles.body2(isDark).copyWith(
+                fontSize: 13,
+                color: AppColors.textPrimary(isDark),
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 8),
+          _PillButton(
+            icon: Icons.edit_rounded,
+            label: 'Edit',
+            isDark: isDark,
+            onTap: _pickContacts,
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _membersPreviewText() {
+    final names = _selectedContacts
+        .map((c) => c.displayName.isEmpty ? 'Unknown' : c.displayName)
+        .toList();
+    if (names.length <= 2) return names.join(', ');
+    return '${names.take(2).join(', ')} +${names.length - 2}';
+  }
+
+  Widget _buildDescriptionToggle(bool isDark) {
+    if (!_showDescription) {
+      return Semantics(
+        button: true,
+        label: 'Add notes',
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () {
+              setState(() => _showDescription = true);
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) _descriptionFocus.requestFocus();
+              });
+            },
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 4,
+                vertical: 10,
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.add_rounded,
+                    size: 18,
+                    color: AppColors.tealDark,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Add notes (optional)',
+                    style: AppTextStyles.body2(isDark).copyWith(
+                      color: AppColors.tealDark,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+    return Semantics(
+      label: 'Group description input',
+      child: AppTextField(
+        controller: _descriptionController,
+        focusNode: _descriptionFocus,
+        hint: 'Add notes about this group…',
+        label: 'Notes',
+        maxLines: 3,
+      ),
+    );
+  }
 }
 
-
-/// Clean top bar matching the rest of the app — back arrow + bold title.
+/// Top bar matching the rest of the app — back arrow + bold title.
 class _TopBar extends StatelessWidget implements PreferredSizeWidget {
   const _TopBar({
     required this.isDark,
@@ -943,22 +757,301 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
 }
 
 class _SectionTitle extends StatelessWidget {
-  const _SectionTitle({required this.label, required this.isDark});
+  const _SectionTitle({
+    required this.label,
+    required this.isDark,
+    this.trailing,
+  });
 
   final String label;
   final bool isDark;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(left: 2, bottom: 2),
+      child: Row(
+        children: [
+          Text(
+            label,
+            style: AppTextStyles.body2(isDark).copyWith(
+              color: AppColors.textPrimary(isDark),
+              fontWeight: FontWeight.w700,
+              fontSize: 14,
+              letterSpacing: -0.1,
+            ),
+          ),
+          if (trailing != null) ...[
+            const SizedBox(width: 8),
+            trailing!,
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Bottom-anchored Create button. Disabled (greyed) until the name is
+/// non-empty; on tap fires [onTap].
+class _StickyCreateBar extends StatelessWidget {
+  const _StickyCreateBar({
+    required this.isDark,
+    required this.enabled,
+    required this.loading,
+    required this.horizontalPad,
+    required this.maxFormWidth,
+    required this.onTap,
+  });
+
+  final bool isDark;
+  final bool enabled;
+  final bool loading;
+  final double horizontalPad;
+  final double maxFormWidth;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.background(isDark),
+        border: Border(
+          top: BorderSide(
+            color: AppColors.divider(isDark).withValues(alpha: 0.7),
+          ),
+        ),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            horizontalPad,
+            10,
+            horizontalPad,
+            10,
+          ),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: maxFormWidth),
+              child: Semantics(
+                button: true,
+                enabled: enabled,
+                label: 'Create group',
+                child: Opacity(
+                  opacity: (enabled || loading) ? 1 : 0.45,
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: enabled ? onTap : null,
+                      borderRadius: BorderRadius.circular(14),
+                      child: Ink(
+                        height: 52,
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              AppColors.tealLight,
+                              AppColors.tealDark,
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: (enabled || loading)
+                              ? [
+                                  BoxShadow(
+                                    color: AppColors.tealDark
+                                        .withValues(alpha: 0.30),
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 6),
+                                  ),
+                                ]
+                              : null,
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            if (loading)
+                              const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor:
+                                      AlwaysStoppedAnimation<Color>(Colors.white),
+                                ),
+                              )
+                            else
+                              const Icon(
+                                Icons.check_rounded,
+                                size: 18,
+                                color: Colors.white,
+                              ),
+                            const SizedBox(width: 8),
+                            Text(
+                              loading ? 'Creating…' : 'Create group',
+                              style: AppTextStyles.body1(isDark).copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 15,
+                                letterSpacing: -0.1,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Avatar stack — first few members shown as overlapping initial circles.
+class _AvatarStack extends StatelessWidget {
+  const _AvatarStack({required this.contacts, required this.isDark});
+
+  final List<Contact> contacts;
+  final bool isDark;
+
+  static const _palette = <Color>[
+    Color(0xFF26A69A),
+    Color(0xFF66BB6A),
+    Color(0xFFFFA726),
+    Color(0xFF7E57C2),
+    Color(0xFFEF5350),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    const maxAvatars = 3;
+    final shown = contacts.take(maxAvatars).toList();
+    final extra = contacts.length - shown.length;
+    final tileCount = shown.length + (extra > 0 ? 1 : 0);
+
+    const tile = 30.0;
+    const overlap = 22.0;
+    final width = tile + overlap * (tileCount - 1);
+
+    return SizedBox(
+      width: width.clamp(tile, 200).toDouble(),
+      height: tile,
+      child: Stack(
+        children: [
+          for (int i = 0; i < shown.length; i++)
+            Positioned(
+              left: i * overlap,
+              child: _initialAvatar(shown[i], i, isDark),
+            ),
+          if (extra > 0)
+            Positioned(
+              left: shown.length * overlap,
+              child: _moreBadge(extra, isDark),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _initialAvatar(Contact c, int i, bool isDark) {
+    final name = c.displayName.isEmpty ? '?' : c.displayName;
+    final initial = name.characters.first.toUpperCase();
+    final color = _palette[i % _palette.length];
+    return Container(
+      width: 30,
+      height: 30,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: color,
+        border: Border.all(
+          color: AppColors.background(isDark),
+          width: 2,
+        ),
+      ),
       child: Text(
-        label,
-        style: AppTextStyles.caption(isDark).copyWith(
-          color: AppColors.textSecondary(isDark),
+        initial,
+        style: const TextStyle(
+          color: Colors.white,
           fontWeight: FontWeight.w700,
-          letterSpacing: 1.3,
+          fontSize: 12,
+        ),
+      ),
+    );
+  }
+
+  Widget _moreBadge(int extra, bool isDark) {
+    return Container(
+      width: 30,
+      height: 30,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: AppColors.surface(isDark),
+        border: Border.all(
+          color: AppColors.background(isDark),
+          width: 2,
+        ),
+      ),
+      child: Text(
+        '+$extra',
+        style: AppTextStyles.caption(isDark).copyWith(
+          fontWeight: FontWeight.w700,
           fontSize: 11,
+          color: AppColors.textPrimary(isDark),
+        ),
+      ),
+    );
+  }
+}
+
+/// Small pill-shaped button used inside cards.
+class _PillButton extends StatelessWidget {
+  const _PillButton({
+    required this.icon,
+    required this.label,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: AppColors.tealDark.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 13, color: AppColors.tealDark),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: AppTextStyles.caption(isDark).copyWith(
+                  color: AppColors.tealDark,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
