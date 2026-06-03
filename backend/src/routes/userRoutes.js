@@ -2,6 +2,7 @@ import express from 'express';
 import { body  } from 'express-validator';
 import { authenticate  } from '../middleware/auth.js';
 import { validate  } from '../middleware/validation.js';
+import { phoneLookupRateLimit } from '../middleware/rateLimits.js';
 import userController from '../controllers/userController.js';
 import notificationController from '../controllers/notificationController.js';
 
@@ -19,6 +20,16 @@ router.post(
 );
 
 router.get('/by-phone/:phoneNumber', authenticate, userController.getUserByPhone);
+
+// Privacy-trimmed lookup for the "Add member by phone" search box. Rate
+// limited per authenticated user so a logged-in client can't enumerate
+// the user directory.
+router.get(
+  '/lookup-by-phone',
+  authenticate,
+  phoneLookupRateLimit,
+  userController.lookupByPhone,
+);
 
 router.get('/:id/dashboard', authenticate, userController.getDashboard);
 

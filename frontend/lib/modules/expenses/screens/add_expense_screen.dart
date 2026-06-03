@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../components/avatar/avatar_widget.dart';
+import '../../../core/services/haptic_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/currency_formatter.dart';
@@ -565,6 +566,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       lastDate: DateTime.now(),
     );
     if (picked != null) {
+      HapticService.instance.selection();
       ref.read(addExpenseProvider.notifier).state =
           state.copyWith(date: picked);
     }
@@ -607,12 +609,13 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                   itemBuilder: (_, i) {
                     final m = groupMembers[i];
                     final isMe = me != null && m.id == me.id;
-                    final label = isMe ? '${m.name} (You)' : m.name;
+                    final label = isMe ? '${m.name} (Me)' : m.name;
                     final selected = state.paidBy == null
                         ? isMe
                         : state.paidBy!.id == m.id;
                     return InkWell(
                       onTap: () {
+                        HapticService.instance.tap();
                         ref.read(addExpenseProvider.notifier).state =
                             state.copyWith(paidBy: m);
                         Navigator.pop(ctx);
@@ -696,7 +699,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                     text: 'Split',
                     isDark: isDark,
                     trailing: TextButton(
-                      onPressed: () => Navigator.pop(ctx),
+                      onPressed: () {
+                        HapticService.instance.success();
+                        Navigator.pop(ctx);
+                      },
                       child: Text(
                         'Done',
                         style: AppTextStyles.body1(isDark).copyWith(
@@ -733,6 +739,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                                 members: groupMembers,
                                 splits: s.splits,
                                 includedMemberIds: s.includedMemberIds,
+                                currentUserId:
+                                    ref.watch(authProvider).user?.id,
                                 onSplitsChanged: (splits) {
                                   ref
                                       .read(addExpenseProvider.notifier)
@@ -797,6 +805,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                     final color = _hexToColor(c.colorHex) ?? AppColors.tealDark;
                     return InkWell(
                       onTap: () {
+                        HapticService.instance.selection();
                         ref.read(addExpenseProvider.notifier).state =
                             state.copyWith(category: c);
                         Navigator.pop(ctx);
@@ -980,12 +989,14 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   Future<void> _handleSave() async {
     final state = ref.read(addExpenseProvider);
     if (state.title == null || state.title!.trim().isEmpty) {
+      HapticService.instance.error();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Add a title before saving.')),
       );
       return;
     }
     if (state.groupId == null) {
+      HapticService.instance.error();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Pick a group before saving the expense.')),
       );
@@ -994,6 +1005,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     final groupId = state.groupId!;
     final currentUser = ref.read(authProvider).user;
     if (currentUser == null) {
+      HapticService.instance.error();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('You must be signed in to save an expense.')),
       );
@@ -1113,6 +1125,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       }
     } catch (e) {
       if (!mounted) return;
+      HapticService.instance.error();
       ref.read(addExpenseProvider.notifier).state =
           state.copyWith(isLoading: false, error: e.toString());
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1128,6 +1141,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     }
 
     if (!mounted) return;
+    HapticService.instance.success();
     ref.read(addExpenseProvider.notifier).state =
         AddExpenseState(date: DateTime.now());
     ScaffoldMessenger.of(context).showSnackBar(
@@ -1176,7 +1190,10 @@ class _QuickRow extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: onTap,
+        onTap: () {
+          HapticService.instance.tap();
+          onTap();
+        },
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
           child: Row(

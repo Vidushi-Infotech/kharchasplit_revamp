@@ -13,6 +13,9 @@ class SplitBreakdownWidget extends StatefulWidget {
   final Set<String> includedMemberIds;
   final Function(Map<String, double>) onSplitsChanged;
   final Function(Set<String>) onIncludedMembersChanged;
+  /// Id of the signed-in user. When non-null, that member's row shows
+  /// "Name (Me)" so users can spot themselves at a glance.
+  final String? currentUserId;
 
   const SplitBreakdownWidget({
     Key? key,
@@ -23,6 +26,7 @@ class SplitBreakdownWidget extends StatefulWidget {
     required this.includedMemberIds,
     required this.onSplitsChanged,
     required this.onIncludedMembersChanged,
+    this.currentUserId,
   }) : super(key: key);
 
   @override
@@ -486,7 +490,10 @@ class _SplitBreakdownWidgetState extends State<SplitBreakdownWidget> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  member.name,
+                  widget.currentUserId != null &&
+                          member.id == widget.currentUserId
+                      ? '${member.name} (Me)'
+                      : member.name,
                   style: AppTextStyles.body2(isDark).copyWith(
                     color: isIncluded
                         ? AppColors.textPrimary(isDark)

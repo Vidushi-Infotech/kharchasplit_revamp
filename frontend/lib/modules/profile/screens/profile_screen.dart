@@ -6,6 +6,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../components/avatar/avatar_widget.dart';
+import '../../../core/services/haptic_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/theme/theme_provider.dart';
@@ -187,6 +188,7 @@ class _Body extends ConsumerWidget {
         duration: Duration(seconds: 4),
       ),
     );
+    HapticService.instance.destructive();
     try {
       await ref.read(authProvider.notifier).logout();
       if (!context.mounted) return;

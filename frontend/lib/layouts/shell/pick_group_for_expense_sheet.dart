@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/services/haptic_service.dart';
+
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../models/group_model.dart';
@@ -44,6 +46,7 @@ class _PickGroupForExpenseSheetState
   }
 
   void _toggleSearch() {
+    HapticService.instance.tap();
     setState(() {
       _searching = !_searching;
       if (!_searching) {
@@ -138,7 +141,10 @@ class _PickGroupForExpenseSheetState
                       isDark: isDark,
                       icon: Icons.close_rounded,
                       semanticLabel: 'Close',
-                      onTap: () => Navigator.of(context).pop(),
+                      onTap: () {
+                        HapticService.instance.tap();
+                        Navigator.of(context).pop();
+                      },
                     ),
                   ],
                 ),
@@ -244,6 +250,7 @@ class _PickGroupForExpenseSheetState
                               group: visible[i],
                               isDark: isDark,
                               onTap: () {
+                                HapticService.instance.tap();
                                 Navigator.of(context).pop();
                                 context.pushNamed(
                                   'add-expense-to-group',

@@ -5,12 +5,70 @@ import '../../core/network/api_client.dart';
 import '../../models/group_model.dart';
 
 class GroupsApiException implements Exception {
-  GroupsApiException(this.message, {this.statusCode});
+  GroupsApiException(this.message, {this.statusCode, this.code, this.data});
   final String message;
   final int? statusCode;
+  /// Machine-readable error tag from the server (e.g. `UNSETTLED_BALANCES`).
+  /// Lets the UI distinguish a "you must acknowledge" 409 from a regular
+  /// 409, without parsing the human-readable message.
+  final String? code;
+  /// Structured payload that accompanies certain errors. For
+  /// `UNSETTLED_BALANCES` this carries the pairwise debt breakdown the
+  /// "write off and remove" dialog renders.
+  final Map<String, dynamic>? data;
 
   @override
   String toString() => message;
+}
+
+/// Pairwise debt entry returned by the backend in the 409
+/// `UNSETTLED_BALANCES` payload. Sign convention:
+/// * `amount > 0` → the member being removed owes [userName] this much.
+/// * `amount < 0` → [userName] owes the member being removed this much.
+class PairwiseDebt {
+  PairwiseDebt({
+    required this.userId,
+    required this.userName,
+    required this.amount,
+  });
+  final String userId;
+  final String userName;
+  final double amount;
+
+  factory PairwiseDebt.fromJson(Map<String, dynamic> j) => PairwiseDebt(
+        userId: j['userId']?.toString() ?? '',
+        userName: j['userName']?.toString() ?? 'Unknown',
+        amount: (j['amount'] is num) ? (j['amount'] as num).toDouble() : 0,
+      );
+}
+
+/// Carries the body of a 409 `UNSETTLED_BALANCES` response in a typed
+/// shape so the dialog can render the list without re-parsing the map.
+class UnsettledBalancesInfo {
+  UnsettledBalancesInfo({
+    required this.memberId,
+    required this.memberName,
+    required this.currency,
+    required this.pairwise,
+  });
+  final String memberId;
+  final String memberName;
+  final String currency;
+  final List<PairwiseDebt> pairwise;
+
+  factory UnsettledBalancesInfo.fromJson(Map<String, dynamic> j) =>
+      UnsettledBalancesInfo(
+        memberId: j['memberId']?.toString() ?? '',
+        memberName: j['memberName']?.toString() ?? 'Member',
+        currency: j['currency']?.toString() ?? 'INR',
+        pairwise: (j['pairwise'] is List)
+            ? (j['pairwise'] as List)
+                .whereType<Map>()
+                .map((e) =>
+                    PairwiseDebt.fromJson(Map<String, dynamic>.from(e)))
+                .toList()
+            : <PairwiseDebt>[],
+      );
 }
 
 class CreateGroupMember {
@@ -120,12 +178,45 @@ class GroupsRepository {
 
   /// Admin-only: remove another member from the group. Same endpoint as
   /// [leave]; the backend enforces admin access when targeting someone else.
+  ///
+  /// Two-step protocol for unsettled balances:
+  /// * First call (default) — if the target member has any unsettled debt
+  ///   the backend returns 409 with `code: 'UNSETTLED_BALANCES'`. We
+  ///   rethrow as a typed [GroupsApiException] whose `code` and `data`
+  ///   carry the pairwise breakdown so the dialog can render it.
+  /// * Second call — pass [acknowledgeUnsettledDebt] = true to authorize
+  ///   the write-off; the backend creates completed settlement rows that
+  ///   zero out the balance before removing the member.
   Future<void> removeMember({
     required String groupId,
     required String userId,
+    bool acknowledgeUnsettledDebt = false,
   }) async {
-    final res = await _client.dio.delete('/groups/$groupId/members/$userId');
-    _ensureSuccess(res);
+    try {
+      final res = await _client.dio.delete(
+        '/groups/$groupId/members/$userId',
+        data: acknowledgeUnsettledDebt
+            ? {'acknowledgeUnsettledDebt': true}
+            : null,
+      );
+      _ensureSuccess(res);
+    } on DioException catch (e) {
+      final res = e.response;
+      final body = res?.data;
+      if (body is Map) {
+        final msg = (body['error'] ?? body['message'] ?? e.message ?? 'Request failed')
+            .toString();
+        final code = body['code']?.toString();
+        final data = body['data'];
+        throw GroupsApiException(
+          msg,
+          statusCode: res?.statusCode,
+          code: code,
+          data: data is Map ? Map<String, dynamic>.from(data) : null,
+        );
+      }
+      rethrow;
+    }
   }
 
   /// Send a "you owe me" push reminder to another member of the group.

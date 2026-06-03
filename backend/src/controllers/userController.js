@@ -193,6 +193,76 @@ const getUserByPhone = async (req, res, next) => {
 };
 
 /**
+ * Privacy-trimmed lookup used by the "Add member by phone number" flow
+ * in the group-members picker.
+ * GET /api/v1/users/lookup-by-phone?phone=XXXXXXXXXX
+ *
+ * Returns only the fields the picker needs to render a result card and
+ * decide whether to add the user to the group. Email, full phone, and
+ * timestamps are intentionally omitted so a logged-in client can't
+ * enumerate the user directory beyond "this number is registered, here
+ * is the display name and avatar."
+ */
+const lookupByPhone = async (req, res, next) => {
+  try {
+    const phone = (req.query?.phone || '').toString().trim();
+    if (!phone) {
+      return res.status(400).json({
+        success: false,
+        error: 'phone query parameter is required',
+      });
+    }
+
+    const user = await User.findByPhoneNumber(phone);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    // Block self-lookup so the picker doesn't accidentally let a user add
+    // themselves to a group via this path; the existing self-detection in
+    // the device-contacts list handles the device-contacts path.
+    if (user.id === req.user.id) {
+      return res.json({
+        success: true,
+        data: {
+          id: user.id,
+          name: user.name,
+          avatarUrl: user.profile_image_base64 || null,
+          phoneSuffix: (user.phone_number || '').replace(/\D/g, '').slice(-4),
+          isSelf: true,
+        },
+      });
+    }
+
+    // Placeholder users are server-side stubs created during invite flows
+    // before the invitee signs up. Treat them as "not registered" so the
+    // picker falls through to its invite-CTA branch.
+    if (user.is_placeholder) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        id: user.id,
+        name: user.name,
+        avatarUrl: user.profile_image_base64 || null,
+        phoneSuffix: (user.phone_number || '').replace(/\D/g, '').slice(-4),
+        isSelf: false,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * Check if users are registered by phone numbers
  * POST /api/v1/users/check-registration
  *
@@ -843,6 +913,7 @@ const getReports = async (req, res, next) => {
 export default {
   getUser,
   getUserByPhone,
+  lookupByPhone,
   updateUser,
   deleteUser,
   checkRegisteredUsers,

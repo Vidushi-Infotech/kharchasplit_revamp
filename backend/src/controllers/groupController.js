@@ -1,5 +1,6 @@
 import { query } from '../config/database.js';
 import Group from '../models/Group.js';
+import Settlement from '../models/Settlement.js';
 import GroupService from '../services/groupService.js';
 import ActivityService from '../services/activityService.js';
 import { NotificationService } from '../services/notificationService.js';
@@ -788,6 +789,70 @@ const removeGroupMember = async (req, res, next) => {
       Group.getMembers(id),
     ]);
     const member = members.find(m => m.user_id === userId);
+
+    // Admin-removing-another path: data-integrity gate. Soft-deleting a
+    // member with unsettled splits would leave phantom debt in the
+    // balance computation (the split rows still reference them, but the
+    // member list filters them out — UI can never settle the debt).
+    //
+    // Two-step protocol:
+    //   1. First call → if unsettled, return 409 with structured debt
+    //      list so the client can show a "write off and remove" prompt.
+    //   2. Second call sets acknowledgeUnsettledDebt:true → we create
+    //      completed write-off settlements for each pair, zeroing the
+    //      member's balance, before soft-deleting the membership.
+    let writeOffPairs = [];
+    if (!isRemovingSelf) {
+      const pair = await GroupService.getUserPairwiseDebts(id, userId);
+      writeOffPairs = [...pair.entries()]
+        .filter(([, amt]) => Math.abs(amt) > 0.005)
+        .map(([otherUserId, amount]) => ({ otherUserId, amount }));
+
+      const acknowledged = req.body?.acknowledgeUnsettledDebt === true;
+      if (writeOffPairs.length > 0 && !acknowledged) {
+        // Resolve names for the UI so it doesn't have to re-fetch.
+        const named = writeOffPairs.map(p => {
+          const other = members.find(m => m.user_id === p.otherUserId);
+          return {
+            userId: p.otherUserId,
+            userName: other?.name || 'Unknown',
+            // Sign convention matches getUserPairwiseDebts:
+            // amount > 0 → the member being removed owes that party.
+            // amount < 0 → that party owes the member being removed.
+            amount: Number(p.amount.toFixed(2)),
+          };
+        });
+        return res.status(409).json({
+          success: false,
+          error: 'Member has unsettled balances',
+          code: 'UNSETTLED_BALANCES',
+          data: {
+            memberId: userId,
+            memberName: member?.name || 'Member',
+            pairwise: named,
+            currency: group?.currency_code || 'INR',
+          },
+        });
+      }
+
+      // Acknowledged path — create write-off settlements before delete.
+      // Status is 'completed' so the balance compute treats them as
+      // already settled; notes carry an audit trail.
+      for (const p of writeOffPairs) {
+        const amount = Math.abs(p.amount);
+        const fromUserId = p.amount > 0 ? userId : p.otherUserId;
+        const toUserId = p.amount > 0 ? p.otherUserId : userId;
+        await Settlement.create({
+          groupId: id,
+          fromUserId,
+          toUserId,
+          amount,
+          currency: group?.currency_code || 'INR',
+          status: 'completed',
+          notes: `Written off — ${member?.name || 'member'} removed by admin`,
+        });
+      }
+    }
 
     const removed = await Group.removeMember(id, userId);
 

@@ -39,6 +39,11 @@ const TOO_MANY_RESETS = {
   error: 'Too many password reset requests for this email. Try again later.',
 };
 
+const TOO_MANY_LOOKUPS = {
+  success: false,
+  error: 'Too many searches. Try again in a few minutes.',
+};
+
 /**
  * 5 OTP requests per phone every 15 minutes. Keys on the *body* phone
  * number rather than IP so a real victim isn't locked out by an attacker
@@ -106,6 +111,22 @@ export const expenseCreateRateLimit = rateLimit({
   keyGenerator: (req) => {
     // `authenticate` middleware should have populated req.user.id by now;
     // fall back to IP for the rare unauthenticated request.
+    return req.user?.id ? `user:${req.user.id}` : `ip:${req.ip}`;
+  },
+});
+
+/**
+ * 30 phone-lookups per authenticated user per hour. Stops a logged-in
+ * client from enumerating the user table by spraying random 10-digit
+ * numbers at the "add member by phone" search box.
+ */
+export const phoneLookupRateLimit = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 30,
+  message: TOO_MANY_LOOKUPS,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
     return req.user?.id ? `user:${req.user.id}` : `ip:${req.ip}`;
   },
 });

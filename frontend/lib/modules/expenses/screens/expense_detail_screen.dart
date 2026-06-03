@@ -93,6 +93,7 @@ class ExpenseDetailScreen extends ConsumerWidget {
                     currency: expense.currency,
                     accent: AppColors.success,
                     isDark: isDark,
+                    isSelf: myId != null && expense.paidBy.id == myId,
                   ),
                   const SizedBox(height: 22),
                   _SectionLabel(
@@ -107,6 +108,7 @@ class ExpenseDetailScreen extends ConsumerWidget {
                     isDark: isDark,
                     splitType: expense.splitType,
                     totalAmount: expense.amount,
+                    currentUserId: myId,
                   ),
                   if (expense.receiptBase64 != null &&
                       expense.receiptBase64!.isNotEmpty) ...[
@@ -520,6 +522,7 @@ class _PersonCard extends StatelessWidget {
     required this.currency,
     required this.accent,
     required this.isDark,
+    this.isSelf = false,
   });
 
   final String name;
@@ -528,6 +531,9 @@ class _PersonCard extends StatelessWidget {
   final String currency;
   final Color accent;
   final bool isDark;
+  /// When true, the person is the signed-in user; we append " (Me)" so
+  /// they spot their own row at a glance.
+  final bool isSelf;
 
   @override
   Widget build(BuildContext context) {
@@ -554,7 +560,7 @@ class _PersonCard extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  name,
+                  isSelf ? '$name (Me)' : name,
                   style: AppTextStyles.body1(isDark).copyWith(
                     fontWeight: FontWeight.w700,
                     fontSize: 14,
@@ -596,12 +602,14 @@ class _SplitsCard extends StatefulWidget {
     required this.isDark,
     required this.splitType,
     required this.totalAmount,
+    this.currentUserId,
   });
 
   final List<SplitModel> splits;
   final String currency;
   final bool isDark;
   final SplitType splitType;
+  final String? currentUserId;
   final double totalAmount;
 
   @override
@@ -640,6 +648,8 @@ class _SplitsCardState extends State<_SplitsCard> {
               totalAmount: widget.totalAmount,
               totalShares: totalShares,
               showWorking: _expanded,
+              isSelf: widget.currentUserId != null &&
+                  widget.splits[i].userId == widget.currentUserId,
             ),
             if (i < widget.splits.length - 1)
               Padding(
@@ -707,6 +717,7 @@ class _SplitRow extends StatelessWidget {
     required this.totalAmount,
     required this.totalShares,
     required this.showWorking,
+    this.isSelf = false,
   });
 
   final SplitModel split;
@@ -716,6 +727,7 @@ class _SplitRow extends StatelessWidget {
   final double totalAmount;
   final double totalShares;
   final bool showWorking;
+  final bool isSelf;
 
   String _amount(double v) => NumberFormat.currency(
         locale: 'en_IN',
@@ -792,7 +804,7 @@ class _SplitRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  split.userName,
+                  isSelf ? '${split.userName} (Me)' : split.userName,
                   style: AppTextStyles.body1(isDark).copyWith(
                     fontWeight: FontWeight.w600,
                     fontSize: 14,

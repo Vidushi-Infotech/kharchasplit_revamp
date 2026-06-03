@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:convert';
 import 'dart:io';
+import '../../../core/services/haptic_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../components/components.dart';
@@ -173,6 +174,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
           );
     } catch (e) {
       if (!mounted) return;
+      HapticService.instance.error();
       setState(() => _isCreating = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Could not create group: $e')),
@@ -237,6 +239,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
     final emailFailed = emailFailures.length;
 
     if (!mounted) return;
+    HapticService.instance.success();
     context.go('/home/groups');
     final parts = <String>['Group "$name" created'];
     if (invitable.isNotEmpty) {
@@ -441,7 +444,12 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
           label: 'Category $name',
           selected: isSelected,
           child: GestureDetector(
-            onTap: () => setState(() => _selectedCategory = category),
+            onTap: () {
+              if (_selectedCategory != category) {
+                HapticService.instance.selection();
+              }
+              setState(() => _selectedCategory = category);
+            },
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 140),
               padding: const EdgeInsets.symmetric(
