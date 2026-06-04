@@ -6,18 +6,23 @@ import groupController from '../controllers/groupController.js';
 
 const router = express.Router();
 
+// Cover-image endpoints opt in to the 10MB body limit; everything else
+// stays on the 256KB default from server.js.
+const largeJson = express.json({ limit: '10mb' });
+
 router.get('/', authenticate, groupController.getGroups);
 router.get('/:id', authenticate, groupController.getGroup);
 
 router.post(
   '/',
+  largeJson,
   authenticate,
   [body('name').trim().isLength({ min: 2, max: 255 })],
   validate,
   groupController.createGroup
 );
 
-router.put('/:id', authenticate, groupController.updateGroup);
+router.put('/:id', largeJson, authenticate, groupController.updateGroup);
 router.delete('/:id', authenticate, groupController.deleteGroup);
 
 router.get('/:id/members', authenticate, groupController.getGroupMembers);

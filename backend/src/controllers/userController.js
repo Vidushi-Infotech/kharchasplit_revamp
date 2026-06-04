@@ -2,6 +2,7 @@ import { query } from '../config/database.js';
 import User from '../models/User.js';
 import Group from '../models/Group.js';
 import { NotificationService } from '../services/notificationService.js';
+import { cache } from '../services/cacheService.js';
 
 /**
  * Get user by ID
@@ -453,6 +454,19 @@ const getDashboard = async (req, res, next) => {
       });
     }
 
+    // 60s cache covers the typical "open app → tab through screens"
+    // session. The cost of the WITH active_groups aggregation across
+    // every active group (and UNION-ed settlements) is non-trivial; on
+    // a cold dashboard hit the query alone walked >100ms in slow-log
+    // samples. Stale-ness is acceptable for a summary view, and every
+    // write path that affects balances has TTL ≤60s anyway so the lag
+    // is bounded.
+    const cacheKey = `user:${id}:dashboard:${recentLimit}`;
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      return res.json({ success: true, data: cached });
+    }
+
     // Per-group net position for this user, in one query.
     // Positive amount = others owe me, negative = I owe others.
     // Combines expenses (someone paying for someone else) AND settlements
@@ -577,14 +591,16 @@ const getDashboard = async (req, res, next) => {
       splits: splitsByExpense[e.id] || [],
     }));
 
+    const data = {
+      youAreOwed: parseFloat(balances.you_are_owed) || 0,
+      youOwe: parseFloat(balances.you_owe) || 0,
+      totalBalance: parseFloat(balances.total) || 0,
+      recentExpenses,
+    };
+    cache.set(cacheKey, data, 60);
     res.json({
       success: true,
-      data: {
-        youAreOwed: parseFloat(balances.you_are_owed) || 0,
-        youOwe: parseFloat(balances.you_owe) || 0,
-        totalBalance: parseFloat(balances.total) || 0,
-        recentExpenses,
-      },
+      data,
     });
   } catch (error) {
     next(error);

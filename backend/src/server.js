@@ -90,11 +90,15 @@ const limiter = rateLimit({
 });
 app.use('/api', limiter);
 
-// Body parsing — 10MB lets receipt photos (base64-encoded) come through
-// even when client-side compression underperforms on huge phone cameras.
-// Trade-off: JSON.parse of 10MB blocks the event loop for ~200ms.
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+// Body parsing — keep the global limit small (256KB covers any sane JSON
+// or form payload). The handful of endpoints that genuinely need ~10MB
+// for inline base64 receipts / cover / profile photos opt in via their
+// own route-level `express.json({ limit: '10mb' })` middleware (see
+// expenseRoutes, groupRoutes, userRoutes). Trade-off avoided: a global
+// 10MB limit meant any endpoint — including bare /auth/login — could
+// be hit with a 10MB body and tie up the event loop for ~200ms.
+app.use(express.json({ limit: '256kb' }));
+app.use(express.urlencoded({ extended: true, limit: '256kb' }));
 
 // Compression — skip responses under 1KB (overhead not worth it for small JSON)
 app.use(compression({ threshold: 1024 }));

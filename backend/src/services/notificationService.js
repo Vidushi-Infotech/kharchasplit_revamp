@@ -268,15 +268,111 @@ class NotificationService {
     if (tokens.length === 0) {
       return { success: true, sent: 0, failed: 0, reason: 'no_tokens' };
     }
+    const config = NOTIFICATION_TYPES[type];
+    if (!config) {
+      logger.error({ type }, '[NotificationService] Unknown notification type');
+      return { success: false, reason: 'unknown_type' };
+    }
 
-    const results = await Promise.all(
-      tokens.map(({ token }) => this.sendNotification(token, type, data, additionalData)),
-    );
-    return {
-      success: true,
-      sent: results.filter((r) => r.success).length,
-      failed: results.filter((r) => !r.success).length,
+    // Build the multicast envelope once — only the token list varies
+    // per chunk. The data payload must be all-strings (FCM rejects
+    // mixed-type values silently in some SDK versions).
+    const multicast = {
+      notification: {
+        title: config.title,
+        body: config.getBody(data),
+      },
+      data: {
+        type,
+        ...additionalData,
+        ...Object.fromEntries(
+          Object.entries(data).map(([k, v]) => [k, String(v)]),
+        ),
+      },
+      android: {
+        notification: {
+          channelId: config.channelId,
+          priority: 'high',
+        },
+      },
+      apns: {
+        payload: { aps: { sound: 'default', badge: 1 } },
+      },
     };
+
+    // FCM caps multicast at 500 tokens per request. Chunk and dispatch
+    // chunks in parallel — for a typical group expense (5-30 members)
+    // we end up making exactly one upstream call.
+    const CHUNK_SIZE = 500;
+    const chunks = [];
+    for (let i = 0; i < tokens.length; i += CHUNK_SIZE) {
+      chunks.push(tokens.slice(i, i + CHUNK_SIZE));
+    }
+
+    const staleTokens = [];
+    let sent = 0;
+    let failed = 0;
+
+    const chunkResults = await Promise.all(
+      chunks.map((chunk) =>
+        admin
+          .messaging()
+          .sendEachForMulticast({
+            tokens: chunk.map((t) => t.token),
+            ...multicast,
+          })
+          .then((batchResp) => ({ chunk, batchResp }))
+          .catch((err) => ({ chunk, err })),
+      ),
+    );
+
+    for (const r of chunkResults) {
+      if (r.err) {
+        // Whole chunk failed (network / quota / SDK error). Don't blame
+        // individual tokens — log and count as failed; client refresh
+        // will recover.
+        logger.error(
+          { err: r.err, type, batchSize: r.chunk.length },
+          '[NotificationService] Multicast batch failed',
+        );
+        failed += r.chunk.length;
+        continue;
+      }
+      const { batchResp, chunk } = r;
+      batchResp.responses.forEach((resp, idx) => {
+        if (resp.success) {
+          sent += 1;
+          return;
+        }
+        failed += 1;
+        const code = resp.error?.code;
+        const isInvalidToken =
+          code === 'messaging/registration-token-not-registered' ||
+          code === 'messaging/invalid-registration-token' ||
+          code === 'messaging/invalid-argument';
+        if (isInvalidToken) {
+          staleTokens.push(chunk[idx].token);
+        } else {
+          logger.error(
+            { err: resp.error, type },
+            '[NotificationService] FCM send failed (per-token)',
+          );
+        }
+      });
+    }
+
+    // Stale-token cleanup runs in parallel; do it after we've answered
+    // the caller's count (already settled above) — but keep awaiting so
+    // exceptions surface in logs.
+    if (staleTokens.length > 0) {
+      logger.warn(
+        { count: staleTokens.length },
+        '[NotificationService] Invalidating stale FCM tokens',
+      );
+      await Promise.all(staleTokens.map((tok) => this.invalidateToken(tok)));
+    }
+
+    return { success: true, sent, failed };
   }
 
   static async sendNotification(token, type, data, additionalData = {}) {

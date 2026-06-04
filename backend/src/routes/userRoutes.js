@@ -8,6 +8,10 @@ import notificationController from '../controllers/notificationController.js';
 
 const router = express.Router();
 
+// User profile update is the only endpoint here that may carry a base64
+// avatar — opt in to 10MB. Everything else stays on the global 256KB.
+const largeJson = express.json({ limit: '10mb' });
+
 // IMPORTANT: Specific routes must come BEFORE parameterized routes like /:id
 router.post(
   '/check-registration',
@@ -41,6 +45,7 @@ router.get('/:id', authenticate, userController.getUser);
 
 router.put(
   '/:id',
+  largeJson,
   authenticate,
   [
     body('name').optional().trim().isLength({ min: 2, max: 255 }),
