@@ -323,10 +323,17 @@ class AuthNotifier extends Notifier<AuthData> {
         successMessage: 'Profile updated',
         needsProfileSetup: clearedSetup ? false : null,
       );
-      // Invalidate group caches so member avatars/names refresh.
-      // Deferred to avoid re-entrant build (groupsProvider watches authProvider).
+      // Refresh group caches so member avatars/names reflect the new
+      // profile right away. Using `refresh()` on the notifier instead of
+      // `ref.invalidate(groupsProvider)` because groupsProvider's
+      // AsyncNotifier.build watches authProvider — Riverpod 3.x's
+      // CircularDependencyError catches the invalidate even when it's
+      // deferred via addPostFrameCallback. The notifier path re-fetches
+      // without going through the dependency graph.
       SchedulerBinding.instance.addPostFrameCallback((_) {
-        ref.invalidate(groupsProvider);
+        ref.read(groupsProvider.notifier).refresh();
+        // groupDetailProvider doesn't watch authProvider so invalidating
+        // every family entry remains safe.
         ref.invalidate(groupDetailProvider);
       });
       return true;
