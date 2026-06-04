@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -80,8 +79,6 @@ class NotificationsSettingsScreen extends ConsumerWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 10),
-                _HapticDiagnostics(isDark: isDark),
                 const SizedBox(height: 22),
                 _SectionLabel(label: 'ACTIVITY', isDark: isDark),
                 const SizedBox(height: 8),
@@ -525,82 +522,3 @@ class _ToggleRow extends StatelessWidget {
   }
 }
 
-/// 4-button diagnostic strip for debugging haptic feedback on Android.
-/// Each button fires a different intensity through a different code path
-/// so we can pinpoint whether the issue is the device, the Flutter API,
-/// the throttle, or the enable flag.
-class _HapticDiagnostics extends ConsumerWidget {
-  const _HapticDiagnostics({required this.isDark});
-  final bool isDark;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final enabled = ref.watch(hapticEnabledProvider);
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.cardBg(isDark),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-            color: AppColors.warning.withValues(alpha: 0.4)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Haptic diagnostics (debug)',
-            style: AppTextStyles.caption(isDark).copyWith(
-              fontWeight: FontWeight.w700,
-              color: AppColors.warning,
-              letterSpacing: 0.4,
-              fontSize: 11,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Toggle is currently: ${enabled ? "ON" : "OFF"}. Tap each '
-            'button below — at least one should buzz on a working phone. '
-            'If none do, your device or Android settings is the issue.',
-            style: AppTextStyles.caption(isDark).copyWith(
-              color: AppColors.textSecondary(isDark),
-              fontSize: 11,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _diagBtn('Raw light', () => HapticFeedback.lightImpact()),
-              _diagBtn('Raw medium', () => HapticFeedback.mediumImpact()),
-              _diagBtn('Raw heavy', () => HapticFeedback.heavyImpact()),
-              _diagBtn(
-                  'Raw selection', () => HapticFeedback.selectionClick()),
-              _diagBtn('Raw vibrate', () => HapticFeedback.vibrate()),
-              _diagBtn(
-                'Service.tap',
-                () => HapticService.instance.tap(),
-              ),
-              _diagBtn(
-                'Service.success',
-                () => HapticService.instance.success(),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _diagBtn(String label, VoidCallback onTap) {
-    return ElevatedButton(
-      onPressed: onTap,
-      style: ElevatedButton.styleFrom(
-        minimumSize: const Size(0, 32),
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        textStyle: const TextStyle(fontSize: 12),
-      ),
-      child: Text(label),
-    );
-  }
-}
