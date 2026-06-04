@@ -29,7 +29,7 @@ class SettlementHistoryScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final screenWidth = MediaQuery.of(context).size.width;
+    final screenWidth = MediaQuery.sizeOf(context).width;
     final me = ref.watch(authProvider).user;
     final detailAsync = ref.watch(groupDetailProvider(groupId));
 

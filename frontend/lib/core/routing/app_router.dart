@@ -68,7 +68,7 @@ final appRouter = GoRouter(
     ),
     ShellRoute(
       builder: (context, state, child) {
-        final screenWidth = MediaQuery.of(context).size.width;
+        final screenWidth = MediaQuery.sizeOf(context).width;
         if (screenWidth < 600) {
           return MobileShell(child: child);
         } else if (screenWidth < 1100) {

@@ -119,7 +119,7 @@ class _BannerSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final statusBarInset = MediaQuery.of(context).padding.top;
+    final statusBarInset = MediaQuery.paddingOf(context).top;
     final accent = AppColors.warning;
     final tintedBg = accent.withValues(alpha: isDark ? 0.22 : 0.16);
 

@@ -507,17 +507,24 @@ class _ContactsPickerSheetState extends ConsumerState<ContactsPickerSheet> {
                         controller: scrollController,
                         physics: const AlwaysScrollableScrollPhysics(),
                         itemCount: items.length,
+                        // RepaintBoundary per row — toggling selection on
+                        // one contact only repaints that tile, not the
+                        // whole on-screen list.
                         itemBuilder: (_, i) {
                           final item = items[i];
                           if (item is _SectionHeaderItem) {
-                            return _SectionHeader(
-                              title: item.title,
-                              count: item.count,
-                              isDark: isDark,
+                            return RepaintBoundary(
+                              child: _SectionHeader(
+                                title: item.title,
+                                count: item.count,
+                                isDark: isDark,
+                              ),
                             );
                           }
                           if (item is _ContactItem) {
-                            return _buildContactTile(item.contact, isDark);
+                            return RepaintBoundary(
+                              child: _buildContactTile(item.contact, isDark),
+                            );
                           }
                           return const SizedBox.shrink();
                         },

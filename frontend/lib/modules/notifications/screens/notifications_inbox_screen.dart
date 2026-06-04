@@ -16,7 +16,7 @@ class NotificationsInboxScreen extends ConsumerWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final inboxAsync = ref.watch(notificationsInboxProvider);
     final notifier = ref.read(notificationsInboxProvider.notifier);
-    final screenWidth = MediaQuery.of(context).size.width;
+    final screenWidth = MediaQuery.sizeOf(context).width;
 
     return Scaffold(
       backgroundColor: AppColors.background(isDark),

@@ -95,10 +95,10 @@ class GroupDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final screenWidth = MediaQuery.of(context).size.width;
+    final screenWidth = MediaQuery.sizeOf(context).width;
     final detailAsync = ref.watch(groupDetailProvider(groupId));
     final tab = ref.watch(groupTabProvider);
-    final myId = ref.watch(authProvider).user?.id;
+    final myId = ref.watch(myIdProvider);
     final loadedDetail = detailAsync.value;
     final isAdmin = loadedDetail != null &&
         myId != null &&
@@ -1516,7 +1516,7 @@ class GroupDetailScreen extends ConsumerWidget {
     // a second listener subscription per build (and a redundant rebuild).
     final detailAsync = ref.watch(groupDetailProvider(groupId));
     final detail = detailAsync.value;
-    final myId = ref.watch(authProvider).user?.id;
+    final myId = ref.watch(myIdProvider);
 
     // The Balances badge previously showed member count, which read as
     // "2 outstanding balances" on a brand-new group with zero expenses.
@@ -1592,7 +1592,7 @@ class GroupDetailScreen extends ConsumerWidget {
       return EmptyStateWidget.noExpenses();
     }
 
-    final screenWidth = MediaQuery.of(context).size.width;
+    final screenWidth = MediaQuery.sizeOf(context).width;
     final isCompact = screenWidth < 600;
     final horizontalPadding = isCompact ? 16.0 : 24.0;
     final verticalSpacing = isCompact ? 8.0 : 12.0;
@@ -1688,7 +1688,7 @@ class GroupDetailScreen extends ConsumerWidget {
     GroupDetail detail,
     String? myId,
   ) {
-    final screenWidth = MediaQuery.of(context).size.width;
+    final screenWidth = MediaQuery.sizeOf(context).width;
     final isCompact = screenWidth < 600;
     final horizontalPadding = isCompact ? 16.0 : 24.0;
     final verticalSpacing = isCompact ? 8.0 : 12.0;
@@ -2841,7 +2841,7 @@ class _EmailInviteSheetState extends State<_EmailInviteSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
     return Padding(
       padding: EdgeInsets.fromLTRB(20, 12, 20, 20 + bottomInset),
       child: Column(

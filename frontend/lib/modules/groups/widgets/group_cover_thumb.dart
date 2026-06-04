@@ -3,6 +3,34 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+/// Module-level cache so re-renders of the same group (e.g. the same
+/// group shown in the dashboard tile AND the groups list) collapse to
+/// one decode per base64 string rather than one per rebuild.
+const int _coverDecodeMaxEntries = 50;
+final Map<String, Uint8List> _coverDecodeCache = {};
+
+Uint8List? _decodeCoverBase64(String input) {
+  final cached = _coverDecodeCache[input];
+  if (cached != null) {
+    _coverDecodeCache.remove(input);
+    _coverDecodeCache[input] = cached;
+    return cached;
+  }
+  try {
+    var src = input;
+    final comma = src.indexOf(',');
+    if (src.startsWith('data:') && comma > 0) src = src.substring(comma + 1);
+    final bytes = base64Decode(src);
+    if (_coverDecodeCache.length >= _coverDecodeMaxEntries) {
+      _coverDecodeCache.remove(_coverDecodeCache.keys.first);
+    }
+    _coverDecodeCache[input] = bytes;
+    return bytes;
+  } catch (_) {
+    return null;
+  }
+}
+
 /// Renders a group's cover. Shows the base64 photo when present,
 /// otherwise falls back to the emoji (or a generic icon if the emoji is
 /// the default people glyph). Centralises the logic so every place that
@@ -33,18 +61,7 @@ class GroupCoverThumb extends StatelessWidget {
   bool get _hasImage =>
       coverImageBase64 != null && coverImageBase64!.trim().isNotEmpty;
 
-  Uint8List? _decode() {
-    try {
-      // Strip any data-URL prefix the backend (or a future client) might
-      // accidentally include.
-      var src = coverImageBase64!;
-      final comma = src.indexOf(',');
-      if (src.startsWith('data:') && comma > 0) src = src.substring(comma + 1);
-      return base64Decode(src);
-    } catch (_) {
-      return null;
-    }
-  }
+  Uint8List? _decode() => _decodeCoverBase64(coverImageBase64!);
 
   @override
   Widget build(BuildContext context) {

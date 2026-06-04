@@ -245,7 +245,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       });
     }
 
-    final screenWidth = MediaQuery.of(context).size.width;
+    final screenWidth = MediaQuery.sizeOf(context).width;
     final double maxFormWidth = screenWidth < 600
         ? double.infinity
         : screenWidth < 1100
@@ -740,7 +740,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                                 splits: s.splits,
                                 includedMemberIds: s.includedMemberIds,
                                 currentUserId:
-                                    ref.watch(authProvider).user?.id,
+                                    ref.watch(myIdProvider),
                                 onSplitsChanged: (splits) {
                                   ref
                                       .read(addExpenseProvider.notifier)

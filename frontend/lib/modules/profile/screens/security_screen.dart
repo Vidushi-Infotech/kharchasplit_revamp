@@ -23,7 +23,7 @@ class _SecurityScreenState extends ConsumerState<SecurityScreen> {
   Widget build(BuildContext context) {
     final ref = this.ref;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final screenWidth = MediaQuery.of(context).size.width;
+    final screenWidth = MediaQuery.sizeOf(context).width;
     final user = ref.watch(authProvider).user;
 
     return Scaffold(
@@ -295,7 +295,7 @@ class _DeleteAccountSheetState extends State<_DeleteAccountSheet> {
       top: false,
       child: Padding(
         padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
+          bottom: MediaQuery.viewInsetsOf(context).bottom,
         ),
         child: Container(
           decoration: BoxDecoration(

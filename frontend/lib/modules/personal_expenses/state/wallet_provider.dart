@@ -42,7 +42,7 @@ class WalletNotifier extends AsyncNotifier<WalletState> {
 
   @override
   Future<WalletState> build() async {
-    final userId = ref.watch(authProvider).user?.id;
+    final userId = ref.watch(myIdProvider);
     if (userId == null) return WalletState.empty;
     final store = await _store();
     final sources = await store.readSources(userId);

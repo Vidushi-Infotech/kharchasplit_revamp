@@ -1,8 +1,11 @@
 import 'dart:async';
-import 'dart:convert';
+import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'dart:convert' show base64Decode;
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
@@ -79,7 +82,7 @@ class _GroupActivityTabState extends ConsumerState<GroupActivityTab> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final feedAsync = ref.watch(groupFeedProvider(widget.groupId));
-    final myId = ref.watch(authProvider).user?.id;
+    final myId = ref.watch(myIdProvider);
 
     // CustomScrollView so the inner list scroll coordinates with a parent
     // NestedScrollView (sticky tabs on the group detail screen). The
@@ -177,24 +180,30 @@ class _GroupActivityTabState extends ConsumerState<GroupActivityTab> {
             );
           }
           final feedItem = (entry as _ItemEntry).item;
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: switch (feedItem) {
-              ExpenseFeedItem(:final expense) => _ExpenseCard(
-                  expense: expense,
-                  isDark: isDark,
-                  myId: myId,
-                  isExpanded: _expanded.contains(feedItem.id),
-                  onTap: () => _toggle(feedItem.id),
-                ),
-              SettlementFeedItem(:final settlement) => _SettlementCard(
-                  settlement: settlement,
-                  isDark: isDark,
-                  myId: myId,
-                  isExpanded: _expanded.contains(feedItem.id),
-                  onTap: () => _toggle(feedItem.id),
-                ),
-            },
+          // RepaintBoundary scopes each card to its own raster layer —
+          // expanding/collapsing one row only repaints THAT row, not the
+          // whole visible portion of the feed. Critical for smooth
+          // scrolling on long feeds when state on one card changes.
+          return RepaintBoundary(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: switch (feedItem) {
+                ExpenseFeedItem(:final expense) => _ExpenseCard(
+                    expense: expense,
+                    isDark: isDark,
+                    myId: myId,
+                    isExpanded: _expanded.contains(feedItem.id),
+                    onTap: () => _toggle(feedItem.id),
+                  ),
+                SettlementFeedItem(:final settlement) => _SettlementCard(
+                    settlement: settlement,
+                    isDark: isDark,
+                    myId: myId,
+                    isExpanded: _expanded.contains(feedItem.id),
+                    onTap: () => _toggle(feedItem.id),
+                  ),
+              },
+            ),
           );
         },
       ),
@@ -724,20 +733,11 @@ class _ExpenseCard extends StatelessWidget {
   }
 
   Widget _receiptThumb(String base64Data) {
-    try {
-      final bytes = base64Decode(base64Data);
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: Image.memory(
-          bytes,
-          height: 110,
-          fit: BoxFit.cover,
-          errorBuilder: (_, _, _) => const SizedBox.shrink(),
-        ),
-      );
-    } catch (_) {
-      return const SizedBox.shrink();
-    }
+    // Off-thread decode via compute() — receipts can be 200KB-1MB and
+    // base64Decode at that size measurably blocks the main isolate
+    // (drops a frame or two). The small placeholder shows during decode
+    // and Image.memory paints once bytes are ready.
+    return _AsyncReceiptThumb(base64Data: base64Data, isDark: isDark);
   }
 
   String _money(double v, String currency) => NumberFormat.currency(
@@ -1150,4 +1150,85 @@ class _HeaderEntry extends _FlatEntry {
 class _ItemEntry extends _FlatEntry {
   _ItemEntry(this.item);
   final GroupFeedItem item;
+}
+
+/// Decodes a receipt's base64 payload off the main isolate (`compute`)
+/// and renders the image once bytes arrive. While decoding, shows a
+/// thin shimmer-like placeholder so the expanded card doesn't jump
+/// height when the bytes land. Receipts can be 200KB-1MB; doing this
+/// inline blocks the UI for 30-100ms on mid-tier Androids.
+class _AsyncReceiptThumb extends StatefulWidget {
+  const _AsyncReceiptThumb({
+    required this.base64Data,
+    required this.isDark,
+  });
+  final String base64Data;
+  final bool isDark;
+  @override
+  State<_AsyncReceiptThumb> createState() => _AsyncReceiptThumbState();
+}
+
+class _AsyncReceiptThumbState extends State<_AsyncReceiptThumb> {
+  Uint8List? _bytes;
+  bool _failed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _decode();
+  }
+
+  @override
+  void didUpdateWidget(_AsyncReceiptThumb old) {
+    super.didUpdateWidget(old);
+    if (old.base64Data != widget.base64Data) {
+      _bytes = null;
+      _failed = false;
+      _decode();
+    }
+  }
+
+  Future<void> _decode() async {
+    try {
+      final bytes = await compute<String, Uint8List>(
+        _decodeBase64Receipt,
+        widget.base64Data,
+      );
+      if (!mounted) return;
+      setState(() => _bytes = bytes);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _failed = true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_failed) return const SizedBox.shrink();
+    if (_bytes == null) {
+      return Container(
+        height: 110,
+        decoration: BoxDecoration(
+          color: AppColors.cardBg(widget.isDark),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppColors.divider(widget.isDark)),
+        ),
+      );
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: Image.memory(
+        _bytes!,
+        height: 110,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+      ),
+    );
+  }
+}
+
+/// Top-level so `compute` can spawn the isolate entry point.
+Uint8List _decodeBase64Receipt(String raw) {
+  final cleaned = raw.contains(',') ? raw.split(',').last : raw;
+  return base64Decode(cleaned);
 }

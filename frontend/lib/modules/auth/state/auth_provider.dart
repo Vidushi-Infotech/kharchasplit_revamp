@@ -60,6 +60,15 @@ final authProvider = NotifierProvider<AuthNotifier, AuthData>(
   AuthNotifier.new,
 );
 
+/// Selector that exposes only the signed-in user's id. Widgets that
+/// previously did `ref.watch(authProvider).user?.id` were rebuilt every
+/// time ANY auth field changed (token refresh, profile update, success
+/// message, etc.). Watching this provider instead means a widget only
+/// rebuilds when the user identity actually flips (login / logout).
+final myIdProvider = Provider<String?>(
+  (ref) => ref.watch(authProvider).user?.id,
+);
+
 class AuthNotifier extends Notifier<AuthData> {
   late final AuthRepository _repo = ref.read(authRepositoryProvider);
   late final ApiClient _apiClient = ref.read(apiClientProvider);
