@@ -212,38 +212,28 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
         : null;
     final List<UserModel> groupMembers = groupAsync?.value?.members ?? [];
 
-    // Auto-recalc splits for equal-split mode whenever amount/members change.
-    if (expenseState.splitType == SplitType.equal && groupMembers.isNotEmpty) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        Set<String> includedIds = expenseState.includedMemberIds;
-        if (includedIds.isEmpty) {
-          includedIds = Set<String>.from(groupMembers.map((m) => m.id));
+    // Equal-split write-back. The derivation lives in
+    // [equalSplitDerivedProvider] — a pure function of (amount,
+    // splitType, includedMemberIds, members). `ref.listen` fires only
+    // when the EqualSplitDerived value structurally changes (the class
+    // implements ==), so we replace the previous "addPostFrameCallback
+    // on every build + guard the state write with mapEquals" pattern
+    // with a single change-driven side effect.
+    ref.listen<EqualSplitDerived?>(
+      equalSplitDerivedProvider(expenseState.groupId),
+      (prev, next) {
+        if (next == null) return;
+        final current = ref.read(addExpenseProvider);
+        if (mapEquals(current.splits, next.splits) &&
+            setEquals(current.includedMemberIds, next.includedMemberIds)) {
+          return;
         }
-        if (expenseState.amount > 0) {
-          final includedCount = includedIds.length;
-          final equalShare = includedCount > 0
-              ? (expenseState.amount / includedCount).toDouble()
-              : 0.0;
-          final newSplits = <String, double>{
-            for (final member in groupMembers)
-              member.id: includedIds.contains(member.id) ? equalShare : 0,
-          };
-          final splitsChanged = !mapEquals(newSplits, expenseState.splits);
-          final includedChanged =
-              !setEquals(includedIds, expenseState.includedMemberIds);
-          if (splitsChanged || includedChanged) {
-            ref.read(addExpenseProvider.notifier).state = expenseState.copyWith(
-              splits: newSplits,
-              includedMemberIds: includedIds,
-            );
-          }
-        } else if (!setEquals(includedIds, expenseState.includedMemberIds)) {
-          ref.read(addExpenseProvider.notifier).state =
-              expenseState.copyWith(includedMemberIds: includedIds);
-        }
-      });
-    }
+        ref.read(addExpenseProvider.notifier).state = current.copyWith(
+          splits: next.splits,
+          includedMemberIds: next.includedMemberIds,
+        );
+      },
+    );
 
     final screenWidth = MediaQuery.sizeOf(context).width;
     final double maxFormWidth = screenWidth < 600

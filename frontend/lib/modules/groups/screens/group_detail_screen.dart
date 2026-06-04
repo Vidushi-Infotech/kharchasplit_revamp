@@ -97,13 +97,19 @@ class GroupDetailScreen extends ConsumerWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final screenWidth = MediaQuery.sizeOf(context).width;
     final detailAsync = ref.watch(groupDetailProvider(groupId));
-    final tab = ref.watch(groupTabProvider);
     final myId = ref.watch(myIdProvider);
     final loadedDetail = detailAsync.value;
     final isAdmin = loadedDetail != null &&
         myId != null &&
         loadedDetail.group.createdBy == myId;
 
+    // NOTE on the inner Consumers below: `tab` deliberately is NOT
+    // watched here in the outer build. Tab switches are the most
+    // frequent state change on this screen; without the inner scoping
+    // every switch would rebuild the entire 2946-line widget tree
+    // (including _DetailTopBar, layout switches, and the refresh
+    // indicator). Confining the tab watch to the body + FAB Consumers
+    // means tab changes only repaint those two regions.
     return Scaffold(
       backgroundColor: AppColors.background(isDark),
       appBar: _DetailTopBar(
@@ -127,37 +133,47 @@ class GroupDetailScreen extends ConsumerWidget {
       body: detailAsync.when(
         loading: () => const ShimmerList(type: ShimmerListType.group),
         error: (err, stack) => _buildErrorState(context, ref, err),
-        data: (detail) {
-          final body = screenWidth < 600
-              ? _buildCompactLayout(context, isDark, detail, tab, ref, myId, isAdmin)
-              : screenWidth < 1100
-                  ? _buildStandardLayout(context, isDark, detail, tab, ref, myId, isAdmin)
-                  : _buildLargeLayout(context, isDark, detail, tab, ref, myId, isAdmin);
-          return RefreshIndicator(
-            onRefresh: () async {
-              // Invalidate the family entry for this group + the pending
-              // settlement providers so the screen pulls fresh data on swipe.
-              ref.invalidate(groupDetailProvider(groupId));
-              ref.invalidate(pendingIncomingSettlementsProvider(groupId));
-              ref.invalidate(pendingOutgoingSettlementsProvider(groupId));
-              await ref.read(groupDetailProvider(groupId).future);
-            },
-            child: body,
+        data: (detail) => Consumer(
+          builder: (context, ref, _) {
+            final tab = ref.watch(groupTabProvider);
+            final body = screenWidth < 600
+                ? _buildCompactLayout(
+                    context, isDark, detail, tab, ref, myId, isAdmin)
+                : screenWidth < 1100
+                    ? _buildStandardLayout(
+                        context, isDark, detail, tab, ref, myId, isAdmin)
+                    : _buildLargeLayout(
+                        context, isDark, detail, tab, ref, myId, isAdmin);
+            return RefreshIndicator(
+              onRefresh: () async {
+                // Invalidate the family entry for this group + the pending
+                // settlement providers so the screen pulls fresh data on swipe.
+                ref.invalidate(groupDetailProvider(groupId));
+                ref.invalidate(pendingIncomingSettlementsProvider(groupId));
+                ref.invalidate(pendingOutgoingSettlementsProvider(groupId));
+                await ref.read(groupDetailProvider(groupId).future);
+              },
+              child: body,
+            );
+          },
+        ),
+      ),
+      floatingActionButton: Consumer(
+        builder: (context, ref, _) {
+          final tab = ref.watch(groupTabProvider);
+          if (tab != GroupTab.expenses) return const SizedBox.shrink();
+          return Semantics(
+            button: true,
+            label: 'Add expense button',
+            onTap: () => _navigateToAddExpense(context),
+            child: FloatingActionButton(
+              onPressed: () => _navigateToAddExpense(context),
+              backgroundColor: AppColors.brand,
+              child: const Icon(Icons.add_rounded, color: Colors.white),
+            ),
           );
         },
       ),
-      floatingActionButton: tab == GroupTab.expenses
-          ? Semantics(
-              button: true,
-              label: 'Add expense button',
-              onTap: () => _navigateToAddExpense(context),
-              child: FloatingActionButton(
-                onPressed: () => _navigateToAddExpense(context),
-                backgroundColor: AppColors.brand,
-                child: const Icon(Icons.add_rounded, color: Colors.white),
-              ),
-            )
-          : null,
     );
   }
 

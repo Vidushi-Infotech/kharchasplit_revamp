@@ -1,6 +1,8 @@
+import 'package:collection/collection.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import '../../../models/models.dart';
+import '../../groups/state/group_detail_provider.dart';
 
 class AddExpenseState {
   final String? title;
@@ -136,4 +138,70 @@ class AddExpenseState {
 
 final addExpenseProvider = StateProvider<AddExpenseState>((ref) {
   return AddExpenseState(date: DateTime.now());
+});
+
+/// Carries the equal-split derivation. Structural `==` so listener-side
+/// no-op detection becomes a single `prev == next` comparison instead of
+/// per-entry mapEquals / setEquals checks at every consumer.
+class EqualSplitDerived {
+  const EqualSplitDerived({
+    required this.splits,
+    required this.includedMemberIds,
+  });
+  final Map<String, double> splits;
+  final Set<String> includedMemberIds;
+
+  static const _mapEq = MapEquality<String, double>();
+  static const _setEq = SetEquality<String>();
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is EqualSplitDerived &&
+          _mapEq.equals(splits, other.splits) &&
+          _setEq.equals(includedMemberIds, other.includedMemberIds));
+
+  @override
+  int get hashCode => Object.hash(
+        _mapEq.hash(splits),
+        _setEq.hash(includedMemberIds),
+      );
+}
+
+/// Derives the equal-split share map + initialised includedMemberIds
+/// from the current addExpense state + the group's members. Pure
+/// function of (amount, splitType, includedMemberIds, members) — the
+/// previous implementation lived inside the add-expense screen's
+/// `build()` via `addPostFrameCallback` which kept scheduling state
+/// writes on every frame. Pulling the math here means consumers can
+/// `ref.listen` it and apply the change exactly once per structural
+/// update.
+final equalSplitDerivedProvider =
+    Provider.family<EqualSplitDerived?, String?>((ref, groupId) {
+  if (groupId == null) return null;
+  final s = ref.watch(addExpenseProvider);
+  if (s.splitType != SplitType.equal) return null;
+
+  final detail = ref.watch(groupDetailProvider(groupId)).value;
+  if (detail == null) return null;
+  final members = detail.members;
+  if (members.isEmpty) return null;
+
+  final includedIds = s.includedMemberIds.isEmpty
+      ? Set<String>.from(members.map((m) => m.id))
+      : s.includedMemberIds;
+
+  final equalShare = (s.amount > 0 && includedIds.isNotEmpty)
+      ? s.amount / includedIds.length
+      : 0.0;
+
+  final splits = <String, double>{
+    for (final m in members)
+      m.id: includedIds.contains(m.id) ? equalShare : 0,
+  };
+
+  return EqualSplitDerived(
+    splits: splits,
+    includedMemberIds: includedIds,
+  );
 });
