@@ -25,6 +25,7 @@ import syncRoutes from './routes/syncRoutes.js';
 import activityRoutes from './routes/activityRoutes.js';
 import inviteRoutes from './routes/inviteRoutes.js';
 import policiesRoutes from './routes/policiesRoutes.js';
+import appVersionRoutes from './routes/appVersionRoutes.js';
 
 dotenv.config();
 
@@ -145,6 +146,7 @@ app.use(`/api/${API_VERSION}/sync`, syncRoutes);
 app.use(`/api/${API_VERSION}/activities`, activityRoutes);
 app.use(`/api/${API_VERSION}/invites`, inviteRoutes);
 app.use(`/api/${API_VERSION}/policies`, policiesRoutes);
+app.use(`/api/${API_VERSION}/app-version`, appVersionRoutes);
 
 // 404 handler
 app.use(notFound);
@@ -197,6 +199,21 @@ const startServer = async () => {
       }, 30_000);
       // Don't keep the process alive if it's otherwise idle.
       intervalHandle.unref();
+    }
+
+    // Pool-pressure monitor. Quiet by default: only warns when real
+    // requests are queueing for a connection (waiting > 0) or the pool
+    // is fully saturated (idle === 0 and total at max). Pairs with the
+    // /health endpoint — that's the on-demand view, this is the
+    // "tell me when something's wrong" view.
+    if (process.env.POOL_MONITOR !== 'false') {
+      const poolHandle = setInterval(() => {
+        const m = getPoolMetrics();
+        if (m.waiting > 0 || (m.idle === 0 && m.total >= pool.options.max)) {
+          logger.warn(m, '[pool] pressure');
+        }
+      }, 30_000);
+      poolHandle.unref();
     }
 
     server = app.listen(PORT, () => {
