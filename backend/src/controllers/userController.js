@@ -609,19 +609,58 @@ const getDashboard = async (req, res, next) => {
 
 /**
  * GET /api/v1/users/:id/export
- * Returns the user's data as a single JSON blob — profile, groups, expenses,
- * personal expenses, and settlements. Lets the client save a copy locally.
+ *
+ * Streams the user's data as JSON — profile, groups, expenses,
+ * personal expenses, and settlements.
+ *
+ * Why streamed instead of res.json(payload):
+ *   At the LIMIT 5000 ceilings below, the assembled payload is roughly
+ *   5–15 MB. A single JSON.stringify on that blob is fully synchronous
+ *   and pegs the event loop for 50–150 ms — every other in-flight
+ *   request waits behind it. By writing the JSON envelope manually and
+ *   stringifying each row independently, work splits into thousands of
+ *   ~10µs jobs that interleave naturally with other traffic, and the
+ *   client starts receiving bytes before the last query even runs.
+ *
+ * Error handling: once we've sent the first byte we can't switch to a
+ * JSON error envelope, so a mid-stream failure just severs the
+ * connection (logged for diagnosis). Pre-stream failures still go
+ * through next(err) the normal way.
  */
 const exportUserData = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    if (req.user.id !== id) {
-      return res.status(403).json({
-        success: false,
-        error: 'You can only export your own data',
-      });
-    }
+  const { id } = req.params;
+  if (req.user.id !== id) {
+    return res.status(403).json({
+      success: false,
+      error: 'You can only export your own data',
+    });
+  }
 
+  // Tiny helper: write a chunk and respect backpressure. Without this the
+  // node socket buffer can balloon for the full export size on a slow client.
+  const write = (chunk) =>
+    new Promise((resolve) => {
+      if (res.write(chunk)) return resolve();
+      res.once('drain', resolve);
+    });
+
+  // Per-row streamer. arrayKey is the JSON key, rows is the pg result rows,
+  // mapper turns each row into the export-shape object. Writes the array as
+  // a JSON literal, one row at a time, with comma separators.
+  const streamArray = async (arrayKey, rows, mapper) => {
+    await write(`,"${arrayKey}":[`);
+    let first = true;
+    for (let i = 0; i < rows.length; i++) {
+      const piece = JSON.stringify(mapper(rows[i]));
+      await write(first ? piece : `,${piece}`);
+      first = false;
+    }
+    await write(']');
+  };
+
+  try {
+    // Run the profile lookup before sending any headers — this is the only
+    // place we can still bail out with a proper JSON error.
     const profileRes = await query(
       `SELECT id, phone_number, name, email, profile_image_base64,
               preferred_currency, created_at, updated_at
@@ -643,16 +682,90 @@ const exportUserData = async (req, res, next) => {
       updatedAt: u.updated_at,
     };
 
-    const groupsRes = await query(
-      `SELECT g.id, g.name, g.description, g.currency, g.created_at,
-              gm.role, gm.joined_at
-       FROM groups g
-       JOIN group_members gm ON gm.group_id = g.id
-       WHERE gm.user_id = $1 AND g.deleted_at IS NULL
-       ORDER BY gm.joined_at DESC`,
-      [id]
+    // Fetch the four collections. We still pull them all before streaming
+    // because the JSON header needs the counts up-front — but we never
+    // materialize the full payload as a single object, and we never call
+    // JSON.stringify on more than one row at a time.
+    const [groupsRes, expensesRes, personalRes] = await Promise.all([
+      query(
+        `SELECT g.id, g.name, g.description, g.currency, g.created_at,
+                gm.role, gm.joined_at
+         FROM groups g
+         JOIN group_members gm ON gm.group_id = g.id
+         WHERE gm.user_id = $1 AND g.deleted_at IS NULL
+         ORDER BY gm.joined_at DESC`,
+        [id]
+      ),
+      query(
+        `SELECT e.id, e.group_id, e.description, e.amount, e.currency, e.category,
+                e.paid_by, e.split_type, e.notes, e.expense_date, e.created_at,
+                es.amount AS my_share, es.percentage AS my_percentage,
+                es.shares AS my_shares
+         FROM expenses e
+         LEFT JOIN expense_splits es ON es.expense_id = e.id AND es.user_id = $1
+         JOIN group_members gm ON gm.group_id = e.group_id AND gm.user_id = $1
+         WHERE e.deleted_at IS NULL
+         ORDER BY e.expense_date DESC
+         LIMIT 5000`,
+        [id]
+      ),
+      query(
+        `SELECT id, description, amount, currency, category, expense_date,
+                notes, created_at
+         FROM personal_expenses
+         WHERE user_id = $1 AND is_deleted = FALSE
+         ORDER BY expense_date DESC
+         LIMIT 5000`,
+        [id]
+      ),
+    ]);
+
+    let settlementsRows = [];
+    try {
+      const settlementsRes = await query(
+        `SELECT id, group_id, amount, currency, payer_id, payee_id, notes,
+                created_at
+         FROM settlements
+         WHERE (payer_id = $1 OR payee_id = $1)
+         ORDER BY created_at DESC
+         LIMIT 5000`,
+        [id]
+      );
+      settlementsRows = settlementsRes.rows;
+    } catch (_) {
+      // settlements table may not exist in all environments — skip silently
+    }
+
+    // Begin the response. From here on, errors can't be recovered into JSON.
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="kharchasplit-export-${id}-${Date.now()}.json"`,
     );
-    const groups = groupsRes.rows.map((r) => ({
+
+    // Envelope header — fixed-shape JSON literal containing the small,
+    // pre-known parts (status + metadata + profile + counts).
+    const envelope = {
+      success: true,
+      data: {
+        exportVersion: 1,
+        exportedAt: new Date().toISOString(),
+        profile,
+        counts: {
+          groups: groupsRes.rows.length,
+          expenses: expensesRes.rows.length,
+          personalExpenses: personalRes.rows.length,
+          settlements: settlementsRows.length,
+        },
+      },
+    };
+    // Strip the trailing '}}' so we can append the streamed arrays inside.
+    const envelopeStr = JSON.stringify(envelope);
+    await write(envelopeStr.slice(0, -2));
+
+    // Stream the four arrays inside data{...}. Each streamArray prepends a
+    // comma + key, so the result is a syntactically valid JSON object.
+    await streamArray('groups', groupsRes.rows, (r) => ({
       id: r.id,
       name: r.name,
       description: r.description,
@@ -661,21 +774,7 @@ const exportUserData = async (req, res, next) => {
       joinedAt: r.joined_at,
       groupCreatedAt: r.created_at,
     }));
-
-    const expensesRes = await query(
-      `SELECT e.id, e.group_id, e.description, e.amount, e.currency, e.category,
-              e.paid_by, e.split_type, e.notes, e.expense_date, e.created_at,
-              es.amount AS my_share, es.percentage AS my_percentage,
-              es.shares AS my_shares
-       FROM expenses e
-       LEFT JOIN expense_splits es ON es.expense_id = e.id AND es.user_id = $1
-       JOIN group_members gm ON gm.group_id = e.group_id AND gm.user_id = $1
-       WHERE e.deleted_at IS NULL
-       ORDER BY e.expense_date DESC
-       LIMIT 5000`,
-      [id]
-    );
-    const expenses = expensesRes.rows.map((r) => ({
+    await streamArray('expenses', expensesRes.rows, (r) => ({
       id: r.id,
       groupId: r.group_id,
       description: r.description,
@@ -692,17 +791,7 @@ const exportUserData = async (req, res, next) => {
       expenseDate: r.expense_date,
       createdAt: r.created_at,
     }));
-
-    const personalRes = await query(
-      `SELECT id, description, amount, currency, category, expense_date,
-              notes, created_at
-       FROM personal_expenses
-       WHERE user_id = $1 AND is_deleted = FALSE
-       ORDER BY expense_date DESC
-       LIMIT 5000`,
-      [id]
-    );
-    const personalExpenses = personalRes.rows.map((r) => ({
+    await streamArray('personalExpenses', personalRes.rows, (r) => ({
       id: r.id,
       title: r.description,
       amount: r.amount,
@@ -712,52 +801,28 @@ const exportUserData = async (req, res, next) => {
       notes: r.notes,
       createdAt: r.created_at,
     }));
+    await streamArray('settlements', settlementsRows, (r) => ({
+      id: r.id,
+      groupId: r.group_id,
+      amount: r.amount,
+      currency: r.currency,
+      payerId: r.payer_id,
+      payeeId: r.payee_id,
+      direction: r.payer_id === id ? 'paid' : 'received',
+      notes: r.notes,
+      createdAt: r.created_at,
+    }));
 
-    let settlements = [];
-    try {
-      const settlementsRes = await query(
-        `SELECT id, group_id, amount, currency, payer_id, payee_id, notes,
-                created_at
-         FROM settlements
-         WHERE (payer_id = $1 OR payee_id = $1)
-         ORDER BY created_at DESC
-         LIMIT 5000`,
-        [id]
-      );
-      settlements = settlementsRes.rows.map((r) => ({
-        id: r.id,
-        groupId: r.group_id,
-        amount: r.amount,
-        currency: r.currency,
-        payerId: r.payer_id,
-        payeeId: r.payee_id,
-        direction: r.payer_id === id ? 'paid' : 'received',
-        notes: r.notes,
-        createdAt: r.created_at,
-      }));
-    } catch (_) {
-      // settlements table may not exist in all environments — skip silently
-    }
-
-    const payload = {
-      exportVersion: 1,
-      exportedAt: new Date().toISOString(),
-      profile,
-      counts: {
-        groups: groups.length,
-        expenses: expenses.length,
-        personalExpenses: personalExpenses.length,
-        settlements: settlements.length,
-      },
-      groups,
-      expenses,
-      personalExpenses,
-      settlements,
-    };
-
-    res.json({ success: true, data: payload });
+    // Close data{...} and the outer envelope.
+    await write('}}');
+    res.end();
   } catch (error) {
-    next(error);
+    if (!res.headersSent) return next(error);
+    // Headers already flushed — can't switch to a JSON error envelope.
+    // Sever the connection so the client knows the export is incomplete,
+    // and surface it in logs for diagnosis.
+    console.error('[export] failed mid-stream:', error.message);
+    res.destroy(error);
   }
 };
 
