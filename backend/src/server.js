@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import pinoHttp from 'pino-http';
+import { monitorEventLoopDelay } from 'perf_hooks';
 
 import { testConnection, pool, getPoolMetrics } from './config/database.js';
 import { initializeDatabase } from './config/initDatabase.js';
@@ -172,7 +173,31 @@ const startServer = async () => {
     }
 
     // Initialize Firebase Admin (push notifications). Non-fatal if missing.
-    initFirebase();
+    await initFirebase();
+
+    // Event loop lag monitor. Posts a warn line every 30s if the max
+    // observed lag in the window crossed 100ms — i.e. some synchronous
+    // hot block ran long enough to push real requests behind it.
+    // Cheap to run (sampling at 20ms resolution from a native histogram)
+    // and disabled-by-flag for CI.
+    if (process.env.EVENT_LOOP_MONITOR !== 'false') {
+      const eld = monitorEventLoopDelay({ resolution: 20 });
+      eld.enable();
+      const LAG_THRESHOLD_MS = parseInt(process.env.EVENT_LOOP_LAG_WARN_MS) || 100;
+      const intervalHandle = setInterval(() => {
+        const maxMs = eld.max / 1e6;
+        const p99Ms = eld.percentile(99) / 1e6;
+        if (maxMs > LAG_THRESHOLD_MS) {
+          logger.warn(
+            { maxMs: +maxMs.toFixed(0), p99Ms: +p99Ms.toFixed(0) },
+            '[loop] event loop lag spike',
+          );
+        }
+        eld.reset();
+      }, 30_000);
+      // Don't keep the process alive if it's otherwise idle.
+      intervalHandle.unref();
+    }
 
     server = app.listen(PORT, () => {
       console.log('');
