@@ -123,10 +123,17 @@ class NotificationService {
   static async getPrefsForUsers(userIds) {
     if (!userIds || userIds.length === 0) return {};
 
-    const placeholders = userIds.map((_, i) => `$${i + 1}`).join(', ');
+    // ANY-array form is one parameter regardless of array size and lets the
+    // planner reuse a prepared plan across different group sizes. Explicit
+    // columns avoid hauling the auto-increment id + created_at over the
+    // wire on a hot fan-out path (every group push fires this).
     const result = await query(
-      `SELECT * FROM notification_prefs WHERE user_id IN (${placeholders})`,
-      userIds,
+      `SELECT user_id, push_enabled, email_enabled, new_expense, group_invite,
+              payment_received, settlement_reminder, comment_mention,
+              weekly_summary, product_updates
+         FROM notification_prefs
+        WHERE user_id = ANY($1::uuid[])`,
+      [userIds],
     );
 
     const byUser = {};

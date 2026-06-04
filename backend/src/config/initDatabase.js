@@ -349,6 +349,11 @@ CREATE INDEX IF NOT EXISTS idx_users_fcm_token ON users(fcm_token) WHERE fcm_tok
 -- Functional index for normalized phone lookups (last 10 digits)
 CREATE INDEX IF NOT EXISTS idx_users_phone_normalized ON users(RIGHT(REGEXP_REPLACE(phone_number, '[^0-9]', '', 'g'), 10));
 
+-- Case-insensitive email lookup (forgot-password / duplicate-check).
+-- Partial: skips soft-deleted rows + rows where email is missing.
+CREATE INDEX IF NOT EXISTS idx_users_email_lower ON users(LOWER(email))
+WHERE deleted_at IS NULL AND email IS NOT NULL;
+
 -- =====================================================
 -- GROUP_MEMBERS: UNIQUE(group_id, user_id) already covers group_id prefix lookups
 -- Replaced idx_group_members_group (redundant) with a covering partial index
@@ -368,13 +373,29 @@ CREATE INDEX IF NOT EXISTS idx_expenses_group_active ON expenses(group_id, expen
 -- Removed idx_expense_splits_expense (redundant prefix of idx_expense_splits_batch)
 -- =====================================================
 CREATE INDEX IF NOT EXISTS idx_expense_splits_batch ON expense_splits(expense_id, amount DESC);
-CREATE INDEX IF NOT EXISTS idx_expense_splits_user ON expense_splits(user_id);
+-- Composite COVERING index for the dashboard sum-by-user + pairwise-debt
+-- queries. INCLUDE(amount) lets Postgres do a true Index-Only Scan
+-- (skip heap fetch entirely) for SUM(amount) aggregations. This
+-- supersedes both the old (user_id) and (user_id, expense_id) indexes —
+-- their use cases are strict prefixes of this one.
+CREATE INDEX IF NOT EXISTS idx_expense_splits_user_expense_covering
+ON expense_splits(user_id, expense_id) INCLUDE (amount)
+WHERE deleted_at IS NULL;
 
 -- =====================================================
 -- SETTLEMENTS: composite indexes for hot-path queries
 -- =====================================================
 CREATE INDEX IF NOT EXISTS idx_settlements_group_active ON settlements(group_id, created_at DESC) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_settlements_pending ON settlements(group_id, from_user_id, to_user_id) WHERE status = 'pending' AND deleted_at IS NULL;
+-- Covering indexes for the pairwise balance compute (one per direction).
+-- Each also closes the FK-coverage gap for from_user_id / to_user_id.
+-- INCLUDE columns enable Index-Only Scans for the balance aggregation.
+CREATE INDEX IF NOT EXISTS idx_settlements_from
+ON settlements(from_user_id, group_id) INCLUDE (to_user_id, amount, status)
+WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_settlements_to
+ON settlements(to_user_id, group_id) INCLUDE (from_user_id, amount, status)
+WHERE deleted_at IS NULL;
 
 -- =====================================================
 -- ACTIVITIES: composite partial indexes for feed queries
@@ -390,22 +411,31 @@ CREATE INDEX IF NOT EXISTS idx_activities_unread ON activities(user_id, is_read)
 CREATE INDEX IF NOT EXISTS idx_personal_expenses_user_active ON personal_expenses(user_id, expense_date DESC, created_at DESC) WHERE deleted_at IS NULL;
 
 -- =====================================================
--- PENDING_GROUP_INVITES: composite for exact-match lookups
+-- GROUPS: FK coverage for ownership lookups + CASCADE perf
+-- =====================================================
+CREATE INDEX IF NOT EXISTS idx_groups_created_by ON groups(created_by) WHERE deleted_at IS NULL;
+
+-- =====================================================
+-- PENDING_GROUP_INVITES: composite for exact-match lookups + FK coverage
 -- =====================================================
 CREATE INDEX IF NOT EXISTS idx_pending_invites_group_phone ON pending_group_invites(group_id, phone_number);
 CREATE INDEX IF NOT EXISTS idx_pending_invites_phone ON pending_group_invites(phone_number);
+CREATE INDEX IF NOT EXISTS idx_pending_invites_invited_by ON pending_group_invites(invited_by);
 
 -- =====================================================
--- GROUP_INVITES: foreign key indexes
+-- GROUP_INVITES: foreign key indexes (group + phone + author + invitee)
 -- =====================================================
 CREATE INDEX IF NOT EXISTS idx_group_invites_group ON group_invites(group_id);
 CREATE INDEX IF NOT EXISTS idx_group_invites_phone ON group_invites(invited_phone);
+CREATE INDEX IF NOT EXISTS idx_group_invites_invited_by ON group_invites(invited_by);
+CREATE INDEX IF NOT EXISTS idx_group_invites_invited_user ON group_invites(invited_user_id);
 
 -- =====================================================
 -- INVITES: invite_code already has UNIQUE constraint
 -- =====================================================
 CREATE INDEX IF NOT EXISTS idx_invites_invited_by ON invites(invited_by, created_at DESC) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_invites_phone ON invites(phone_number) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_invites_accepted_by ON invites(accepted_by) WHERE deleted_at IS NULL;
 
 -- =====================================================
 -- OTPS: composite for verification query

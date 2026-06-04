@@ -68,7 +68,11 @@ const getPrefs = async (req, res, next) => {
     }
 
     const result = await query(
-      `SELECT * FROM notification_prefs WHERE user_id = $1`,
+      `SELECT user_id, push_enabled, email_enabled, new_expense, group_invite,
+              payment_received, settlement_reminder, comment_mention,
+              weekly_summary, product_updates
+         FROM notification_prefs
+        WHERE user_id = $1`,
       [id],
     );
     if (result.rows.length === 0) {

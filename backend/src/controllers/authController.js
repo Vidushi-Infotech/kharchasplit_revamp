@@ -398,11 +398,15 @@ const refreshAccessToken = async (req, res, next) => {
       });
     }
 
+    // Existence check only — the userId comes from the verified JWT
+    // payload above, not from the DB row. Narrow projection keeps this
+    // off the hot refresh path's wire.
     const tokenResult = await query(
-      `SELECT * FROM refresh_tokens
-       WHERE token = $1
-       AND expires_at > NOW()
-       LIMIT 1`,
+      `SELECT id FROM refresh_tokens
+        WHERE token = $1
+          AND expires_at > NOW()
+          AND deleted_at IS NULL
+        LIMIT 1`,
       [refreshToken],
     );
 
