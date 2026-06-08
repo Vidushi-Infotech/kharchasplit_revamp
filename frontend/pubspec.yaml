@@ -82,6 +82,11 @@ dependencies:
   package_info_plus: ^9.0.1
   url_launcher: ^6.3.2
 
+  # In-App Update — Android only. Wraps Google's Play Core in-app update API.
+  # iOS has no native equivalent; we drive the iOS path with a custom dialog
+  # + url_launcher to the App Store (see core/services/update_service.dart).
+  in_app_update: ^4.2.3
+
   # Push Notifications (Firebase Cloud Messaging)
   firebase_core: ^4.2.0
   firebase_messaging: ^16.2.2
