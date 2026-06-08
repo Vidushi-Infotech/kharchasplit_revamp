@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -167,6 +169,44 @@ class GroupsRepository {
   Future<void> delete(String groupId) async {
     final res = await _client.dio.delete('/groups/$groupId');
     _ensureSuccess(res);
+  }
+
+  /// Download a multi-sheet .xlsx export for the group.
+  ///
+  /// Returns `(bytes, filename)`. The filename is taken from the
+  /// `Content-Disposition` header so the receiver sees the same
+  /// `kharchasplit_<groupname>_<date>.xlsx` the backend generated.
+  Future<({List<int> bytes, String filename})> exportGroup(String groupId) async {
+    final res = await _client.dio.get<List<int>>(
+      '/groups/$groupId/export',
+      options: Options(
+        responseType: ResponseType.bytes,
+        // Don't apply the JSON-envelope validator — this endpoint returns
+        // raw xlsx bytes on success and a JSON envelope only on failure.
+        validateStatus: (s) => s != null && s < 500,
+      ),
+    );
+    if (res.statusCode != 200 || res.data == null) {
+      // Body may be a JSON error envelope (when Dio decoded it) or text bytes.
+      String msg = 'Failed to export (status ${res.statusCode})';
+      final body = res.data;
+      if (body is List<int> && body.isNotEmpty) {
+        try {
+          final decoded = utf8.decode(body);
+          final json = jsonDecode(decoded);
+          if (json is Map && json['error'] is String) msg = json['error'] as String;
+        } catch (_) {/* not JSON; keep generic */}
+      }
+      throw GroupsApiException(msg, statusCode: res.statusCode);
+    }
+    // Parse filename out of Content-Disposition: attachment; filename="…"
+    String filename = 'kharchasplit_$groupId.xlsx';
+    final disposition = res.headers.value('content-disposition');
+    if (disposition != null) {
+      final match = RegExp(r'filename="?([^";]+)"?').firstMatch(disposition);
+      if (match != null) filename = match.group(1)!;
+    }
+    return (bytes: res.data!, filename: filename);
   }
 
   /// Leave a group (remove yourself). Backend rejects with 409 if you have

@@ -89,4 +89,8 @@ router.put('/:id/complete', authenticate, groupController.completeGroup);
 // soft rate limit per (caller, target, group) tuple.
 router.post('/:id/remind/:userId', authenticate, groupController.remindForBalance);
 
+// Export full group ledger as an .xlsx file (multi-sheet workbook).
+// Members get the file; the client saves + shares it.
+router.get('/:id/export', authenticate, groupController.exportGroup);
+
 export default router;

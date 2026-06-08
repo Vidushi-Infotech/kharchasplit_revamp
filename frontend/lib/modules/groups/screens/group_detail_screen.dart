@@ -1,8 +1,12 @@
+import 'dart:io';
+
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../widgets/edit_group_sheet.dart';
 import '../widgets/group_cover_thumb.dart';
@@ -129,6 +133,8 @@ class GroupDetailScreen extends ConsumerWidget {
             : () => _openEditGroupSheet(context, ref, loadedDetail.group),
         onLeaveGroup: () => _confirmLeaveGroup(context, ref, myId),
         onDeleteGroup: () => _confirmDeleteGroup(context, ref),
+        onExportGroup:
+            loadedDetail == null ? null : () => _exportGroup(context, ref, loadedDetail.group),
       ),
       body: detailAsync.when(
         loading: () => const ShimmerList(type: ShimmerListType.group),
@@ -824,6 +830,71 @@ class GroupDetailScreen extends ConsumerWidget {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Could not leave: $e')),
+      );
+    }
+  }
+
+  /// Download the group's .xlsx ledger and hand it to the OS share sheet so
+  /// the user can save it anywhere (Drive, email, WhatsApp, Files…).
+  ///
+  /// Flow:
+  ///   1. Show a non-dismissible spinner so the user knows work is happening.
+  ///   2. Fetch bytes from `/groups/:id/export` via the repository.
+  ///   3. Write bytes to a temp file in the platform temp dir (Android/iOS
+  ///      both support this; the OS reaps the file on its own schedule).
+  ///   4. Dismiss the spinner and call `Share.shareXFiles` so the user picks
+  ///      a destination.
+  ///
+  /// Errors at any step surface as a snackbar — never crash, never silently
+  /// fail.
+  Future<void> _exportGroup(
+    BuildContext context,
+    WidgetRef ref,
+    GroupModel group,
+  ) async {
+    HapticService.instance.selection();
+
+    // 1. Spinner
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      // 2. Download
+      final result =
+          await ref.read(groupsRepositoryProvider).exportGroup(groupId);
+
+      // 3. Write to temp
+      final tempDir = await getTemporaryDirectory();
+      final file = File('${tempDir.path}/${result.filename}');
+      await file.writeAsBytes(result.bytes, flush: true);
+
+      // 4. Dismiss spinner + share
+      if (!context.mounted) return;
+      Navigator.of(context, rootNavigator: true).pop();
+
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(file.path, mimeType:
+              'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')],
+          subject: 'KharchaSplit — ${group.name} ledger',
+          text:
+              'Group ledger for "${group.name}" — exported from KharchaSplit.',
+        ),
+      );
+    } on GroupsApiException catch (e) {
+      if (!context.mounted) return;
+      Navigator.of(context, rootNavigator: true).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      Navigator.of(context, rootNavigator: true).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not export: $e')),
       );
     }
   }
@@ -1951,6 +2022,7 @@ class _DetailTopBar extends StatelessWidget implements PreferredSizeWidget {
     required this.onEditGroup,
     required this.onLeaveGroup,
     required this.onDeleteGroup,
+    required this.onExportGroup,
     required this.isAdmin,
     required this.canManage,
   });
@@ -1964,6 +2036,9 @@ class _DetailTopBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback? onEditGroup;
   final VoidCallback onLeaveGroup;
   final VoidCallback onDeleteGroup;
+  /// Set when the group is loaded so the user can request a .xlsx ledger.
+  /// Null hides the option while still loading.
+  final VoidCallback? onExportGroup;
 
   /// True when the signed-in user is the group's admin/creator.
   final bool isAdmin;
@@ -2026,6 +2101,9 @@ class _DetailTopBar extends StatelessWidget implements PreferredSizeWidget {
                           break;
                         case 'add_member':
                           onAddMember();
+                          break;
+                        case 'export':
+                          onExportGroup?.call();
                           break;
                         case 'leave':
                           onLeaveGroup();
@@ -2098,6 +2176,24 @@ class _DetailTopBar extends StatelessWidget implements PreferredSizeWidget {
                               ),
                               const SizedBox(width: 10),
                               const Text('Leave group'),
+                            ],
+                          ),
+                        ),
+                      // Export to Excel: any member can export the ledger.
+                      // Placed right before Delete so admins still see Delete
+                      // as the final destructive action.
+                      if (onExportGroup != null)
+                        PopupMenuItem(
+                          value: 'export',
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.file_download_outlined,
+                                size: 18,
+                                color: AppColors.textPrimary(isDark),
+                              ),
+                              const SizedBox(width: 10),
+                              const Text('Export to Excel'),
                             ],
                           ),
                         ),
