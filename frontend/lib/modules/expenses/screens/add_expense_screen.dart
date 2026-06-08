@@ -216,22 +216,33 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     // [equalSplitDerivedProvider] — a pure function of (amount,
     // splitType, includedMemberIds, members). `ref.listen` fires only
     // when the EqualSplitDerived value structurally changes (the class
-    // implements ==), so we replace the previous "addPostFrameCallback
-    // on every build + guard the state write with mapEquals" pattern
-    // with a single change-driven side effect.
+    // implements ==).
+    //
+    // The state write is deferred to a post-frame callback because the
+    // derived provider watches addExpenseProvider — writing back
+    // synchronously inside the listener dirties the dependency, and
+    // Riverpod refuses to recompute the same provider twice in one
+    // frame ("Bad state: Tried to rebuild Provider<EqualSplitDerived?>
+    // multiple times in the same frame"). Posting the write to the
+    // next frame lets Riverpod's per-frame bookkeeping reset; the
+    // structural `==` on EqualSplitDerived then short-circuits the
+    // next listener fire (prev == next) and the loop terminates.
     ref.listen<EqualSplitDerived?>(
       equalSplitDerivedProvider(expenseState.groupId),
       (prev, next) {
         if (next == null) return;
-        final current = ref.read(addExpenseProvider);
-        if (mapEquals(current.splits, next.splits) &&
-            setEquals(current.includedMemberIds, next.includedMemberIds)) {
-          return;
-        }
-        ref.read(addExpenseProvider.notifier).state = current.copyWith(
-          splits: next.splits,
-          includedMemberIds: next.includedMemberIds,
-        );
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          final current = ref.read(addExpenseProvider);
+          if (mapEquals(current.splits, next.splits) &&
+              setEquals(current.includedMemberIds, next.includedMemberIds)) {
+            return;
+          }
+          ref.read(addExpenseProvider.notifier).state = current.copyWith(
+            splits: next.splits,
+            includedMemberIds: next.includedMemberIds,
+          );
+        });
       },
     );
 
