@@ -23,6 +23,7 @@ class BalanceBreakdownView extends StatelessWidget {
     required this.emptyEmoji,
     required this.emptyTitle,
     required this.emptyMessage,
+    this.amountExtractor,
   });
 
   final String overline;
@@ -34,6 +35,16 @@ class BalanceBreakdownView extends StatelessWidget {
   final String emptyEmoji;
   final String emptyTitle;
   final String emptyMessage;
+  /// How to derive the per-row amount from a group.
+  ///
+  /// - "You're owed" screen should pass `(g) => g.youAreOwedInGroup` — that
+  ///   tells the user how much they're owed in this group (ignoring debts
+  ///   they have to other members in the same group).
+  /// - "You owe" screen should pass `(g) => g.youOweInGroup`.
+  ///
+  /// Falls back to `group.myBalance.abs()` when null so legacy callers
+  /// (group cards, etc.) keep working.
+  final double Function(dynamic group)? amountExtractor;
 
   static const String _defaultPeopleEmoji = '👥';
 
@@ -80,6 +91,7 @@ class BalanceBreakdownView extends StatelessWidget {
                         groups: groups,
                         accent: accent,
                         amountSign: amountSign,
+                        amountExtractor: amountExtractor,
                         isDark: isDark,
                       ),
                     ],
@@ -209,12 +221,14 @@ class _GroupsCard extends StatelessWidget {
     required this.groups,
     required this.accent,
     required this.amountSign,
+    required this.amountExtractor,
     required this.isDark,
   });
 
   final List<dynamic> groups;
   final Color accent;
   final String amountSign;
+  final double Function(dynamic group)? amountExtractor;
   final bool isDark;
 
   @override
@@ -232,6 +246,7 @@ class _GroupsCard extends StatelessWidget {
               group: groups[i],
               accent: accent,
               amountSign: amountSign,
+              amountExtractor: amountExtractor,
               isDark: isDark,
               onTap: () => context.pushNamed(
                 'group-detail',
@@ -259,6 +274,7 @@ class _GroupRow extends StatelessWidget {
     required this.group,
     required this.accent,
     required this.amountSign,
+    required this.amountExtractor,
     required this.isDark,
     required this.onTap,
   });
@@ -266,6 +282,7 @@ class _GroupRow extends StatelessWidget {
   final dynamic group;
   final Color accent;
   final String amountSign;
+  final double Function(dynamic group)? amountExtractor;
   final bool isDark;
   final VoidCallback onTap;
 
@@ -273,7 +290,9 @@ class _GroupRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final coverEmoji = (group.coverEmoji as String?) ?? '';
     final coverImageBase64 = group.coverImageBase64 as String?;
-    final amount = (group.myBalance as num).toDouble().abs();
+    final amount = amountExtractor != null
+        ? amountExtractor!(group)
+        : (group.myBalance as num).toDouble().abs();
     final formatted = NumberFormat.currency(
       locale: 'en_IN',
       symbol: '₹',

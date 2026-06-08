@@ -2,38 +2,45 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../models/models.dart';
 import '../../groups/state/groups_provider.dart';
 
-// These providers source from groupsProvider (the full list, up to 50) — NOT
-// from dashboardProvider.recentGroups, which caps at 5 and was hiding
-// higher-balance groups from the You're-Owed / You-Owe detail screens. The
-// dashboard's *summary cards* still use the backend-aggregated totals, so
-// the per-group breakdown here now sums to the same number.
+// Sources from groupsProvider (the full list, up to 50). The detail screens
+// filter by PAIR-level totals (youAreOwedInGroup / youOweInGroup), NOT by the
+// per-group net (myBalance). Reason: in a group like "Dami" a user may net
+// +566 (myBalance positive) but still owe one specific member -1633; without
+// pair-level filtering that group would vanish from the "You owe" drill-down
+// even though the homescreen counts ₹1633 of debt there.
+//
+// Backwards compatibility: when an older backend hasn't shipped the new
+// fields, GroupModel.fromJson derives them from myBalance so existing
+// installs continue to work.
 
-/// Provider for groups where user is owed money (myBalance > 0)
+const double _epsilon = 0.005;
+
+/// Groups where someone in the group owes the user money.
 final owedToMeGroupsProvider = Provider<List<GroupModel>>((ref) {
   final groups = ref.watch(groupsProvider).value ?? const <GroupModel>[];
   return groups
-      .where((g) => g.myBalance > 0)
+      .where((g) => g.youAreOwedInGroup > _epsilon)
       .toList()
-    ..sort((a, b) => b.myBalance.compareTo(a.myBalance));
+    ..sort((a, b) => b.youAreOwedInGroup.compareTo(a.youAreOwedInGroup));
 });
 
-/// Provider for groups where user owes money (myBalance < 0)
+/// Groups where the user owes someone money.
 final iOweGroupsProvider = Provider<List<GroupModel>>((ref) {
   final groups = ref.watch(groupsProvider).value ?? const <GroupModel>[];
   return groups
-      .where((g) => g.myBalance < 0)
+      .where((g) => g.youOweInGroup > _epsilon)
       .toList()
-    ..sort((a, b) => a.myBalance.compareTo(b.myBalance));
+    ..sort((a, b) => b.youOweInGroup.compareTo(a.youOweInGroup));
 });
 
-/// Provider for calculating total amount owed to user
+/// Total amount owed to the user (sum of pair-level positives across all groups).
 final totalOwedToMeProvider = Provider<double>((ref) {
   final groups = ref.watch(owedToMeGroupsProvider);
-  return groups.fold<double>(0, (sum, g) => sum + g.myBalance);
+  return groups.fold<double>(0, (sum, g) => sum + g.youAreOwedInGroup);
 });
 
-/// Provider for calculating total amount user owes
+/// Total amount the user owes (sum of pair-level debts across all groups).
 final totalIOweProvider = Provider<double>((ref) {
   final groups = ref.watch(iOweGroupsProvider);
-  return groups.fold<double>(0, (sum, g) => sum + g.myBalance.abs());
+  return groups.fold<double>(0, (sum, g) => sum + g.youOweInGroup);
 });

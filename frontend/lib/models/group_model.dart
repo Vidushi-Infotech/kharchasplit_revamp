@@ -22,7 +22,18 @@ class GroupModel extends Equatable {
   final String? coverImageBase64;
   final List<UserModel> members;
   final double totalExpenses;
+  /// Signed per-group net for the current user. Positive = others owe me net;
+  /// negative = I owe net. Used for the group card.
   final double myBalance;
+  /// Sum of positive pair-nets within this group — i.e. how much I am owed
+  /// by people in this group, ignoring debts I have within the same group.
+  /// Used by the "You're owed" detail screen so a group appears even when
+  /// myBalance is negative.
+  final double youAreOwedInGroup;
+  /// Sum of |negative pair-nets| within this group — i.e. how much I owe
+  /// to people in this group. Used by the "You owe" detail screen so a
+  /// group appears even when myBalance is positive.
+  final double youOweInGroup;
   final String currency;
   final DateTime createdAt;
   final GroupCategory category;
@@ -36,6 +47,8 @@ class GroupModel extends Equatable {
     required this.members,
     this.totalExpenses = 0,
     this.myBalance = 0,
+    this.youAreOwedInGroup = 0,
+    this.youOweInGroup = 0,
     this.currency = '₹',
     required this.createdAt,
     this.category = GroupCategory.other,
@@ -62,6 +75,17 @@ class GroupModel extends Equatable {
       members: members,
       totalExpenses: (json['totalExpenses'] as num?)?.toDouble() ?? 0,
       myBalance: (json['myBalance'] as num?)?.toDouble() ?? 0,
+      // Pair-level totals from the backend. Fall back to deriving from
+      // myBalance when an older backend hasn't shipped these fields yet:
+      // positive myBalance → all owed-to-me; negative → all owe.
+      youAreOwedInGroup: (json['youAreOwedInGroup'] as num?)?.toDouble() ??
+          (((json['myBalance'] as num?)?.toDouble() ?? 0) > 0
+              ? ((json['myBalance'] as num).toDouble())
+              : 0),
+      youOweInGroup: (json['youOweInGroup'] as num?)?.toDouble() ??
+          (((json['myBalance'] as num?)?.toDouble() ?? 0) < 0
+              ? -((json['myBalance'] as num).toDouble())
+              : 0),
       currency: CurrencyFormatter.symbolFor(
           (json['currency'] as String?) ?? 'INR'),
       createdAt:
@@ -79,6 +103,8 @@ class GroupModel extends Equatable {
     List<UserModel>? members,
     double? totalExpenses,
     double? myBalance,
+    double? youAreOwedInGroup,
+    double? youOweInGroup,
     String? currency,
     DateTime? createdAt,
     GroupCategory? category,
@@ -92,6 +118,8 @@ class GroupModel extends Equatable {
       members: members ?? this.members,
       totalExpenses: totalExpenses ?? this.totalExpenses,
       myBalance: myBalance ?? this.myBalance,
+      youAreOwedInGroup: youAreOwedInGroup ?? this.youAreOwedInGroup,
+      youOweInGroup: youOweInGroup ?? this.youOweInGroup,
       currency: currency ?? this.currency,
       createdAt: createdAt ?? this.createdAt,
       category: category ?? this.category,
@@ -127,6 +155,8 @@ class GroupModel extends Equatable {
         members,
         totalExpenses,
         myBalance,
+        youAreOwedInGroup,
+        youOweInGroup,
         currency,
         createdAt,
         category,

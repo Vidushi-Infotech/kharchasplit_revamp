@@ -30,43 +30,77 @@ const getGroups = async (req, res, next) => {
     const groupIds = groups.map(g => g.id);
     const membersByGroup = await Group.getMembersByGroupIds(groupIds);
 
-    // Net balance for the requesting user in each of these groups, in one query.
-    // Positive = others owe me; negative = I owe others. Combines expense
-    // contributions and settlement contributions so myBalance reflects
-    // settled debts.
+    // Pair-level breakdown of the requesting user's position in each group.
+    //
+    // For each group we compute three numbers:
+    //   myBalance         = signed per-group net (positive = others owe me net,
+    //                       negative = I owe net). Used by the group card.
+    //   youAreOwedInGroup = sum of positive pair-nets (per other user)
+    //                       within this group. What "I'm owed" totals up to,
+    //                       independent of debts to other people.
+    //   youOweInGroup     = sum of |negative pair-nets| within this group.
+    //                       What "I owe" totals up to.
+    //
+    // Why both: home-screen detail screens ("You're owed" / "You owe") need
+    // pair-level totals so users see Group X even when their per-group net is
+    // positive but they owe one specific member there. The group card and
+    // simplify-debt math still want the net.
     const balancesByGroup = {};
     if (groupIds.length > 0) {
       const placeholders = groupIds.map((_, i) => `$${i + 2}`).join(', ');
       const balanceResult = await query(
-        `SELECT group_id, COALESCE(SUM(contribution), 0) AS net FROM (
-           SELECT e.group_id,
-                  SUM(CASE
-                    WHEN e.paid_by = $1 AND es.user_id != $1 THEN es.amount
-                    WHEN e.paid_by != $1 AND es.user_id = $1 THEN -es.amount
-                    ELSE 0
-                  END) AS contribution
+        `WITH pair_deltas AS (
+           -- I paid → each other split row means that user owes me
+           SELECT e.group_id, es.user_id AS other_user_id, es.amount AS delta
            FROM expenses e
            JOIN expense_splits es ON es.expense_id = e.id
-           WHERE e.deleted_at IS NULL AND e.group_id IN (${placeholders})
-           GROUP BY e.group_id
+           WHERE e.deleted_at IS NULL
+             AND e.paid_by = $1
+             AND es.user_id != $1
+             AND e.group_id IN (${placeholders})
            UNION ALL
-           SELECT s.group_id,
-                  SUM(CASE
-                    WHEN s.from_user_id = $1 THEN s.amount
-                    WHEN s.to_user_id   = $1 THEN -s.amount
-                    ELSE 0
-                  END) AS contribution
+           -- Other paid → I owe them my split
+           SELECT e.group_id, e.paid_by AS other_user_id, -es.amount AS delta
+           FROM expenses e
+           JOIN expense_splits es ON es.expense_id = e.id
+           WHERE e.deleted_at IS NULL
+             AND e.paid_by != $1
+             AND es.user_id = $1
+             AND e.group_id IN (${placeholders})
+           UNION ALL
+           SELECT s.group_id, s.to_user_id AS other_user_id, s.amount AS delta
            FROM settlements s
            WHERE s.deleted_at IS NULL
-             AND (s.status IS NULL OR s.status NOT IN ('failed', 'cancelled'))
+             AND s.status = 'paid'
+             AND s.from_user_id = $1
              AND s.group_id IN (${placeholders})
-           GROUP BY s.group_id
-         ) all_contributions
+           UNION ALL
+           SELECT s.group_id, s.from_user_id AS other_user_id, -s.amount AS delta
+           FROM settlements s
+           WHERE s.deleted_at IS NULL
+             AND s.status = 'paid'
+             AND s.to_user_id = $1
+             AND s.group_id IN (${placeholders})
+         ),
+         pair_net AS (
+           SELECT group_id, other_user_id, SUM(delta) AS net
+           FROM pair_deltas
+           GROUP BY group_id, other_user_id
+         )
+         SELECT group_id,
+                COALESCE(SUM(net), 0)                  AS my_balance,
+                COALESCE(SUM(GREATEST(net, 0)), 0)     AS you_are_owed_in_group,
+                COALESCE(SUM(GREATEST(-net, 0)), 0)    AS you_owe_in_group
+         FROM pair_net
          GROUP BY group_id`,
         [userId, ...groupIds]
       );
       for (const row of balanceResult.rows) {
-        balancesByGroup[row.group_id] = parseFloat(row.net);
+        balancesByGroup[row.group_id] = {
+          myBalance: parseFloat(row.my_balance),
+          youAreOwedInGroup: parseFloat(row.you_are_owed_in_group),
+          youOweInGroup: parseFloat(row.you_owe_in_group),
+        };
       }
     }
 
@@ -84,6 +118,11 @@ const getGroups = async (req, res, next) => {
         isPlaceholder: member.is_placeholder || false,
       }));
 
+      const bal = balancesByGroup[group.id] || {
+        myBalance: 0,
+        youAreOwedInGroup: 0,
+        youOweInGroup: 0,
+      };
       return {
         id: group.id,
         name: group.name,
@@ -97,7 +136,11 @@ const getGroups = async (req, res, next) => {
         memberCount: parseInt(group.member_count) || 0,
         expenseCount: parseInt(group.expense_count) || 0,
         totalExpenses: parseFloat(group.total_expenses) || 0,
-        myBalance: balancesByGroup[group.id] || 0,
+        myBalance: bal.myBalance,
+        // Pair-level aggregates so the "You're owed" / "You owe" detail
+        // screens can list this group even when myBalance net is positive.
+        youAreOwedInGroup: bal.youAreOwedInGroup,
+        youOweInGroup: bal.youOweInGroup,
         members: transformedMembers,
       };
     });

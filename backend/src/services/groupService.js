@@ -41,13 +41,15 @@ class GroupService {
 
     // Apply settlements: when A pays B ₹X, B's positive balance shrinks by X
     // and A's negative balance shrinks (becomes less negative) by X.
-    // Includes pending + completed settlements; excludes 'failed'/'cancelled'.
+    // Only confirmed ('paid') settlements affect the balance. Pending
+    // settlements await the recipient's confirmation before they count.
+    // Failed / cancelled / null statuses are excluded.
     const settlementsResult = await query(
       `SELECT from_user_id, to_user_id, amount
        FROM settlements
        WHERE group_id = $1
          AND deleted_at IS NULL
-         AND (status IS NULL OR status NOT IN ('failed', 'cancelled'))`,
+         AND status = 'paid'`,
       [groupId]
     );
 
@@ -152,7 +154,7 @@ class GroupService {
       `SELECT from_user_id, to_user_id, amount
        FROM settlements
        WHERE group_id = $1 AND deleted_at IS NULL
-         AND (status IS NULL OR status NOT IN ('failed', 'cancelled'))`,
+         AND status = 'paid'`,
       [groupId]
     );
     for (const r of settlementsResult.rows) {
@@ -164,6 +166,33 @@ class GroupService {
       }
     }
     return pair;
+  }
+
+  /**
+   * Invalidate every group member's per-user dashboard cache.
+   *
+   * Why: the dashboard endpoint caches under `user:<userId>:dashboard:<limit>`
+   * (60s TTL). The existing Expense.invalidateGroupExpenses only nukes group-
+   * keyed entries (`group:<id>:expenses`, `group:<id>:balances`), so the
+   * dashboard summary cards continued to show stale "You owe / You're owed"
+   * numbers for up to a minute after every expense or settlement write. Call
+   * this from any controller that mutates expenses or settlements so all
+   * affected users see fresh numbers on their next dashboard fetch.
+   *
+   * Best-effort: errors are swallowed (logged) — never block a successful
+   * write because invalidation failed.
+   */
+  static async invalidateMemberDashboards(groupId) {
+    try {
+      const members = await Group.getMembers(groupId);
+      for (const m of members) {
+        if (m.user_id) {
+          cache.invalidate(`user:${m.user_id}:dashboard`);
+        }
+      }
+    } catch (err) {
+      console.error('[GroupService] invalidateMemberDashboards failed:', err.message);
+    }
   }
 }
 

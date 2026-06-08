@@ -101,6 +101,9 @@ const createSettlement = async (req, res, next) => {
     // the simplified-debt math).
     cache.invalidate(`group:${groupId}:settlements`);
     cache.invalidate(`group:${groupId}:balances`);
+    // Bust every group member's dashboard cache so the next homescreen load
+    // reflects this new settlement (pending → won't count yet, but listed).
+    await GroupService.invalidateMemberDashboards(groupId);
 
     // Log activity - use group currency as default instead of USD
     const settlementCurrency = currency || group.currency || 'INR';
@@ -189,9 +192,12 @@ const confirmSettlement = async (req, res, next) => {
       });
     }
 
-    // Invalidate settlement + balance caches
+    // Invalidate settlement + balance caches + every member's dashboard.
+    // Confirmation flips status from 'pending' to 'paid' — which is now what
+    // actually counts in balance math — so dashboard MUST refresh.
     cache.invalidate(`group:${existingSettlement.group_id}:settlements`);
     cache.invalidate(`group:${existingSettlement.group_id}:balances`);
+    await GroupService.invalidateMemberDashboards(existingSettlement.group_id);
 
     // Log activity
     await ActivityService.logSettlementConfirmed(
@@ -268,9 +274,10 @@ const deleteSettlement = async (req, res, next) => {
       });
     }
 
-    // Invalidate settlement + balance caches
+    // Invalidate settlement + balance caches + every member's dashboard.
     cache.invalidate(`group:${settlement.group_id}:settlements`);
     cache.invalidate(`group:${settlement.group_id}:balances`);
+    await GroupService.invalidateMemberDashboards(settlement.group_id);
 
     res.json({
       success: true,

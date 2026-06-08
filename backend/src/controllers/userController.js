@@ -478,6 +478,16 @@ const getDashboard = async (req, res, next) => {
     // groups.deleted_at filter, leftover expenses in soft-deleted groups
     // still counted into the dashboard total but vanished from the
     // breakdown — root cause of the ₹X mismatch.)
+    // Net debt with each (group, other-user) pair, NOT just per-group net.
+    //
+    // Why pair-level: per-group netting hides debts. If Akash owes me 2200 in
+    // the same group where I owe R Ansari 1633, per-group net = +566 which
+    // showed "you_owe = 0" — even though I genuinely owe R Ansari money.
+    // Splitwise-style behaviour aggregates positive pair balances into
+    // "you're owed" and negative pair balances into "you owe" separately.
+    //
+    // total = you_are_owed - you_owe (mathematically equal to the old per-group
+    // sum, so existing TOTAL invariants are preserved).
     const balancesResult = await query(
       `WITH active_groups AS (
          SELECT g.id AS group_id
@@ -486,38 +496,51 @@ const getDashboard = async (req, res, next) => {
          WHERE gm.user_id = $1
            AND gm.deleted_at IS NULL
            AND g.deleted_at IS NULL
+       ),
+       pair_deltas AS (
+         -- I paid → every other split row means that user owes me their share
+         SELECT e.group_id, es.user_id AS other_user_id, es.amount AS delta
+         FROM expenses e
+         JOIN expense_splits es ON es.expense_id = e.id
+         WHERE e.deleted_at IS NULL
+           AND e.paid_by = $1
+           AND es.user_id != $1
+           AND e.group_id IN (SELECT group_id FROM active_groups)
+         UNION ALL
+         -- Someone else paid → I owe THEM my split (delta negative)
+         SELECT e.group_id, e.paid_by AS other_user_id, -es.amount AS delta
+         FROM expenses e
+         JOIN expense_splits es ON es.expense_id = e.id
+         WHERE e.deleted_at IS NULL
+           AND e.paid_by != $1
+           AND es.user_id = $1
+           AND e.group_id IN (SELECT group_id FROM active_groups)
+         UNION ALL
+         -- I paid them a settlement → they owe me that much more (or I owe less)
+         SELECT s.group_id, s.to_user_id AS other_user_id, s.amount AS delta
+         FROM settlements s
+         WHERE s.deleted_at IS NULL
+           AND s.status = 'paid'
+           AND s.from_user_id = $1
+           AND s.group_id IN (SELECT group_id FROM active_groups)
+         UNION ALL
+         -- They paid me → I owe them more (or they owe me less)
+         SELECT s.group_id, s.from_user_id AS other_user_id, -s.amount AS delta
+         FROM settlements s
+         WHERE s.deleted_at IS NULL
+           AND s.status = 'paid'
+           AND s.to_user_id = $1
+           AND s.group_id IN (SELECT group_id FROM active_groups)
+       ),
+       pair_net AS (
+         SELECT group_id, other_user_id, SUM(delta) AS net
+         FROM pair_deltas
+         GROUP BY group_id, other_user_id
        )
        SELECT COALESCE(SUM(GREATEST(net, 0)), 0) AS you_are_owed,
               COALESCE(SUM(GREATEST(-net, 0)), 0) AS you_owe,
               COALESCE(SUM(net), 0) AS total
-       FROM (
-         SELECT group_id, SUM(contribution) AS net FROM (
-           SELECT e.group_id,
-                  SUM(CASE
-                    WHEN e.paid_by = $1 AND es.user_id != $1 THEN es.amount
-                    WHEN e.paid_by != $1 AND es.user_id = $1 THEN -es.amount
-                    ELSE 0
-                  END) AS contribution
-           FROM expenses e
-           JOIN expense_splits es ON es.expense_id = e.id
-           WHERE e.deleted_at IS NULL
-             AND e.group_id IN (SELECT group_id FROM active_groups)
-           GROUP BY e.group_id
-           UNION ALL
-           SELECT s.group_id,
-                  SUM(CASE
-                    WHEN s.from_user_id = $1 THEN s.amount
-                    WHEN s.to_user_id   = $1 THEN -s.amount
-                    ELSE 0
-                  END) AS contribution
-           FROM settlements s
-           WHERE s.deleted_at IS NULL
-             AND (s.status IS NULL OR s.status NOT IN ('failed', 'cancelled'))
-             AND s.group_id IN (SELECT group_id FROM active_groups)
-           GROUP BY s.group_id
-         ) all_contributions
-         GROUP BY group_id
-       ) per_group`,
+       FROM pair_net`,
       [id]
     );
 
@@ -878,6 +901,9 @@ const getReports = async (req, res, next) => {
     // you_owe / you_are_owed numbers. We intentionally do NOT period-window
     // these (debts don't have a "this month" — they're either outstanding
     // now or settled).
+    // Pair-level netting — same shape as the dashboard query so the Reports
+    // screen's you_are_owed / you_owe match the homescreen exactly. See the
+    // long comment in getDashboard for the why.
     const balancesResult = await query(
       `WITH active_groups AS (
          SELECT g.id AS group_id
@@ -886,37 +912,46 @@ const getReports = async (req, res, next) => {
          WHERE gm.user_id = $1
            AND gm.deleted_at IS NULL
            AND g.deleted_at IS NULL
+       ),
+       pair_deltas AS (
+         SELECT e.group_id, es.user_id AS other_user_id, es.amount AS delta
+         FROM expenses e
+         JOIN expense_splits es ON es.expense_id = e.id
+         WHERE e.deleted_at IS NULL
+           AND e.paid_by = $1
+           AND es.user_id != $1
+           AND e.group_id IN (SELECT group_id FROM active_groups)
+         UNION ALL
+         SELECT e.group_id, e.paid_by AS other_user_id, -es.amount AS delta
+         FROM expenses e
+         JOIN expense_splits es ON es.expense_id = e.id
+         WHERE e.deleted_at IS NULL
+           AND e.paid_by != $1
+           AND es.user_id = $1
+           AND e.group_id IN (SELECT group_id FROM active_groups)
+         UNION ALL
+         SELECT s.group_id, s.to_user_id AS other_user_id, s.amount AS delta
+         FROM settlements s
+         WHERE s.deleted_at IS NULL
+           AND s.status = 'paid'
+           AND s.from_user_id = $1
+           AND s.group_id IN (SELECT group_id FROM active_groups)
+         UNION ALL
+         SELECT s.group_id, s.from_user_id AS other_user_id, -s.amount AS delta
+         FROM settlements s
+         WHERE s.deleted_at IS NULL
+           AND s.status = 'paid'
+           AND s.to_user_id = $1
+           AND s.group_id IN (SELECT group_id FROM active_groups)
+       ),
+       pair_net AS (
+         SELECT group_id, other_user_id, SUM(delta) AS net
+         FROM pair_deltas
+         GROUP BY group_id, other_user_id
        )
        SELECT COALESCE(SUM(GREATEST(net, 0)), 0) AS you_are_owed,
               COALESCE(SUM(GREATEST(-net, 0)), 0) AS you_owe
-       FROM (
-         SELECT group_id, SUM(contribution) AS net FROM (
-           SELECT e.group_id,
-                  SUM(CASE
-                    WHEN e.paid_by = $1 AND es.user_id != $1 THEN es.amount
-                    WHEN e.paid_by != $1 AND es.user_id = $1 THEN -es.amount
-                    ELSE 0
-                  END) AS contribution
-           FROM expenses e
-           JOIN expense_splits es ON es.expense_id = e.id
-           WHERE e.deleted_at IS NULL
-             AND e.group_id IN (SELECT group_id FROM active_groups)
-           GROUP BY e.group_id
-           UNION ALL
-           SELECT s.group_id,
-                  SUM(CASE
-                    WHEN s.from_user_id = $1 THEN s.amount
-                    WHEN s.to_user_id   = $1 THEN -s.amount
-                    ELSE 0
-                  END) AS contribution
-           FROM settlements s
-           WHERE s.deleted_at IS NULL
-             AND (s.status IS NULL OR s.status NOT IN ('failed', 'cancelled'))
-             AND s.group_id IN (SELECT group_id FROM active_groups)
-           GROUP BY s.group_id
-         ) all_contributions
-         GROUP BY group_id
-       ) per_group`,
+       FROM pair_net`,
       [id]
     );
     const balances = balancesResult.rows[0] || {};
