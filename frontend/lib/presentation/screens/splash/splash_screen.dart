@@ -72,7 +72,7 @@ class _LogoWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
+    final size = MediaQuery.sizeOf(context);
     final logoSize = size.width * 0.4;
 
     return AnimatedOpacity(

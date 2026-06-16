@@ -14,7 +14,7 @@ class ActivityScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final screenWidth = MediaQuery.of(context).size.width;
+    final screenWidth = MediaQuery.sizeOf(context).width;
     final filter = ref.watch(activityFilterProvider);
     final feedAsync = ref.watch(filteredActivityFeedProvider);
     final allActivities = ref.watch(activityFeedProvider).value ?? const [];

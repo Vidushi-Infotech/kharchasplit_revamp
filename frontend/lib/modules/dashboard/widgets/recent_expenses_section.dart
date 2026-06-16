@@ -26,7 +26,7 @@ class RecentExpensesSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final currentUserId = ref.watch(authProvider).user?.id;
+    final currentUserId = ref.watch(myIdProvider);
     final groupNames = {for (final g in groups) g.id: g.name};
 
     final grouped = <String, List<ExpenseModel>>{};

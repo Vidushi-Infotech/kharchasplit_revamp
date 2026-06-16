@@ -27,11 +27,11 @@ extension ResponsiveContext on BuildContext {
 /// Helper class for responsive sizing
 class ResponsiveSize {
   static double width(BuildContext context, double percentage) {
-    return MediaQuery.of(context).size.width * percentage;
+    return MediaQuery.sizeOf(context).width * percentage;
   }
 
   static double height(BuildContext context, double percentage) {
-    return MediaQuery.of(context).size.height * percentage;
+    return MediaQuery.sizeOf(context).height * percentage;
   }
 
   static double responsiveFontSize(BuildContext context, double size) {

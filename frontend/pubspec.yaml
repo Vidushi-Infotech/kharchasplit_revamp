@@ -2,7 +2,7 @@ name: kharchasplit
 description: "A Flutter expense-splitting app for groups and settlements."
 publish_to: 'none'
 
-version: 3.2.1+20
+version: 3.3.0+21
 
 environment:
   sdk: ^3.11.0
@@ -44,6 +44,14 @@ dependencies:
   # Local Storage
   shared_preferences: ^2.2.3
 
+  # Haptics. Flutter's built-in HapticFeedback.lightImpact / mediumImpact /
+  # heavyImpact / selectionClick silently no-ops on Samsung devices whose
+  # "Touch feedback" system toggle is off, even with VIBRATE permission
+  # granted. The `vibration` package uses the VibratorManager service
+  # directly with custom durations + amplitudes, bypassing that gate, so
+  # every user gets consistent feedback regardless of OEM defaults.
+  vibration: ^3.1.3
+
   # Data Modeling
   equatable: ^2.0.5
   uuid: ^4.4.0
@@ -73,6 +81,11 @@ dependencies:
   device_info_plus: ^12.4.0
   package_info_plus: ^9.0.1
   url_launcher: ^6.3.2
+
+  # In-App Update — Android only. Wraps Google's Play Core in-app update API.
+  # iOS has no native equivalent; we drive the iOS path with a custom dialog
+  # + url_launcher to the App Store (see core/services/update_service.dart).
+  in_app_update: ^4.2.3
 
   # Push Notifications (Firebase Cloud Messaging)
   firebase_core: ^4.2.0

@@ -7,11 +7,16 @@ import expenseController from '../controllers/expenseController.js';
 
 const router = express.Router();
 
+// Receipt-bearing endpoints opt in to the 10MB body limit. Other routes
+// stay on the global 256KB default set in server.js.
+const largeJson = express.json({ limit: '10mb' });
+
 router.get('/', authenticate, expenseController.getExpenses);
 router.get('/:id', authenticate, expenseController.getExpense);
 
 router.post(
   '/',
+  largeJson,
   authenticate,
   // Per-user limit (60/min) sits AFTER authenticate so the key generator
   // can read req.user.id; before validate so a malformed payload still
@@ -32,7 +37,7 @@ router.post(
   expenseController.createExpense
 );
 
-router.put('/:id', authenticate, expenseController.updateExpense);
+router.put('/:id', largeJson, authenticate, expenseController.updateExpense);
 router.delete('/:id', authenticate, expenseController.deleteExpense);
 
 export default router;

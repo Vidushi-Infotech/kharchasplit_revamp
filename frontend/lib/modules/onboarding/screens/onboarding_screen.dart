@@ -100,7 +100,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     final currentPage = ref.watch(onboardingPageProvider);
-    final screenWidth = MediaQuery.of(context).size.width;
+    final screenWidth = MediaQuery.sizeOf(context).width;
     final isTablet = screenWidth >= 600 && screenWidth < 1100;
     final isWeb = screenWidth >= 1100;
     final accent = _slides[currentPage].accent;

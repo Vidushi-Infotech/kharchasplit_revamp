@@ -52,7 +52,7 @@ class _WalletSetupSheetState extends ConsumerState<WalletSetupSheet> {
           ),
           child: Padding(
             padding: EdgeInsets.only(
-              bottom: MediaQuery.of(context).viewInsets.bottom,
+              bottom: MediaQuery.viewInsetsOf(context).bottom,
             ),
             child: Column(
               children: [

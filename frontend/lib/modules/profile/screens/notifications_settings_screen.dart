@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/services/haptic_service.dart';
 import '../../../core/state/haptic_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -15,7 +16,7 @@ class NotificationsSettingsScreen extends ConsumerWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final prefs = ref.watch(notificationPrefsProvider);
     final notifier = ref.read(notificationPrefsProvider.notifier);
-    final screenWidth = MediaQuery.of(context).size.width;
+    final screenWidth = MediaQuery.sizeOf(context).width;
     final pushDisabled = !prefs.pushEnabled;
 
     return Scaffold(
@@ -447,8 +448,12 @@ class _ToggleRow extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap:
-            disabled ? null : () => item.onChanged(!item.value),
+        onTap: disabled
+            ? null
+            : () {
+                HapticService.instance.selection();
+                item.onChanged(!item.value);
+              },
         borderRadius: BorderRadius.circular(14),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -516,3 +521,4 @@ class _ToggleRow extends StatelessWidget {
     );
   }
 }
+

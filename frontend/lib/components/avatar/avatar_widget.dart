@@ -1,7 +1,37 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../core/theme/app_colors.dart';
+
+/// Module-level LRU cache for base64-decoded avatar bytes. Avatars appear
+/// in many lists (members, activity, picker) and the SAME base64 string
+/// is decoded multiple times per frame. Caching the Uint8List collapses
+/// repeated decodes to a single Map lookup. Cache size caps RAM usage to
+/// roughly maxEntries × typical-avatar (~30KB) = ~3MB.
+const int _avatarDecodeMaxEntries = 100;
+final Map<String, Uint8List> _avatarDecodeCache = {};
+
+Uint8List? _decodeAvatarBase64(String input) {
+  final cached = _avatarDecodeCache[input];
+  if (cached != null) {
+    // Move-to-end on access keeps the LRU ordering valid.
+    _avatarDecodeCache.remove(input);
+    _avatarDecodeCache[input] = cached;
+    return cached;
+  }
+  try {
+    final cleaned = input.contains(',') ? input.split(',').last : input;
+    final bytes = base64Decode(cleaned);
+    if (_avatarDecodeCache.length >= _avatarDecodeMaxEntries) {
+      _avatarDecodeCache.remove(_avatarDecodeCache.keys.first);
+    }
+    _avatarDecodeCache[input] = bytes;
+    return bytes;
+  } catch (_) {
+    return null;
+  }
+}
 
 /// Avatar widget with network image, initials fallback, and stacking support
 class AvatarWidget extends StatelessWidget {
@@ -101,12 +131,9 @@ class AvatarWidget extends StatelessWidget {
   }
 
   MemoryImage? _decodeBase64(String input) {
-    try {
-      final cleaned = input.contains(',') ? input.split(',').last : input;
-      return MemoryImage(base64Decode(cleaned));
-    } catch (_) {
-      return null;
-    }
+    final bytes = _decodeAvatarBase64(input);
+    if (bytes == null) return null;
+    return MemoryImage(bytes);
   }
 
   Widget _buildNetworkImage(String url, bool isDark) {

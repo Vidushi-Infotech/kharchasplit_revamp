@@ -20,6 +20,19 @@ const pool = new Pool({
   connectionTimeoutMillis: 5000,  // wait up to 5s for a connection (2s was too aggressive under load)
   application_name: 'kharchasplit-api',  // visible in pg_stat_activity
   statement_timeout: 30000,       // kill queries running longer than 30s
+  // Kill any transaction left idle for 30s — guards against a bug where
+  // we BEGIN and never COMMIT (e.g. awaiting an external API mid-txn),
+  // which would otherwise hold a pool slot forever. 10 such bugs across
+  // the codebase = total pool exhaustion = full outage. Cheap insurance.
+  idle_in_transaction_session_timeout: 30000,
+  // TCP keepalives. Production traffic goes Cloudflare → LB → pg, and
+  // NAT entries on the path expire after a few minutes of silence. Without
+  // keepalives the pool hands out a half-open socket, the first query
+  // fails with "Connection terminated unexpectedly", pool replaces the
+  // client — repeat per quiet period. keepAlive makes the OS send probes
+  // so connections stay genuinely alive.
+  keepAlive: true,
+  keepAliveInitialDelayMillis: 10000,
 });
 
 // Log pool errors but do NOT crash — the pool self-heals by replacing dead connections.

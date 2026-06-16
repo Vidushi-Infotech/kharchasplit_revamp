@@ -34,9 +34,19 @@ class DashboardHeader extends ConsumerWidget {
     // groups, not the recent-5 carousel — otherwise the dashboard's
     // "N groups" caption disagrees with the You're-Owed / You-Owe detail
     // screens (which now read the same full list).
+    //
+    // We count by PAIR-LEVEL totals (youAreOwedInGroup / youOweInGroup)
+    // rather than per-group net (myBalance). A group can show up in BOTH
+    // counts simultaneously — e.g. in Dami you might be owed ₹2,200 by
+    // Akash AND owe ₹1,633 to R Ansari. Filtering on myBalance > 0 / < 0
+    // hid the group from "0 groups" because its net was positive even
+    // though pair-level debts existed.
+    const epsilon = 0.005;
     final allGroups = ref.watch(groupsProvider).value ?? const [];
-    final owedCount = allGroups.where((g) => g.myBalance > 0).length;
-    final oweCount = allGroups.where((g) => g.myBalance < 0).length;
+    final owedCount =
+        allGroups.where((g) => g.youAreOwedInGroup > epsilon).length;
+    final oweCount =
+        allGroups.where((g) => g.youOweInGroup > epsilon).length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

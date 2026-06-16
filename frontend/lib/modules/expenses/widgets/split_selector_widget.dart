@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/services/haptic_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../models/models.dart';
@@ -79,7 +80,12 @@ class SplitSelectorWidget extends StatelessWidget {
                     isDark: isDark,
                     data: opt,
                     selected: splitType == opt.type,
-                    onTap: () => onSplitTypeChanged(opt.type),
+                    onTap: () {
+                      if (splitType != opt.type) {
+                        HapticService.instance.selection();
+                        onSplitTypeChanged(opt.type);
+                      }
+                    },
                   ),
               ],
             );

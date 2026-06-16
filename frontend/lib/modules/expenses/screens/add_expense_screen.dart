@@ -7,7 +7,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../../components/avatar/avatar_widget.dart';
+import '../../../core/services/haptic_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/currency_formatter.dart';
@@ -20,10 +22,9 @@ import '../../../modules/groups/state/groups_provider.dart';
 import '../state/add_expense_provider.dart';
 import '../state/expense_detail_provider.dart';
 import '../widgets/amount_input_widget.dart';
-import '../widgets/category_selector_widget.dart';
-import '../widgets/split_selector_widget.dart';
 import '../widgets/invoice_upload_widget.dart';
 import '../widgets/split_breakdown_widget.dart';
+import '../widgets/split_selector_widget.dart';
 
 class AddExpenseScreen extends ConsumerStatefulWidget {
   final String? groupId;
@@ -45,27 +46,14 @@ class AddExpenseScreen extends ConsumerStatefulWidget {
 class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   late TextEditingController _titleController;
   late TextEditingController _notesController;
-  late TextEditingController _equalSplitSearchController;
-  late ScrollController _scrollController;
 
-  /// Anchor key on the split-breakdown section. Used by [_scrollToBreakdown]
-  /// to slide the breakdown into view after the user picks Exact/%/Shares.
-  final GlobalKey _breakdownKey = GlobalKey();
-
-  /// Latch — set once the widget.groupId has been pushed into state. Stops
-  /// the build() loop from re-scheduling the same write every frame.
+  /// Latch — set once widget.groupId has been pushed into state.
   bool _groupIdSynced = false;
 
-  /// Debounce on the title TextField. Each keystroke previously wrote
-  /// straight to the provider, which rebuilds the entire 1300-line screen
-  /// (split breakdown, member list, etc.) — visible lag on lower-end
-  /// devices. 200 ms collapses a typed word into one rebuild.
+  /// Debounce on the title TextField to avoid rebuilding the whole tree
+  /// on every keystroke.
   Timer? _titleDebounce;
 
-  /// Edit-mode latches.
-  ///   _hydrating    — true while the initial GET /expenses/:id is in flight;
-  ///                   used to show the spinner overlay and block save.
-  ///   _hydrateError — last hydration failure (rendered as inline error).
   bool _hydrating = false;
   String? _hydrateError;
 
@@ -74,8 +62,6 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     super.initState();
     _titleController = TextEditingController();
     _notesController = TextEditingController();
-    _equalSplitSearchController = TextEditingController();
-    _scrollController = ScrollController();
 
     if (widget.isEditing) {
       _hydrating = true;
@@ -83,8 +69,6 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     }
   }
 
-  /// Fetch the existing expense and seed [addExpenseProvider] + the text
-  /// controllers. Runs exactly once on entry to edit mode.
   Future<void> _hydrateFromExpense() async {
     final id = widget.expenseId;
     if (id == null) return;
@@ -92,9 +76,6 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       final expense = await ref.read(expensesRepositoryProvider).getById(id);
       if (!mounted) return;
 
-      // Build the splits map in the same shape AddExpenseState uses:
-      //   equal/exact → amount, percentage → percent, shares → share count.
-      // includedMemberIds is everyone with a non-zero entry.
       final splits = <String, double>{};
       final included = <String>{};
       for (final s in expense.splits) {
@@ -135,9 +116,6 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
 
       setState(() {
         _hydrating = false;
-        // Edit mode reuses the equal-split auto-recalc path; setting the
-        // groupId-synced latch prevents the build() block from re-pushing
-        // widget.groupId (which is null in edit mode) over the loaded value.
         _groupIdSynced = true;
       });
     } catch (e) {
@@ -154,11 +132,6 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     _titleDebounce?.cancel();
     _titleController.dispose();
     _notesController.dispose();
-    _equalSplitSearchController.dispose();
-    _scrollController.dispose();
-    // Edit mode hydrates the shared provider with the expense being edited.
-    // If the user pops without saving, that hydrated state would otherwise
-    // bleed into the next Add Expense session — reset it on exit.
     if (widget.isEditing) {
       Future.microtask(() {
         ref.read(addExpenseProvider.notifier).state =
@@ -168,26 +141,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     super.dispose();
   }
 
-  void _scrollToBreakdown() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final ctx = _breakdownKey.currentContext;
-      if (ctx == null) return;
-      Scrollable.ensureVisible(
-        ctx,
-        duration: const Duration(milliseconds: 350),
-        curve: Curves.easeOutCubic,
-        alignment: 0.05,
-      );
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final screenWidth = MediaQuery.of(context).size.width;
 
-    // Edit mode short-circuits: spinner while the GET is in flight, error
-    // page with retry if it failed. We never show the half-empty form.
     if (widget.isEditing && (_hydrating || _hydrateError != null)) {
       return Scaffold(
         backgroundColor: AppColors.background(isDark),
@@ -238,9 +195,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
 
     final expenseState = ref.watch(addExpenseProvider);
 
-    // Initialise expense.groupId from the route param exactly once.
-    // The latch prevents re-scheduling the same write every rebuild even if
-    // the comparison briefly regresses (e.g. provider invalidation).
+    // Sync route param → provider once.
     if (!_groupIdSynced &&
         widget.groupId != null &&
         expenseState.groupId != widget.groupId) {
@@ -252,75 +207,57 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       });
     }
 
-    // Get group members if groupId is set
     final groupAsync = expenseState.groupId != null
         ? ref.watch(groupDetailProvider(expenseState.groupId!))
         : null;
-    final List<UserModel> groupMembers =
-        groupAsync?.value?.members ?? [];
+    final List<UserModel> groupMembers = groupAsync?.value?.members ?? [];
 
-    // Auto-initialise / recalculate splits for equal split.
+    // Equal-split write-back. The derivation lives in
+    // [equalSplitDerivedProvider] — a pure function of (amount,
+    // splitType, includedMemberIds, members). `ref.listen` fires only
+    // when the EqualSplitDerived value structurally changes (the class
+    // implements ==).
     //
-    // Critically: change-detection uses STRUCTURAL equality (`mapEquals`,
-    // `setEquals`). Map/Set use reference equality by default, so the old
-    // `newSplits != expenseState.splits` always evaluated true and scheduled
-    // a state write every frame (= permanent rebuild loop, ~60 writes/sec).
-    if (expenseState.splitType == SplitType.equal && groupMembers.isNotEmpty) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-
-        Set<String> includedIds = expenseState.includedMemberIds;
-        if (includedIds.isEmpty) {
-          includedIds = Set<String>.from(groupMembers.map((m) => m.id));
-        }
-
-        if (expenseState.amount > 0) {
-          final includedCount = includedIds.length;
-          final equalShare = includedCount > 0
-              ? (expenseState.amount / includedCount).toDouble()
-              : 0.0;
-          final newSplits = <String, double>{
-            for (final member in groupMembers)
-              member.id: includedIds.contains(member.id) ? equalShare : 0,
-          };
-
-          final splitsChanged =
-              !mapEquals(newSplits, expenseState.splits);
-          final includedChanged =
-              !setEquals(includedIds, expenseState.includedMemberIds);
-
-          if (splitsChanged || includedChanged) {
-            ref.read(addExpenseProvider.notifier).state = expenseState.copyWith(
-              splits: newSplits,
-              includedMemberIds: includedIds,
-            );
+    // The state write is deferred to a post-frame callback because the
+    // derived provider watches addExpenseProvider — writing back
+    // synchronously inside the listener dirties the dependency, and
+    // Riverpod refuses to recompute the same provider twice in one
+    // frame ("Bad state: Tried to rebuild Provider<EqualSplitDerived?>
+    // multiple times in the same frame"). Posting the write to the
+    // next frame lets Riverpod's per-frame bookkeeping reset; the
+    // structural `==` on EqualSplitDerived then short-circuits the
+    // next listener fire (prev == next) and the loop terminates.
+    ref.listen<EqualSplitDerived?>(
+      equalSplitDerivedProvider(expenseState.groupId),
+      (prev, next) {
+        if (next == null) return;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          final current = ref.read(addExpenseProvider);
+          if (mapEquals(current.splits, next.splits) &&
+              setEquals(current.includedMemberIds, next.includedMemberIds)) {
+            return;
           }
-        } else if (!setEquals(includedIds, expenseState.includedMemberIds)) {
-          // Amount=0: still initialise includedMemberIds so the UI shows
-          // every member checked.
-          ref.read(addExpenseProvider.notifier).state =
-              expenseState.copyWith(includedMemberIds: includedIds);
-        }
-      });
-    }
+          ref.read(addExpenseProvider.notifier).state = current.copyWith(
+            splits: next.splits,
+            includedMemberIds: next.includedMemberIds,
+          );
+        });
+      },
+    );
 
-    // Responsive layout decision based on CLAUDE.md section 5
-    if (screenWidth < 600) {
-      return _buildCompactLayout(context, isDark, expenseState, groupMembers);
-    } else if (screenWidth < 1100) {
-      return _buildStandardLayout(context, isDark, expenseState, groupMembers);
-    } else {
-      return _buildLargeLayout(context, isDark, expenseState, groupMembers);
-    }
-  }
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final double maxFormWidth = screenWidth < 600
+        ? double.infinity
+        : screenWidth < 1100
+            ? 600
+            : 700;
+    final double horizontalPad = screenWidth < 600
+        ? 16
+        : screenWidth < 1100
+            ? 24
+            : 32;
 
-  // Compact: <600px - Mobile layout (16-20px padding)
-  Widget _buildCompactLayout(
-    BuildContext context,
-    bool isDark,
-    AddExpenseState state,
-    List<UserModel> groupMembers,
-  ) {
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
@@ -328,1036 +265,739 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
         _closeScreen();
       },
       child: Scaffold(
-      backgroundColor: AppColors.background(isDark),
-      appBar: _TopBar(
-        title: widget.isEditing ? 'Edit expense' : 'Add expense',
-        onClose: _closeScreen,
-        isDark: isDark,
-      ),
-      body: ScrollConfiguration(
-        behavior: ScrollConfiguration.of(context).copyWith(scrollbars: true),
-        child: SingleChildScrollView(
-          controller: _scrollController,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-            child: Column(
-              children: [
-                _buildInvoiceSection(isDark, state),
-                const SizedBox(height: 24),
-                _buildTitleSection(isDark),
-                const SizedBox(height: 20),
-                _buildAmountSection(isDark, state),
-                const SizedBox(height: 20),
-                _buildMemberSection(isDark, state, groupMembers),
-                const SizedBox(height: 20),
-                _buildCategorySection(isDark, state),
-                const SizedBox(height: 20),
-                _buildDateSection(isDark, state),
-                const SizedBox(height: 20),
-                _buildSplitSection(isDark, state),
-                const SizedBox(height: 12),
-                KeyedSubtree(
-                  key: _breakdownKey,
-                  child:
-                      _buildSplitBreakdownSection(isDark, state, groupMembers),
-                ),
-                const SizedBox(height: 100),
-              ],
-            ),
-          ),
+        backgroundColor: AppColors.background(isDark),
+        appBar: _TopBar(
+          title: widget.isEditing ? 'Edit expense' : 'Add expense',
+          onClose: _closeScreen,
+          isDark: isDark,
         ),
-      ),
-      bottomNavigationBar: _buildSaveButton(isDark, state),
-      ),
-    );
-  }
-
-  // Standard: 600-1100px - Tablet layout (24-32px padding)
-  Widget _buildStandardLayout(
-    BuildContext context,
-    bool isDark,
-    AddExpenseState state,
-    List<UserModel> groupMembers,
-  ) {
-    return Scaffold(
-      backgroundColor: AppColors.background(isDark),
-      appBar: _TopBar(
-        title: widget.isEditing ? 'Edit expense' : 'Add expense',
-        onClose: _closeScreen,
-        isDark: isDark,
-      ),
-      body: ScrollConfiguration(
-        behavior: ScrollConfiguration.of(context).copyWith(scrollbars: true),
-        child: SingleChildScrollView(
-          controller: _scrollController,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 600),
-                child: Column(
-                  children: [
-                    _buildInvoiceSection(isDark, state),
-                    const SizedBox(height: 28),
-                    _buildTitleSection(isDark),
-                    const SizedBox(height: 24),
-                    _buildAmountSection(isDark, state),
-                    const SizedBox(height: 24),
-                    _buildMemberSection(isDark, state, groupMembers),
-                    const SizedBox(height: 24),
-                    _buildCategorySection(isDark, state),
-                    const SizedBox(height: 24),
-                    _buildDateSection(isDark, state),
-                    const SizedBox(height: 24),
-                    _buildSplitSection(isDark, state),
-                    const SizedBox(height: 12),
-                    KeyedSubtree(
-                      key: _breakdownKey,
-                      child: _buildSplitBreakdownSection(
-                          isDark, state, groupMembers),
-                    ),
-                    const SizedBox(height: 120),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-      bottomNavigationBar: _buildSaveButton(isDark, state),
-    );
-  }
-
-  // Large: >1100px - Desktop layout (32-48px padding)
-  Widget _buildLargeLayout(
-    BuildContext context,
-    bool isDark,
-    AddExpenseState state,
-    List<UserModel> groupMembers,
-  ) {
-    return Scaffold(
-      backgroundColor: AppColors.background(isDark),
-      appBar: _TopBar(
-        title: widget.isEditing ? 'Edit expense' : 'Add expense',
-        onClose: _closeScreen,
-        isDark: isDark,
-      ),
-      body: ScrollConfiguration(
-        behavior: ScrollConfiguration.of(context).copyWith(scrollbars: true),
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 32),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1000),
-                child: Column(
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Left: Invoice section
-                        Expanded(
-                          flex: 1,
-                          child: _buildInvoiceSection(isDark, state),
-                        ),
-                        const SizedBox(width: 48),
-                        // Right: Form fields stacked vertically
-                        Expanded(
-                          flex: 2,
-                          child: SingleChildScrollView(
-                            child: Column(
-                              children: [
-                                _buildTitleSection(isDark),
-                                const SizedBox(height: 20),
-                                _buildAmountSection(isDark, state),
-                                const SizedBox(height: 20),
-                                _buildMemberSection(isDark, state, groupMembers),
-                                const SizedBox(height: 20),
-                                _buildCategorySection(isDark, state),
-                                const SizedBox(height: 20),
-                                _buildDateSection(isDark, state),
-                                const SizedBox(height: 20),
-                                _buildSplitSection(isDark, state),
-                                const SizedBox(height: 12),
-                                KeyedSubtree(
-                                  key: _breakdownKey,
-                                  child: _buildSplitBreakdownSection(
-                                      isDark, state, groupMembers),
-                                ),
-                                const SizedBox(height: 32),
-                                _buildSaveButtonLarge(isDark, state),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 40),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // Receipt upload — picks an image and stores it as base64 to attach as
-  // proof on save. (OCR scanning is intentionally disabled for now.)
-  Widget _buildInvoiceSection(bool isDark, AddExpenseState state) {
-    return Semantics(
-      label: 'Receipt upload section',
-      child: InvoiceUploadWidget(
-        onImageSelected: (imagePath, file) async {
-          // Read once → base64 once. Re-using the same bytes both for the
-          // preview tile (handled by the widget) and the POST body.
-          try {
-            final bytes = await File(imagePath).readAsBytes();
-            final encoded = base64Encode(bytes);
-            ref.read(addExpenseProvider.notifier).state = state.copyWith(
-              invoiceImagePath: imagePath,
-              receiptBase64: encoded,
-            );
-          } catch (_) {
-            // Fall back to just storing the path; save will skip the receipt.
-            ref.read(addExpenseProvider.notifier).state =
-                state.copyWith(invoiceImagePath: imagePath);
-          }
-        },
-      ),
-    );
-  }
-
-  Widget _buildAmountSection(bool isDark, AddExpenseState state) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _SectionTitle(label: 'AMOUNT', isDark: isDark),
-        const SizedBox(height: 10),
-        Semantics(
-          button: true,
-          label:
-              'Enter amount in ${state.currency}, currently ${CurrencyFormatter.format(state.amount)}',
-          child: AmountInputWidget(
-            amount: state.amount,
-            currency: state.currency,
-            onChanged: (amount) {
-              ref.read(addExpenseProvider.notifier).state =
-                  state.copyWith(amount: amount);
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTitleSection(bool isDark) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            _SectionTitle(label: 'TITLE', isDark: isDark),
-            const SizedBox(width: 4),
-            // Asterisk to flag required-ness; reads as '*' but uses the
-            // app's warning color so it stands out without a wall of text.
-            Text(
-              '*',
-              style: AppTextStyles.caption(isDark).copyWith(
-                color: AppColors.warning,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        TextField(
-          controller: _titleController,
-          decoration: InputDecoration(
-            hintText: 'Dinner, movie, groceries…',
-            filled: true,
-            fillColor: AppColors.inputFill(isDark),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: AppColors.inputBorder(isDark)),
-            ),
-          ),
-          onChanged: (value) {
-            // Debounce — see _titleDebounce field for rationale.
-            _titleDebounce?.cancel();
-            _titleDebounce = Timer(const Duration(milliseconds: 200), () {
-              if (!mounted) return;
-              ref.read(addExpenseProvider.notifier).state =
-                  ref.read(addExpenseProvider).copyWith(title: value);
-            });
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCategorySection(bool isDark, AddExpenseState state) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _SectionTitle(label: 'CATEGORY', isDark: isDark),
-        const SizedBox(height: 10),
-        Semantics(
-          button: true,
-          label:
-              'Select category, currently ${state.category?.name ?? 'None selected'}',
-          child: CategorySelectorWidget(
-            selectedCategory: state.category,
-            onCategorySelected: (category) {
-              ref.read(addExpenseProvider.notifier).state =
-                  state.copyWith(category: category);
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDateSection(bool isDark, AddExpenseState state) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _SectionTitle(label: 'DATE', isDark: isDark),
-        const SizedBox(height: 10),
-        GestureDetector(
-          onTap: () async {
-            final picked = await showDatePicker(
-              context: context,
-              initialDate: state.date,
-              firstDate: DateTime.now().subtract(const Duration(days: 365)),
-              lastDate: DateTime.now(),
-            );
-            if (picked != null) {
-              ref.read(addExpenseProvider.notifier).state =
-                  state.copyWith(date: picked);
-            }
-          },
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            decoration: BoxDecoration(
-              border: Border.all(color: AppColors.inputBorder(isDark)),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  state.date.toString().split(' ')[0],
-                  style: AppTextStyles.body2(isDark),
-                ),
-                const Icon(Icons.calendar_today_rounded, size: 18),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSplitSection(bool isDark, AddExpenseState state) {
-    return SplitSelectorWidget(
-      splitType: state.splitType,
-      amount: state.amount,
-      onSplitTypeChanged: (type) {
-        // When leaving Equal, reset per-member values to 0 so the
-        // equal-split amount (e.g. 1200) doesn't get reinterpreted as a
-        // percentage / share / exact amount.
-        Map<String, double> nextSplits = state.splits;
-        if (type != state.splitType && type != SplitType.equal) {
-          nextSplits = {for (final id in state.splits.keys) id: 0};
-        }
-        ref.read(addExpenseProvider.notifier).state =
-            state.copyWith(splitType: type, splits: nextSplits);
-
-        // Picking a non-equal type means the user needs the breakdown next —
-        // scroll to it so the keyboard / inputs are immediately reachable.
-        if (type == SplitType.exact ||
-            type == SplitType.percentage ||
-            type == SplitType.shares) {
-          _scrollToBreakdown();
-        }
-      },
-    );
-  }
-
-  Widget _buildSplitBreakdownSection(bool isDark, AddExpenseState state, List<UserModel> members) {
-    // Hide if no group selected
-    if (state.groupId == null || members.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    // For equal split, show member selection list (redesigned to match
-    // the 21st.dev aesthetic used elsewhere in the app).
-    if (state.splitType == SplitType.equal) {
-      final includedCount = state.includedMemberIds.length;
-      final totalCount = members.length;
-      final searchQuery = _equalSplitSearchController.text.toLowerCase();
-      final filteredMembers = searchQuery.isEmpty
-          ? members
-          : members
-              .where((m) => m.name.toLowerCase().contains(searchQuery))
-              .toList();
-      final perMember = (includedCount > 0 && state.amount > 0)
-          ? state.amount / includedCount
-          : 0.0;
-      final showSearch = members.length > 4;
-
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Section header
-          Row(
+        body: SafeArea(
+          top: false,
+          bottom: false,
+          child: Column(
             children: [
               Expanded(
-                child: Text(
-                  'BREAKDOWN',
-                  style: AppTextStyles.caption(isDark).copyWith(
-                    color: AppColors.textSecondary(isDark),
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.3,
-                    fontSize: 11,
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.fromLTRB(
+                    horizontalPad,
+                    16,
+                    horizontalPad,
+                    20,
+                  ),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: maxFormWidth),
+                      child: _buildFormBody(
+                        isDark,
+                        expenseState,
+                        groupMembers,
+                      ),
+                    ),
                   ),
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: AppColors.success.withValues(alpha: isDark ? 0.18 : 0.12),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: AppColors.success.withValues(alpha: 0.4),
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 6,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        color: AppColors.success,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Balanced',
-                      style: AppTextStyles.caption(isDark).copyWith(
-                        color: AppColors.success,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ],
-                ),
+              _StickyCreateBar(
+                isDark: isDark,
+                enabled: expenseState.isValid && !expenseState.isLoading,
+                loading: expenseState.isLoading,
+                horizontalPad: horizontalPad,
+                maxFormWidth: maxFormWidth,
+                label: widget.isEditing ? 'Save changes' : 'Save expense',
+                disabledHint: _missingFieldHint(expenseState),
+                onTap: _handleSave,
               ),
             ],
           ),
-          const SizedBox(height: 10),
-          // Card
-          Container(
-            decoration: BoxDecoration(
-              color: AppColors.cardBg(isDark),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.divider(isDark)),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFormBody(
+    bool isDark,
+    AddExpenseState state,
+    List<UserModel> groupMembers,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildHero(isDark, state),
+        const SizedBox(height: 28),
+        _buildQuickRows(isDark, state, groupMembers),
+        const SizedBox(height: 20),
+        _buildMoreOptions(isDark, state),
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+
+  Widget _buildHero(bool isDark, AddExpenseState state) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 18),
+      decoration: BoxDecoration(
+        color: AppColors.cardBg(isDark),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.divider(isDark)),
+      ),
+      child: Column(
+        children: [
+          Semantics(
+            label:
+                'Enter amount in ${state.currency}, currently ${CurrencyFormatter.format(state.amount)}',
+            child: AmountInputWidget(
+              amount: state.amount,
+              currency: state.currency,
+              autoFocus: !widget.isEditing,
+              onChanged: (amount) {
+                ref.read(addExpenseProvider.notifier).state =
+                    state.copyWith(amount: amount);
+              },
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          '$includedCount of $totalCount included',
-                          style: AppTextStyles.body2(isDark).copyWith(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: () {
-                          final allIncluded =
-                              state.includedMemberIds.length == members.length;
-                          ref.read(addExpenseProvider.notifier).state =
-                              state.copyWith(
-                            includedMemberIds: allIncluded
-                                ? <String>{}
-                                : Set<String>.from(members.map((m) => m.id)),
-                          );
-                        },
-                        style: TextButton.styleFrom(
-                          foregroundColor: AppColors.tealDark,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 4,
-                          ),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        child: Text(
-                          state.includedMemberIds.length == members.length
-                              ? 'Clear'
-                              : 'Select all',
-                          style: AppTextStyles.caption(isDark).copyWith(
-                            color: AppColors.tealDark,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+          ),
+          const SizedBox(height: 14),
+          Divider(
+            color: AppColors.divider(isDark).withValues(alpha: 0.5),
+            height: 1,
+            indent: 16,
+            endIndent: 16,
+          ),
+          const SizedBox(height: 6),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: TextField(
+              controller: _titleController,
+              textAlign: TextAlign.center,
+              style: AppTextStyles.body1(isDark).copyWith(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+              decoration: InputDecoration(
+                hintText: "What's this for?",
+                hintStyle: AppTextStyles.body1(isDark).copyWith(
+                  color: AppColors.textSecondary(isDark),
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
                 ),
-                Container(
-                  height: 1,
-                  color: AppColors.divider(isDark).withValues(alpha: 0.6),
-                ),
-                if (showSearch) ...[
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
-                    child: Container(
-                      height: 38,
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      decoration: BoxDecoration(
-                        color: AppColors.surface(isDark),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: AppColors.divider(isDark)),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.search_rounded,
-                            size: 16,
-                            color: AppColors.textSecondary(isDark),
-                          ),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: TextField(
-                              controller: _equalSplitSearchController,
-                              onChanged: (_) => setState(() {}),
-                              style: AppTextStyles.body2(isDark)
-                                  .copyWith(fontSize: 13),
-                              decoration: InputDecoration(
-                                isCollapsed: true,
-                                border: InputBorder.none,
-                                contentPadding:
-                                    const EdgeInsets.symmetric(vertical: 10),
-                                hintText: 'Search members',
-                                hintStyle: AppTextStyles.body2(isDark).copyWith(
-                                  color: AppColors.textSecondary(isDark),
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ),
-                          ),
-                          if (_equalSplitSearchController.text.isNotEmpty)
-                            GestureDetector(
-                              onTap: () {
-                                _equalSplitSearchController.clear();
-                                setState(() {});
-                              },
-                              child: Icon(
-                                Icons.close_rounded,
-                                size: 16,
-                                color: AppColors.textSecondary(isDark),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  Container(
-                    height: 1,
-                    color: AppColors.divider(isDark).withValues(alpha: 0.6),
-                  ),
-                ],
-                for (int i = 0; i < filteredMembers.length; i++) ...[
-                  _buildMemberEqualSplitRow(
-                    isDark,
-                    state,
-                    filteredMembers[i],
-                    perMember,
-                  ),
-                  if (i < filteredMembers.length - 1)
-                    Container(
-                      height: 1,
-                      color: AppColors.divider(isDark).withValues(alpha: 0.6),
-                    ),
-                ],
-                if (filteredMembers.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Text(
-                      'No members match "$searchQuery"',
-                      style: AppTextStyles.body2(isDark).copyWith(
-                        color: AppColors.textSecondary(isDark),
-                      ),
-                    ),
-                  ),
-                Container(
-                  height: 1,
-                  color: AppColors.divider(isDark).withValues(alpha: 0.6),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Each pays',
-                        style: AppTextStyles.body2(isDark).copyWith(
-                          color: AppColors.textSecondary(isDark),
-                          fontSize: 13,
-                        ),
-                      ),
-                      Text(
-                        '₹${perMember.toStringAsFixed(2)}',
-                        style: AppTextStyles.body2(isDark).copyWith(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13.5,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(vertical: 8),
+              ),
+              onChanged: (value) {
+                _titleDebounce?.cancel();
+                _titleDebounce = Timer(const Duration(milliseconds: 200), () {
+                  if (!mounted) return;
+                  ref.read(addExpenseProvider.notifier).state =
+                      ref.read(addExpenseProvider).copyWith(title: value);
+                });
+              },
             ),
           ),
         ],
-      );
-    }
-
-    // For other split types, show full breakdown widget
-    return SplitBreakdownWidget(
-      splitType: state.splitType,
-      totalAmount: state.amount,
-      members: members,
-      splits: state.splits,
-      includedMemberIds: state.includedMemberIds,
-      onSplitsChanged: (splits) {
-        ref.read(addExpenseProvider.notifier).state =
-            state.copyWith(splits: splits);
-      },
-      onIncludedMembersChanged: (includedIds) {
-        ref.read(addExpenseProvider.notifier).state =
-            state.copyWith(includedMemberIds: includedIds);
-      },
-    );
-  }
-
-  Widget _buildMemberEqualSplitRow(
-    bool isDark,
-    AddExpenseState state,
-    UserModel member,
-    double perMember,
-  ) {
-    final isIncluded = state.includedMemberIds.contains(member.id);
-    final dim = !isIncluded;
-    final initials = _initialsFor(member.name);
-
-    void toggle() {
-      final newSet = Set<String>.from(state.includedMemberIds);
-      if (newSet.contains(member.id)) {
-        newSet.remove(member.id);
-      } else {
-        newSet.add(member.id);
-      }
-      ref.read(addExpenseProvider.notifier).state =
-          state.copyWith(includedMemberIds: newSet);
-    }
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: toggle,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              // Toggle box
-              Container(
-                width: 22,
-                height: 22,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: isIncluded ? AppColors.tealDark : Colors.transparent,
-                  borderRadius: BorderRadius.circular(7),
-                  border: Border.all(
-                    color: isIncluded
-                        ? AppColors.tealDark
-                        : AppColors.divider(isDark),
-                    width: 1.5,
-                  ),
-                ),
-                child: isIncluded
-                    ? const Icon(Icons.check_rounded,
-                        size: 14, color: Colors.white)
-                    : null,
-              ),
-              const SizedBox(width: 10),
-              // Avatar tile
-              Opacity(
-                opacity: dim ? 0.5 : 1.0,
-                child: AvatarWidget(
-                  name: member.name,
-                  imageUrl: member.avatarUrl,
-                  radius: 16,
-                ),
-              ),
-              const SizedBox(width: 10),
-              // Name
-              Expanded(
-                child: Text(
-                  member.name,
-                  style: AppTextStyles.body1(isDark).copyWith(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                    color: dim
-                        ? AppColors.textSecondary(isDark)
-                        : AppColors.textPrimary(isDark),
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              const SizedBox(width: 8),
-              // Per-person amount (only when included)
-              if (isIncluded)
-                Text(
-                  '₹${perMember.toStringAsFixed(2)}',
-                  style: AppTextStyles.body2(isDark).copyWith(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                    color: AppColors.textPrimary(isDark),
-                  ),
-                ),
-            ],
-          ),
-        ),
       ),
     );
   }
 
-  String _initialsFor(String name) {
-    final parts = name.trim().split(RegExp(r'\s+'));
-    if (parts.isEmpty || parts.first.isEmpty) return '?';
-    if (parts.length == 1) return parts.first[0].toUpperCase();
-    return (parts.first[0] + parts.last[0]).toUpperCase();
-  }
-
-  Widget _buildMemberSection(bool isDark, AddExpenseState state, List<UserModel> groupMembers) {
+  Widget _buildQuickRows(
+    bool isDark,
+    AddExpenseState state,
+    List<UserModel> groupMembers,
+  ) {
     final me = ref.watch(authProvider).user;
-    // Resolve display payer: explicit pick > the current user (default).
     final UserModel? payer = state.paidBy ??
         (me == null
             ? null
             : groupMembers.firstWhereOrNull((m) => m.id == me.id));
     final isMe = me != null && payer != null && payer.id == me.id;
-    final displayName = payer == null
-        ? 'Me'
-        : (isMe ? '${payer.name} (Me)' : payer.name);
-    final initial = (payer?.name.isNotEmpty ?? false)
-        ? payer!.name[0].toUpperCase()
-        : 'M';
+    final paidByText =
+        payer == null ? 'You' : (isMe ? 'You' : payer.name);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _SectionTitle(label: 'PAID BY', isDark: isDark),
-        const SizedBox(height: 10),
-        Semantics(
-          button: true,
-          label: 'Select member who paid',
-          onTap: () => _showMemberPicker(context, isDark, state, groupMembers),
-          child: GestureDetector(
-            onTap: () => _showMemberPicker(context, isDark, state, groupMembers),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              decoration: BoxDecoration(
-                border: Border.all(color: AppColors.inputBorder(isDark)),
-                borderRadius: BorderRadius.circular(8),
-                color: AppColors.inputFill(isDark),
-              ),
-              child: Row(
-                children: [
-                  AvatarWidget(
-                    name: payer?.name ?? 'Me',
-                    imageUrl: isMe ? me?.avatarUrl : payer?.avatarUrl,
-                    radius: 16,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      displayName,
-                      style: AppTextStyles.body2(isDark),
-                    ),
-                  ),
-                  Icon(Icons.expand_more_rounded, color: AppColors.brand),
-                ],
-              ),
-            ),
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.cardBg(isDark),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.divider(isDark)),
+      ),
+      child: Column(
+        children: [
+          _QuickRow(
+            icon: Icons.person_outline_rounded,
+            iconColor: AppColors.tealDark,
+            label: 'Paid by',
+            value: paidByText,
+            isDark: isDark,
+            onTap: () =>
+                _showPaidBySheet(isDark, state, groupMembers),
           ),
-        ),
-      ],
+          _RowDivider(isDark: isDark),
+          _QuickRow(
+            icon: Icons.pie_chart_outline_rounded,
+            iconColor: AppColors.tealDark,
+            label: 'Split',
+            value: _splitSummary(state, groupMembers),
+            isDark: isDark,
+            onTap: () =>
+                _showSplitSheet(isDark, state, groupMembers),
+          ),
+          _RowDivider(isDark: isDark),
+          _QuickRow(
+            icon: Icons.event_outlined,
+            iconColor: AppColors.tealDark,
+            label: 'When',
+            value: _formatDate(state.date),
+            isDark: isDark,
+            onTap: () => _pickDate(state),
+          ),
+          _RowDivider(isDark: isDark),
+          _QuickRow(
+            icon: state.category?.icon ?? Icons.local_offer_outlined,
+            iconColor:
+                _hexToColor(state.category?.colorHex) ?? AppColors.tealDark,
+            label: 'Category',
+            value: state.category?.name ?? 'Choose',
+            isDark: isDark,
+            onTap: () => _showCategorySheet(isDark, state),
+          ),
+        ],
+      ),
     );
   }
 
-  void _showMemberPicker(BuildContext context, bool isDark, AddExpenseState state, List<UserModel> groupMembers) {
+  Widget _buildMoreOptions(bool isDark, AddExpenseState state) {
+    final hasReceipt = state.invoiceImagePath != null ||
+        (state.receiptBase64 != null && state.receiptBase64!.isNotEmpty);
+    final notes = state.notes ?? '';
+    final hasNotes = notes.trim().isNotEmpty;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.cardBg(isDark),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.divider(isDark)),
+      ),
+      child: Column(
+        children: [
+          _QuickRow(
+            icon: Icons.receipt_long_outlined,
+            iconColor: AppColors.tealDark,
+            label: 'Receipt',
+            value: hasReceipt ? 'Added' : 'Optional',
+            valueIsMuted: !hasReceipt,
+            isDark: isDark,
+            onTap: () => _showReceiptSheet(isDark, state),
+          ),
+          _RowDivider(isDark: isDark),
+          _QuickRow(
+            icon: Icons.notes_rounded,
+            iconColor: AppColors.tealDark,
+            label: 'Notes',
+            value: hasNotes
+                ? (notes.length > 24
+                    ? '${notes.substring(0, 22)}…'
+                    : notes)
+                : 'Optional',
+            valueIsMuted: !hasNotes,
+            isDark: isDark,
+            onTap: () => _showNotesSheet(isDark),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // -- Helpers --
+
+  String _splitSummary(AddExpenseState state, List<UserModel> members) {
+    final count = state.includedMemberIds.isEmpty
+        ? members.length
+        : state.includedMemberIds.length;
+    if (count == 0) return 'Equally';
+    switch (state.splitType) {
+      case SplitType.equal:
+        return 'Equally · $count ${count == 1 ? 'person' : 'people'}';
+      case SplitType.exact:
+        return 'By amounts · $count';
+      case SplitType.percentage:
+        return 'By percent · $count';
+      case SplitType.shares:
+        return 'By shares · $count';
+    }
+  }
+
+  String _formatDate(DateTime d) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final picked = DateTime(d.year, d.month, d.day);
+    final diff = today.difference(picked).inDays;
+    if (diff == 0) return 'Today';
+    if (diff == 1) return 'Yesterday';
+    if (diff > 1 && diff < 7) return '$diff days ago';
+    return '${picked.day}/${picked.month}/${picked.year}';
+  }
+
+  Color? _hexToColor(String? hex) {
+    if (hex == null || hex.isEmpty) return null;
+    var s = hex.replaceFirst('#', '');
+    if (s.length == 6) s = 'FF$s';
+    final value = int.tryParse(s, radix: 16);
+    return value == null ? null : Color(value);
+  }
+
+  /// Returns a short, actionable hint describing what's missing to enable
+  /// Save. `null` when the form is ready to submit. Used as the disabled
+  /// button label so users immediately see *why* they can't save yet.
+  String? _missingFieldHint(AddExpenseState state) {
+    if (state.isValid) return null;
+    final hasTitle = (state.title ?? '').trim().isNotEmpty;
+    final hasAmount = state.amount > 0;
+    if (!hasTitle && !hasAmount) return 'Enter amount and title';
+    if (!hasAmount) return 'Enter amount';
+    if (!hasTitle) return 'Enter title';
+    if (state.groupId == null) return 'Pick a group';
+    return 'Complete required fields';
+  }
+
+  Future<void> _pickDate(AddExpenseState state) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: state.date,
+      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+      lastDate: DateTime.now(),
+    );
+    if (picked != null) {
+      HapticService.instance.selection();
+      ref.read(addExpenseProvider.notifier).state =
+          state.copyWith(date: picked);
+    }
+  }
+
+  // -- Bottom sheets --
+
+  void _showPaidBySheet(
+    bool isDark,
+    AddExpenseState state,
+    List<UserModel> groupMembers,
+  ) {
+    if (groupMembers.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No group selected.')),
+      );
+      return;
+    }
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.background(isDark),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                'Who paid?',
-                style: AppTextStyles.headline3(isDark),
-              ),
-            ),
-            const Divider(),
-            Expanded(
-              child: ListView(
-                children: [
-                  // One row per group member. The current user gets tagged
-                  // with "(Me)" instead of being a separate redundant entry.
-                  ...() {
-                    final me = ref.read(authProvider).user;
-                    return groupMembers.map((member) {
-                      final isMe = me != null && member.id == me.id;
-                      final label = isMe ? '${member.name} (Me)' : member.name;
-                      final imageUrl = isMe ? me?.avatarUrl : member.avatarUrl;
-                      // Selected when explicit pick matches, OR when nothing
-                      // is picked yet and this is the current user (default).
-                      final selected = state.paidBy == null
-                          ? isMe
-                          : state.paidBy!.id == member.id;
-                      return _buildMemberListItem(
-                        isDark,
-                        label,
-                        imageUrl: imageUrl,
-                        isSelected: selected,
-                        onTap: () {
-                          ref.read(addExpenseProvider.notifier).state =
-                              state.copyWith(paidBy: member);
-                          Navigator.pop(context);
-                        },
-                      );
-                    });
-                  }(),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMemberListItem(
-    bool isDark,
-    String name,
-    {String? imageUrl, required bool isSelected, required VoidCallback onTap}
-  ) {
-    return Semantics(
-      button: true,
-      label: '$name${isSelected ? ' - selected' : ''}',
-      onTap: onTap,
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          color: isSelected ? AppColors.brand.withValues(alpha: 0.05) : Colors.transparent,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Row(
+      builder: (ctx) {
+        final me = ref.read(authProvider).user;
+        return SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              AvatarWidget(
-                name: name,
-                imageUrl: imageUrl,
-                radius: 20,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  name,
-                  style: AppTextStyles.body2(isDark),
+              _SheetHandle(isDark: isDark),
+              _SheetTitle(text: 'Who paid?', isDark: isDark),
+              Flexible(
+                child: ListView.builder(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  shrinkWrap: true,
+                  itemCount: groupMembers.length,
+                  itemBuilder: (_, i) {
+                    final m = groupMembers[i];
+                    final isMe = me != null && m.id == me.id;
+                    final label = isMe ? '${m.name} (Me)' : m.name;
+                    final selected = state.paidBy == null
+                        ? isMe
+                        : state.paidBy!.id == m.id;
+                    return InkWell(
+                      onTap: () {
+                        HapticService.instance.tap();
+                        ref.read(addExpenseProvider.notifier).state =
+                            state.copyWith(paidBy: m);
+                        Navigator.pop(ctx);
+                      },
+                      child: Container(
+                        color: selected
+                            ? AppColors.tealDark.withValues(alpha: 0.06)
+                            : Colors.transparent,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 12,
+                        ),
+                        child: Row(
+                          children: [
+                            AvatarWidget(
+                              name: m.name,
+                              imageUrl: isMe ? me.avatarUrl : m.avatarUrl,
+                              radius: 18,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                label,
+                                style: AppTextStyles.body1(isDark).copyWith(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            if (selected)
+                              Icon(
+                                Icons.check_circle_rounded,
+                                color: AppColors.tealDark,
+                                size: 22,
+                              ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ),
-              if (isSelected)
-                Icon(Icons.check_rounded, color: AppColors.brand),
             ],
           ),
-        ),
+        );
+      },
+    );
+  }
+
+  void _showSplitSheet(
+    bool isDark,
+    AddExpenseState state,
+    List<UserModel> groupMembers,
+  ) {
+    if (groupMembers.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No group selected.')),
+      );
+      return;
+    }
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.background(isDark),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-    );
-  }
-
-  Widget _buildNotesSection(bool isDark) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _SectionTitle(label: 'NOTES (OPTIONAL)', isDark: isDark),
-        const SizedBox(height: 10),
-        TextField(
-          controller: _notesController,
-          minLines: 2,
-          maxLines: 4,
-          decoration: InputDecoration(
-            hintText: 'Add any details...',
-            filled: true,
-            fillColor: AppColors.inputFill(isDark),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: AppColors.inputBorder(isDark)),
-            ),
-          ),
-          onChanged: (value) {
-            ref.read(addExpenseProvider.notifier).state =
-                ref.read(addExpenseProvider).copyWith(notes: value);
-          },
-        ),
-      ],
-    );
-  }
-
-  // Save button for mobile/tablet
-  Widget _buildSaveButton(bool isDark, AddExpenseState state) {
-    final enabled = state.isValid;
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-          left: 16,
-          right: 16,
-          top: 12,
-        ),
-        child: Semantics(
-          button: true,
-          label: 'Save expense button',
-          enabled: enabled,
-          onTap: enabled ? _handleSave : null,
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: enabled ? _handleSave : null,
-              borderRadius: BorderRadius.circular(14),
-              child: Ink(
-                height: 54,
-                decoration: BoxDecoration(
-                  gradient: enabled
-                      ? const LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [AppColors.tealLight, AppColors.tealDark],
-                        )
-                      : null,
-                  color: enabled ? null : AppColors.cardBg(isDark),
-                  border: enabled
-                      ? null
-                      : Border.all(color: AppColors.divider(isDark)),
-                  borderRadius: BorderRadius.circular(14),
-                  boxShadow: enabled
-                      ? [
-                          BoxShadow(
-                            color: AppColors.tealDark.withValues(alpha: 0.35),
-                            blurRadius: 14,
-                            offset: const Offset(0, 6),
-                          ),
-                        ]
-                      : null,
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.check_rounded,
-                      size: 18,
-                      color: enabled
-                          ? Colors.white
-                          : AppColors.textSecondary(isDark),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Save expense',
-                      style: AppTextStyles.body1(isDark).copyWith(
-                        color: enabled
-                            ? Colors.white
-                            : AppColors.textSecondary(isDark),
-                        fontWeight: FontWeight.w700,
-                        fontSize: 15,
-                        letterSpacing: -0.1,
+      builder: (ctx) {
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.85,
+          minChildSize: 0.5,
+          maxChildSize: 0.95,
+          builder: (_, scrollController) {
+            return SafeArea(
+              top: false,
+              child: Column(
+                children: [
+                  _SheetHandle(isDark: isDark),
+                  _SheetTitle(
+                    text: 'Split',
+                    isDark: isDark,
+                    trailing: TextButton(
+                      onPressed: () {
+                        HapticService.instance.success();
+                        Navigator.pop(ctx);
+                      },
+                      child: Text(
+                        'Done',
+                        style: AppTextStyles.body1(isDark).copyWith(
+                          color: AppColors.tealDark,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                        ),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      controller: scrollController,
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                      child: Consumer(
+                        builder: (_, ref, __) {
+                          final s = ref.watch(addExpenseProvider);
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              SplitSelectorWidget(
+                                splitType: s.splitType,
+                                amount: s.amount,
+                                onSplitTypeChanged: (type) {
+                                  ref
+                                      .read(addExpenseProvider.notifier)
+                                      .state = s.copyWith(splitType: type);
+                                },
+                              ),
+                              const SizedBox(height: 12),
+                              SplitBreakdownWidget(
+                                splitType: s.splitType,
+                                totalAmount: s.amount,
+                                members: groupMembers,
+                                splits: s.splits,
+                                includedMemberIds: s.includedMemberIds,
+                                currentUserId:
+                                    ref.watch(myIdProvider),
+                                onSplitsChanged: (splits) {
+                                  ref
+                                      .read(addExpenseProvider.notifier)
+                                      .state = s.copyWith(splits: splits);
+                                },
+                                onIncludedMembersChanged: (included) {
+                                  ref
+                                      .read(addExpenseProvider.notifier)
+                                      .state = s.copyWith(
+                                          includedMemberIds: included);
+                                },
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ),
-        ),
-      ),
+            );
+          },
+        );
+      },
     );
   }
 
-  // Save button for desktop
-  Widget _buildSaveButtonLarge(bool isDark, AddExpenseState state) {
-    return Semantics(
-      button: true,
-      label: 'Save expense button',
-      enabled: state.isValid,
-      onTap: state.isValid ? () => _handleSave() : null,
-      child: SizedBox(
-        width: double.infinity,
-        height: 48,
-        child: ElevatedButton(
-          onPressed: state.isValid ? () => _handleSave() : null,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.brand,
-            disabledBackgroundColor: AppColors.textSecondary(isDark),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-          child: Text(
-            'Save Expense',
-            style: AppTextStyles.body2(isDark).copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
+  void _showCategorySheet(bool isDark, AddExpenseState state) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.background(isDark),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
+      builder: (ctx) {
+        final categories = CategoryModel.all;
+        return SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _SheetHandle(isDark: isDark),
+              _SheetTitle(text: 'Pick a category', isDark: isDark),
+              Padding(
+                padding:
+                    const EdgeInsets.fromLTRB(16, 6, 16, 18),
+                child: GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: categories.length,
+                  gridDelegate:
+                      const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 4,
+                    crossAxisSpacing: 10,
+                    mainAxisSpacing: 10,
+                    childAspectRatio: 0.95,
+                  ),
+                  itemBuilder: (_, i) {
+                    final c = categories[i];
+                    final selected = state.category?.id == c.id;
+                    final color = _hexToColor(c.colorHex) ?? AppColors.tealDark;
+                    return InkWell(
+                      onTap: () {
+                        HapticService.instance.selection();
+                        ref.read(addExpenseProvider.notifier).state =
+                            state.copyWith(category: c);
+                        Navigator.pop(ctx);
+                      },
+                      borderRadius: BorderRadius.circular(14),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 140),
+                        decoration: BoxDecoration(
+                          color: selected
+                              ? color.withValues(alpha: 0.18)
+                              : AppColors.cardBg(isDark),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: selected
+                                ? color
+                                : AppColors.divider(isDark),
+                            width: selected ? 1.5 : 1,
+                          ),
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              width: 38,
+                              height: 38,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: color.withValues(alpha: 0.16),
+                                borderRadius: BorderRadius.circular(11),
+                              ),
+                              child: Icon(c.icon, size: 20, color: color),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              c.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTextStyles.caption(isDark).copyWith(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: selected
+                                    ? color
+                                    : AppColors.textPrimary(isDark),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
+
+  void _showReceiptSheet(bool isDark, AddExpenseState state) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.background(isDark),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _SheetHandle(isDark: isDark),
+              _SheetTitle(text: 'Receipt', isDark: isDark),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
+                child: InvoiceUploadWidget(
+                  onImageSelected: (imagePath, file) async {
+                    try {
+                      final bytes = await File(imagePath).readAsBytes();
+                      final encoded = base64Encode(bytes);
+                      ref.read(addExpenseProvider.notifier).state =
+                          ref.read(addExpenseProvider).copyWith(
+                                invoiceImagePath: imagePath,
+                                receiptBase64: encoded,
+                              );
+                    } catch (_) {
+                      ref.read(addExpenseProvider.notifier).state = ref
+                          .read(addExpenseProvider)
+                          .copyWith(invoiceImagePath: imagePath);
+                    }
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showNotesSheet(bool isDark) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.background(isDark),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(ctx).viewInsets.bottom,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _SheetHandle(isDark: isDark),
+                _SheetTitle(
+                  text: 'Notes',
+                  isDark: isDark,
+                  trailing: TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: Text(
+                      'Done',
+                      style: AppTextStyles.body1(isDark).copyWith(
+                        color: AppColors.tealDark,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                  child: TextField(
+                    controller: _notesController,
+                    autofocus: true,
+                    minLines: 3,
+                    maxLines: 6,
+                    decoration: InputDecoration(
+                      hintText: 'Add any details…',
+                      filled: true,
+                      fillColor: AppColors.cardBg(isDark),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide:
+                            BorderSide(color: AppColors.divider(isDark)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide:
+                            BorderSide(color: AppColors.divider(isDark)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: AppColors.tealDark.withValues(alpha: 0.45),
+                        ),
+                      ),
+                    ),
+                    onChanged: (value) {
+                      ref.read(addExpenseProvider.notifier).state =
+                          ref.read(addExpenseProvider).copyWith(notes: value);
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // -- Save --
 
   Future<void> _handleSave() async {
     final state = ref.read(addExpenseProvider);
-    // Defensive: the Save button is already gated by state.isValid, but a
-    // bypass (hot reload, swipe gesture) could still hit this — surface a
-    // clear message rather than letting the model send an empty title.
     if (state.title == null || state.title!.trim().isEmpty) {
+      HapticService.instance.error();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Add a title before saving.')),
       );
       return;
     }
     if (state.groupId == null) {
+      HapticService.instance.error();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Pick a group before saving the expense.')),
       );
@@ -1366,6 +1006,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     final groupId = state.groupId!;
     final currentUser = ref.read(authProvider).user;
     if (currentUser == null) {
+      HapticService.instance.error();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('You must be signed in to save an expense.')),
       );
@@ -1410,8 +1051,6 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       }
     }
 
-    // Backend's split_type CHECK accepts ('equal', 'unequal', 'percentage', 'shares').
-    // Map 'exact' to 'unequal' since we send concrete amounts.
     String backendSplitType(SplitType t) {
       switch (t) {
         case SplitType.equal:
@@ -1425,9 +1064,6 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       }
     }
 
-    // Pull the raw input (percentage / shares / exact-amount) the user typed
-    // for this member, so we can persist it alongside the resolved amount.
-    // This lets the detail screen later show the working ("30% × ₹X = ₹Y").
     double? percentageFor(String id) =>
         state.splitType == SplitType.percentage ? (state.splits[id] ?? 0) : null;
     int? sharesFor(String id) => state.splitType == SplitType.shares
@@ -1457,8 +1093,6 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
         state.copyWith(isLoading: true, error: null);
 
     try {
-      // Title is required and validated by state.isValid before reaching
-      // here; trim defensively but never substitute "Untitled".
       final repo = ref.read(expensesRepositoryProvider);
       if (widget.isEditing) {
         await repo.update(
@@ -1492,6 +1126,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       }
     } catch (e) {
       if (!mounted) return;
+      HapticService.instance.error();
       ref.read(addExpenseProvider.notifier).state =
           state.copyWith(isLoading: false, error: e.toString());
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1503,11 +1138,11 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     ref.invalidate(dashboardProvider);
     ref.invalidate(groupDetailProvider(groupId));
     if (widget.isEditing) {
-      // Bust the detail-screen cache so the popped-to screen reflects edits.
       ref.invalidate(expenseDetailProvider(widget.expenseId!));
     }
 
     if (!mounted) return;
+    HapticService.instance.success();
     ref.read(addExpenseProvider.notifier).state =
         AddExpenseState(date: DateTime.now());
     ScaffoldMessenger.of(context).showSnackBar(
@@ -1530,32 +1165,289 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   }
 }
 
-/// Uppercase overline-style label used as a section header in the form.
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle({required this.label, required this.isDark});
+/// Single-line quick-row used in the form body for Paid by / Split / When /
+/// Category / Receipt / Notes. Icon + label + value + chevron, fully tappable.
+class _QuickRow extends StatelessWidget {
+  const _QuickRow({
+    required this.icon,
+    required this.iconColor,
+    required this.label,
+    required this.value,
+    required this.isDark,
+    required this.onTap,
+    this.valueIsMuted = false,
+  });
 
+  final IconData icon;
+  final Color iconColor;
   final String label;
+  final String value;
   final bool isDark;
+  final bool valueIsMuted;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 2, bottom: 2),
-      child: Text(
-        label,
-        style: AppTextStyles.caption(isDark).copyWith(
-          color: AppColors.textSecondary(isDark),
-          fontWeight: FontWeight.w700,
-          letterSpacing: 1.3,
-          fontSize: 11,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          HapticService.instance.tap();
+          onTap();
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          child: Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: iconColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, size: 17, color: iconColor),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                label,
+                style: AppTextStyles.body2(isDark).copyWith(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                  color: AppColors.textSecondary(isDark),
+                ),
+              ),
+              const Spacer(),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 180),
+                child: Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.end,
+                  style: AppTextStyles.body2(isDark).copyWith(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13.5,
+                    color: valueIsMuted
+                        ? AppColors.textSecondary(isDark)
+                        : AppColors.textPrimary(isDark),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 18,
+                color: AppColors.textSecondary(isDark),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-/// Custom top bar — back arrow + title, no Material elevation, sits flush
-/// against the background for a clean modern feel.
+class _RowDivider extends StatelessWidget {
+  const _RowDivider({required this.isDark});
+  final bool isDark;
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      child: Divider(
+        height: 1,
+        thickness: 1,
+        color: AppColors.divider(isDark).withValues(alpha: 0.6),
+      ),
+    );
+  }
+}
+
+class _SheetHandle extends StatelessWidget {
+  const _SheetHandle({required this.isDark});
+  final bool isDark;
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 10, bottom: 6),
+      child: Container(
+        width: 36,
+        height: 4,
+        decoration: BoxDecoration(
+          color: AppColors.divider(isDark),
+          borderRadius: BorderRadius.circular(2),
+        ),
+      ),
+    );
+  }
+}
+
+class _SheetTitle extends StatelessWidget {
+  const _SheetTitle({
+    required this.text,
+    required this.isDark,
+    this.trailing,
+  });
+  final String text;
+  final bool isDark;
+  final Widget? trailing;
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 12, 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              text,
+              style: AppTextStyles.body1(isDark).copyWith(
+                fontWeight: FontWeight.w700,
+                fontSize: 16,
+                letterSpacing: -0.2,
+              ),
+            ),
+          ),
+          if (trailing != null) trailing!,
+        ],
+      ),
+    );
+  }
+}
+
+class _StickyCreateBar extends StatelessWidget {
+  const _StickyCreateBar({
+    required this.isDark,
+    required this.enabled,
+    required this.loading,
+    required this.horizontalPad,
+    required this.maxFormWidth,
+    required this.label,
+    required this.onTap,
+    this.disabledHint,
+  });
+
+  final bool isDark;
+  final bool enabled;
+  final bool loading;
+  final double horizontalPad;
+  final double maxFormWidth;
+  final String label;
+  final String? disabledHint;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.background(isDark),
+        border: Border(
+          top: BorderSide(
+            color: AppColors.divider(isDark).withValues(alpha: 0.7),
+          ),
+        ),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            horizontalPad,
+            10,
+            horizontalPad,
+            10,
+          ),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: maxFormWidth),
+              child: Semantics(
+                button: true,
+                enabled: enabled,
+                label: label,
+                child: Opacity(
+                  opacity: (enabled || loading) ? 1 : 0.6,
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: enabled ? onTap : null,
+                      borderRadius: BorderRadius.circular(14),
+                      child: Ink(
+                        height: 52,
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              AppColors.tealLight,
+                              AppColors.tealDark,
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: (enabled || loading)
+                              ? [
+                                  BoxShadow(
+                                    color: AppColors.tealDark
+                                        .withValues(alpha: 0.30),
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 6),
+                                  ),
+                                ]
+                              : null,
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            if (loading)
+                              const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.white),
+                                ),
+                              )
+                            else
+                              Icon(
+                                enabled
+                                    ? Icons.check_rounded
+                                    : Icons.info_outline_rounded,
+                                size: 18,
+                                color: Colors.white,
+                              ),
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Text(
+                                loading
+                                    ? 'Saving…'
+                                    : (enabled
+                                        ? label
+                                        : (disabledHint ?? label)),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTextStyles.body1(isDark).copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 15,
+                                  letterSpacing: -0.1,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _TopBar extends StatelessWidget implements PreferredSizeWidget {
   const _TopBar({
     required this.title,
@@ -1602,7 +1494,7 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
                         border: Border.all(color: AppColors.divider(isDark)),
                       ),
                       child: Icon(
-                        Icons.arrow_back_rounded,
+                        Icons.close_rounded,
                         size: 18,
                         color: AppColors.textPrimary(isDark),
                       ),

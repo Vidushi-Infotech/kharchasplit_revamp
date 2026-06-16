@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import pinoHttp from 'pino-http';
+import { monitorEventLoopDelay } from 'perf_hooks';
 
 import { testConnection, pool, getPoolMetrics } from './config/database.js';
 import { initializeDatabase } from './config/initDatabase.js';
@@ -24,6 +25,7 @@ import syncRoutes from './routes/syncRoutes.js';
 import activityRoutes from './routes/activityRoutes.js';
 import inviteRoutes from './routes/inviteRoutes.js';
 import policiesRoutes from './routes/policiesRoutes.js';
+import appVersionRoutes from './routes/appVersionRoutes.js';
 
 dotenv.config();
 
@@ -90,11 +92,15 @@ const limiter = rateLimit({
 });
 app.use('/api', limiter);
 
-// Body parsing — 10MB lets receipt photos (base64-encoded) come through
-// even when client-side compression underperforms on huge phone cameras.
-// Trade-off: JSON.parse of 10MB blocks the event loop for ~200ms.
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+// Body parsing — keep the global limit small (256KB covers any sane JSON
+// or form payload). The handful of endpoints that genuinely need ~10MB
+// for inline base64 receipts / cover / profile photos opt in via their
+// own route-level `express.json({ limit: '10mb' })` middleware (see
+// expenseRoutes, groupRoutes, userRoutes). Trade-off avoided: a global
+// 10MB limit meant any endpoint — including bare /auth/login — could
+// be hit with a 10MB body and tie up the event loop for ~200ms.
+app.use(express.json({ limit: '256kb' }));
+app.use(express.urlencoded({ extended: true, limit: '256kb' }));
 
 // Compression — skip responses under 1KB (overhead not worth it for small JSON)
 app.use(compression({ threshold: 1024 }));
@@ -140,6 +146,7 @@ app.use(`/api/${API_VERSION}/sync`, syncRoutes);
 app.use(`/api/${API_VERSION}/activities`, activityRoutes);
 app.use(`/api/${API_VERSION}/invites`, inviteRoutes);
 app.use(`/api/${API_VERSION}/policies`, policiesRoutes);
+app.use(`/api/${API_VERSION}/app-version`, appVersionRoutes);
 
 // 404 handler
 app.use(notFound);
@@ -168,7 +175,46 @@ const startServer = async () => {
     }
 
     // Initialize Firebase Admin (push notifications). Non-fatal if missing.
-    initFirebase();
+    await initFirebase();
+
+    // Event loop lag monitor. Posts a warn line every 30s if the max
+    // observed lag in the window crossed 100ms — i.e. some synchronous
+    // hot block ran long enough to push real requests behind it.
+    // Cheap to run (sampling at 20ms resolution from a native histogram)
+    // and disabled-by-flag for CI.
+    if (process.env.EVENT_LOOP_MONITOR !== 'false') {
+      const eld = monitorEventLoopDelay({ resolution: 20 });
+      eld.enable();
+      const LAG_THRESHOLD_MS = parseInt(process.env.EVENT_LOOP_LAG_WARN_MS) || 100;
+      const intervalHandle = setInterval(() => {
+        const maxMs = eld.max / 1e6;
+        const p99Ms = eld.percentile(99) / 1e6;
+        if (maxMs > LAG_THRESHOLD_MS) {
+          logger.warn(
+            { maxMs: +maxMs.toFixed(0), p99Ms: +p99Ms.toFixed(0) },
+            '[loop] event loop lag spike',
+          );
+        }
+        eld.reset();
+      }, 30_000);
+      // Don't keep the process alive if it's otherwise idle.
+      intervalHandle.unref();
+    }
+
+    // Pool-pressure monitor. Quiet by default: only warns when real
+    // requests are queueing for a connection (waiting > 0) or the pool
+    // is fully saturated (idle === 0 and total at max). Pairs with the
+    // /health endpoint — that's the on-demand view, this is the
+    // "tell me when something's wrong" view.
+    if (process.env.POOL_MONITOR !== 'false') {
+      const poolHandle = setInterval(() => {
+        const m = getPoolMetrics();
+        if (m.waiting > 0 || (m.idle === 0 && m.total >= pool.options.max)) {
+          logger.warn(m, '[pool] pressure');
+        }
+      }, 30_000);
+      poolHandle.unref();
+    }
 
     server = app.listen(PORT, () => {
       console.log('');

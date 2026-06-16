@@ -1,7 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/services/haptic_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../data/contacts/device_contacts_provider.dart';
@@ -87,6 +89,22 @@ class _ContactsPickerSheetState extends ConsumerState<ContactsPickerSheet> {
   Set<String> _registeredPhones = const {};
   bool _registrationLookupStarted = false;
 
+  // Phone-search state — derived from the unified search bar above. When
+  // the user types exactly 10 digits, [_phoneInput] mirrors [_query] and
+  // triggers a debounced backend lookup.
+  Timer? _phoneDebounce;
+  String _phoneInput = '';
+  PhoneLookupResult? _phoneResult;
+  String? _phoneError;
+  bool _phoneLooking = false;
+  /// In-session cache so re-typing the same 10-digit number doesn't hit
+  /// the rate-limited endpoint a second time.
+  final Map<String, PhoneLookupResult?> _phoneCache = {};
+  /// Synthetic Contacts representing phone-search adds (registered users
+  /// the device contacts list doesn't know about). Added to the returned
+  /// selection alongside device-contact picks.
+  final List<Contact> _extraContacts = [];
+
   @override
   void initState() {
     super.initState();
@@ -120,7 +138,284 @@ class _ContactsPickerSheetState extends ConsumerState<ContactsPickerSheet> {
   @override
   void dispose() {
     _searchController.dispose();
+    _phoneDebounce?.cancel();
     super.dispose();
+  }
+
+  // -- Unified search handler --
+
+  /// Single entry point for the unified search bar. Updates [_query] for
+  /// device-contacts filtering AND, when the query is exactly a 10-digit
+  /// number, fires a debounced backend lookup so the user can add
+  /// registered users whose number isn't in their phone book.
+  void _onQueryChanged(String raw) {
+    final isAllDigits = raw.isNotEmpty && RegExp(r'^\d+$').hasMatch(raw);
+    final digits = isAllDigits ? raw : '';
+    setState(() {
+      _query = raw;
+      _phoneInput = digits.length == 10 ? digits : '';
+      _phoneError = null;
+      if (digits.length != 10) {
+        _phoneResult = null;
+        _phoneLooking = false;
+      }
+    });
+    _phoneDebounce?.cancel();
+    if (digits.length != 10) return;
+    if (_phoneCache.containsKey(digits)) {
+      setState(() {
+        _phoneResult = _phoneCache[digits];
+        _phoneError = null;
+        _phoneLooking = false;
+      });
+      return;
+    }
+    _phoneDebounce = Timer(const Duration(milliseconds: 400), () {
+      if (!mounted) return;
+      _runPhoneLookup(digits);
+    });
+  }
+
+  Future<void> _runPhoneLookup(String digits) async {
+    setState(() {
+      _phoneLooking = true;
+      _phoneError = null;
+      _phoneResult = null;
+    });
+    try {
+      final result =
+          await ref.read(usersRepositoryProvider).lookupByPhone(digits);
+      if (!mounted || _phoneInput != digits) return;
+      _phoneCache[digits] = result;
+      setState(() {
+        _phoneResult = result;
+        _phoneLooking = false;
+      });
+    } on UsersApiException catch (e) {
+      if (!mounted || _phoneInput != digits) return;
+      setState(() {
+        _phoneLooking = false;
+        _phoneResult = null;
+        _phoneError = e.statusCode == 429
+            ? 'Too many searches — try again in a few minutes.'
+            : 'Lookup failed. Check your connection and try again.';
+      });
+    } catch (_) {
+      if (!mounted || _phoneInput != digits) return;
+      setState(() {
+        _phoneLooking = false;
+        _phoneResult = null;
+        _phoneError =
+            'Lookup failed. Check your connection and try again.';
+      });
+    }
+  }
+
+  /// True when the searched phone number is the same as one of the group's
+  /// existing members. Used to render an "Already in group" chip on the
+  /// result row instead of an Add button.
+  bool _phoneAlreadyInGroup(String digits) {
+    if (widget.existingMemberPhones.isEmpty) return false;
+    return widget.existingMemberPhones.contains(normalizePhone(digits));
+  }
+
+  /// Add a phone-search hit (registered user) to the picker's selection.
+  /// Synthesizes a Contact whose id is unique (`phone:<digits>`) so it can
+  /// coexist with device-contact ids in [_selectedIds].
+  void _addFoundUser(PhoneLookupResult user, String digits) {
+    final id = 'phone:$digits';
+    if (_selectedIds.contains(id)) return;
+    HapticService.instance.success();
+    final synthetic = Contact(
+      id: id,
+      displayName: user.name,
+      phones: [Phone(digits)],
+    );
+    setState(() {
+      _extraContacts.add(synthetic);
+      _selectedIds.add(id);
+      // Clear the unified search box so the user can search the next
+      // number (or a name) immediately.
+      _searchController.clear();
+      _query = '';
+      _phoneInput = '';
+      _phoneResult = null;
+      _phoneError = null;
+    });
+  }
+
+  // -- Phone-result card (rendered under the unified search bar) --
+
+  Widget _buildPhoneResultCard(bool isDark) {
+    if (_phoneError != null) {
+      return _phoneResultCardShell(
+        isDark: isDark,
+        leading: Icon(
+          Icons.error_outline_rounded,
+          size: 18,
+          color: AppColors.textSecondary(isDark),
+        ),
+        title: _phoneError!,
+        trailing: const SizedBox.shrink(),
+      );
+    }
+    if (_phoneLooking) {
+      return _phoneResultCardShell(
+        isDark: isDark,
+        leading: const SizedBox(
+          width: 16,
+          height: 16,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+        title: 'Searching…',
+        trailing: const SizedBox.shrink(),
+      );
+    }
+    final digits = _phoneInput;
+    final alreadyAdded = _selectedIds.contains('phone:$digits');
+    final r = _phoneResult;
+    if (r == null) {
+      // 10 digits typed but no registered user — offer the invite path.
+      return _phoneResultCardShell(
+        isDark: isDark,
+        leading: Icon(
+          Icons.person_search_rounded,
+          size: 18,
+          color: AppColors.textSecondary(isDark),
+        ),
+        title: 'No KharchaSplit user found',
+        subtitle: alreadyAdded
+            ? 'Already added to invite list'
+            : 'They will get a WhatsApp invite',
+        trailing: alreadyAdded
+            ? const _AddedTickChip()
+            : OutlinedButton.icon(
+                onPressed: () => _addInviteForPhone(digits),
+                icon: const Icon(Icons.send_rounded, size: 14),
+                label: const Text('Invite'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.brand,
+                  side: BorderSide(color: AppColors.brand),
+                  minimumSize: const Size(72, 32),
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                ),
+              ),
+      );
+    }
+    final initial = r.name.isNotEmpty ? r.name[0].toUpperCase() : '?';
+    Widget trailing;
+    if (r.isSelf) {
+      trailing = const _SelfChip();
+    } else if (_phoneAlreadyInGroup(digits)) {
+      trailing = _AlreadyAddedChip(isDark: isDark);
+    } else if (alreadyAdded) {
+      trailing = const _AddedTickChip();
+    } else {
+      trailing = FilledButton.icon(
+        onPressed: () => _addFoundUser(r, digits),
+        icon: const Icon(Icons.add_rounded, size: 16),
+        label: const Text('Add'),
+        style: FilledButton.styleFrom(
+          backgroundColor: AppColors.brand,
+          minimumSize: const Size(72, 32),
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+        ),
+      );
+    }
+    return _phoneResultCardShell(
+      isDark: isDark,
+      leading: CircleAvatar(
+        backgroundColor: AppColors.brand.withValues(alpha: 0.2),
+        radius: 16,
+        child: Text(
+          initial,
+          style: TextStyle(
+            color: AppColors.brand,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+      title: r.name,
+      subtitle: r.phoneSuffix.isEmpty
+          ? 'On KharchaSplit'
+          : 'On KharchaSplit · ••••${r.phoneSuffix}',
+      trailing: trailing,
+    );
+  }
+
+  Widget _phoneResultCardShell({
+    required bool isDark,
+    required Widget leading,
+    required String title,
+    String? subtitle,
+    required Widget trailing,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.cardBg(isDark),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.divider(isDark)),
+      ),
+      child: Row(
+        children: [
+          SizedBox(width: 32, height: 32, child: Center(child: leading)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.body2(isDark).copyWith(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13.5,
+                  ),
+                ),
+                if (subtitle != null && subtitle.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: AppTextStyles.caption(isDark).copyWith(
+                      color: AppColors.textSecondary(isDark),
+                      fontSize: 11.5,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          trailing,
+        ],
+      ),
+    );
+  }
+
+  /// Add an unregistered number to the picker as a synthetic Contact so the
+  /// rest of the flow (Done → invitePhone in the parent) sends it down the
+  /// WhatsApp / SMS invite path.
+  void _addInviteForPhone(String digits) {
+    final id = 'phone:$digits';
+    if (_selectedIds.contains(id)) return;
+    HapticService.instance.tap();
+    final synthetic = Contact(
+      id: id,
+      displayName: '+91 $digits',
+      phones: [Phone(digits)],
+    );
+    setState(() {
+      _extraContacts.add(synthetic);
+      _selectedIds.add(id);
+      _searchController.clear();
+      _query = '';
+      _phoneInput = '';
+      _phoneResult = null;
+      _phoneError = null;
+    });
   }
 
   @override
@@ -148,18 +443,34 @@ class _ContactsPickerSheetState extends ConsumerState<ContactsPickerSheet> {
                 count: _selectedIds.length,
                 doneLabel: widget.doneLabel,
                 onDone: () {
+                  HapticService.instance.success();
                   final allContacts = asyncContacts.value ?? const <Contact>[];
-                  final selected = allContacts
-                      .where((c) => _selectedIds.contains(c.id))
-                      .toList();
+                  // Merge device-contact picks + phone-search picks. The
+                  // synthetic Contacts in [_extraContacts] use ids prefixed
+                  // with `phone:` so they never collide with device ids.
+                  final selected = <Contact>[
+                    ...allContacts.where((c) => _selectedIds.contains(c.id)),
+                    ..._extraContacts
+                        .where((c) => _selectedIds.contains(c.id)),
+                  ];
                   Navigator.of(context).pop(selected);
                 },
                 isDark: isDark,
               ),
               _SearchField(
                 controller: _searchController,
-                onChanged: (v) => setState(() => _query = v),
+                onChanged: _onQueryChanged,
               ),
+              if (_phoneInput.length == 10 &&
+                  (_phoneLooking ||
+                      _phoneResult != null ||
+                      _phoneError != null)) ...[
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: _buildPhoneResultCard(isDark),
+                ),
+              ],
               const SizedBox(height: 8),
               Expanded(
                 child: asyncContacts.when(
@@ -186,23 +497,34 @@ class _ContactsPickerSheetState extends ConsumerState<ContactsPickerSheet> {
                     }
                     final items = _sectionItems(filtered);
                     return RefreshIndicator(
-                      onRefresh: () =>
-                          ref.read(deviceContactsProvider.notifier).refresh(),
+                      onRefresh: () {
+                        HapticService.instance.thresholdCrossed();
+                        return ref
+                            .read(deviceContactsProvider.notifier)
+                            .refresh();
+                      },
                       child: ListView.builder(
                         controller: scrollController,
                         physics: const AlwaysScrollableScrollPhysics(),
                         itemCount: items.length,
+                        // RepaintBoundary per row — toggling selection on
+                        // one contact only repaints that tile, not the
+                        // whole on-screen list.
                         itemBuilder: (_, i) {
                           final item = items[i];
                           if (item is _SectionHeaderItem) {
-                            return _SectionHeader(
-                              title: item.title,
-                              count: item.count,
-                              isDark: isDark,
+                            return RepaintBoundary(
+                              child: _SectionHeader(
+                                title: item.title,
+                                count: item.count,
+                                isDark: isDark,
+                              ),
                             );
                           }
                           if (item is _ContactItem) {
-                            return _buildContactTile(item.contact, isDark);
+                            return RepaintBoundary(
+                              child: _buildContactTile(item.contact, isDark),
+                            );
                           }
                           return const SizedBox.shrink();
                         },
@@ -220,6 +542,19 @@ class _ContactsPickerSheetState extends ConsumerState<ContactsPickerSheet> {
 
   List<Contact> _filter(List<Contact> contacts) {
     if (_query.isEmpty) return contacts;
+    // Digit-only query → phone partial-match. We strip non-digits from
+    // each contact's stored numbers so '+91 98765 43210' still matches
+    // '98765'. Below 10 digits the user just narrows the device list;
+    // at 10 digits the backend lookup card (rendered separately) also
+    // surfaces registered users who aren't in the device book at all.
+    if (RegExp(r'^\d+$').hasMatch(_query)) {
+      return contacts
+          .where((c) => c.phones.any((p) {
+                final d = p.number.replaceAll(RegExp(r'\D'), '');
+                return d.isNotEmpty && d.contains(_query);
+              }))
+          .toList();
+    }
     final q = _query.toLowerCase();
     return contacts
         .where((c) => c.displayName.toLowerCase().contains(q))
@@ -319,6 +654,7 @@ class _ContactsPickerSheetState extends ConsumerState<ContactsPickerSheet> {
   }
 
   void _toggle(String id) {
+    HapticService.instance.tap();
     setState(() {
       if (_selectedIds.contains(id)) {
         _selectedIds.remove(id);
@@ -478,8 +814,9 @@ class _SearchField extends StatelessWidget {
       child: TextField(
         controller: controller,
         onChanged: onChanged,
+        keyboardType: TextInputType.text,
         decoration: InputDecoration(
-          hintText: 'Search contacts',
+          hintText: 'Search by name or 10-digit number',
           prefixIcon: const Icon(Icons.search_rounded),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         ),
@@ -613,6 +950,40 @@ class _ContactsError extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+
+/// Small "Added" pill shown when the phone-search result has already been
+/// pushed into the picker's selection list during this session.
+class _AddedTickChip extends StatelessWidget {
+  const _AddedTickChip();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.brand.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.check_circle_rounded,
+              size: 14, color: AppColors.brand),
+          const SizedBox(width: 4),
+          Text(
+            'Added',
+            style: TextStyle(
+              color: AppColors.brand,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -18,40 +18,65 @@ const syncData = async (req, res, next) => {
     const results = [];
     const errors = [];
 
-    // Process each operation
-    for (const operation of operations) {
+    // Process ops in parallel with bounded concurrency. Each op writes
+    // to its own row (separate recordId), so they're independent — the
+    // old for-of `await` chain serialized them at the cost of total
+    // latency = sum of per-op latency. A small concurrency cap keeps us
+    // from saturating the pool when a client sends a huge batch.
+    const CONCURRENCY = 4;
+    const processOperation = async (operation) => {
       try {
         const { type, table, data, recordId } = operation;
-
         let result;
-
         switch (type) {
           case 'CREATE':
-            // Insert new record
             result = await handleCreate(table, data, req.user.id);
-            results.push({ recordId, success: true, id: result.id });
-            break;
-
+            return { kind: 'ok', recordId, success: true, id: result.id };
           case 'UPDATE':
-            // Update existing record
-            result = await handleUpdate(table, recordId, data, req.user.id);
-            results.push({ recordId, success: true });
-            break;
-
+            await handleUpdate(table, recordId, data, req.user.id);
+            return { kind: 'ok', recordId, success: true };
           case 'DELETE':
-            // Soft delete record
-            result = await handleDelete(table, recordId, req.user.id);
-            results.push({ recordId, success: true });
-            break;
-
+            await handleDelete(table, recordId, req.user.id);
+            return { kind: 'ok', recordId, success: true };
           default:
-            errors.push({ recordId, error: 'Invalid operation type' });
+            return {
+              kind: 'err',
+              recordId,
+              error: 'Invalid operation type',
+            };
         }
       } catch (error) {
-        errors.push({
+        return {
+          kind: 'err',
           recordId: operation.recordId,
           error: error.message,
-        });
+        };
+      }
+    };
+
+    // Worker-pool pattern: keep CONCURRENCY workers pulling from the
+    // operations queue until all are processed. Preserves recordId →
+    // result mapping via index.
+    let cursor = 0;
+    const slotResults = new Array(operations.length);
+    const worker = async () => {
+      while (true) {
+        const i = cursor++;
+        if (i >= operations.length) return;
+        slotResults[i] = await processOperation(operations[i]);
+      }
+    };
+    await Promise.all(
+      Array.from({ length: Math.min(CONCURRENCY, operations.length) }, worker),
+    );
+
+    for (const r of slotResults) {
+      if (!r) continue;
+      if (r.kind === 'ok') {
+        const { kind, ...rest } = r;
+        results.push(rest);
+      } else {
+        errors.push({ recordId: r.recordId, error: r.error });
       }
     }
 

@@ -91,6 +91,6 @@ Map<String, double> _computeBalances(
   return balances;
 }
 
-enum GroupTab { balances, expenses }
+enum GroupTab { balances, expenses, activity }
 
 final groupTabProvider = StateProvider<GroupTab>((ref) => GroupTab.expenses);

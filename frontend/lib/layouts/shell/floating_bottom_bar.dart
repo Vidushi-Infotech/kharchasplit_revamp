@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
+import '../../core/services/haptic_service.dart';
 import '../../core/theme/app_colors.dart';
 
 /// Floating bottom navigation bar with an iOS 18-style liquid glass
@@ -23,7 +24,7 @@ class FloatingBottomBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bottomInset = MediaQuery.of(context).padding.bottom;
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
 
     return Padding(
       padding: EdgeInsets.fromLTRB(16, 0, 16, 12 + bottomInset),
@@ -71,13 +72,25 @@ class FloatingBottomBar extends StatelessWidget {
                       child: isFab
                           ? _FabSlot(
                               item: item,
-                              onTap: () => onItemSelected(index),
+                              onTap: () {
+                                // FAB always fires — it's a discrete action
+                                // ("create"), not a tab switch.
+                                HapticService.instance.tap();
+                                onItemSelected(index);
+                              },
                             )
                           : _IconSlot(
                               item: item,
                               isSelected: isSelected,
                               isDark: isDark,
-                              onTap: () => onItemSelected(index),
+                              onTap: () {
+                                // Tab switch — selection click only when
+                                // actually moving to a new tab.
+                                if (!isSelected) {
+                                  HapticService.instance.selection();
+                                }
+                                onItemSelected(index);
+                              },
                             ),
                     );
                   }),

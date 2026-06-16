@@ -11,6 +11,7 @@ import 'components/banners/offline_banner.dart';
 import 'core/services/app_logger.dart';
 import 'core/services/notification_router.dart';
 import 'core/services/push_service.dart';
+import 'core/services/update_service.dart';
 import 'core/state/connectivity_provider.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_provider.dart';
@@ -94,6 +95,14 @@ class _KharchaSplitAppState extends ConsumerState<KharchaSplitApp> {
         NotificationRouter.handleTap(appRouter, message);
       });
     }
+    // Kick off the in-app update check once the first frame is rendered so
+    // the navigator key is attached and dialogs can be shown. Failures are
+    // swallowed inside the service — version gating is best-effort.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(updateServiceProvider).checkForUpdate(
+            navigatorKey: appRouter.routerDelegate.navigatorKey,
+          );
+    });
   }
 
   @override

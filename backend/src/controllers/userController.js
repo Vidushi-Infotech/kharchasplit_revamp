@@ -2,6 +2,7 @@ import { query } from '../config/database.js';
 import User from '../models/User.js';
 import Group from '../models/Group.js';
 import { NotificationService } from '../services/notificationService.js';
+import { cache } from '../services/cacheService.js';
 
 /**
  * Get user by ID
@@ -185,6 +186,76 @@ const getUserByPhone = async (req, res, next) => {
         preferredCurrency: user.preferred_currency,
         createdAt: user.created_at,
         updatedAt: user.updated_at,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Privacy-trimmed lookup used by the "Add member by phone number" flow
+ * in the group-members picker.
+ * GET /api/v1/users/lookup-by-phone?phone=XXXXXXXXXX
+ *
+ * Returns only the fields the picker needs to render a result card and
+ * decide whether to add the user to the group. Email, full phone, and
+ * timestamps are intentionally omitted so a logged-in client can't
+ * enumerate the user directory beyond "this number is registered, here
+ * is the display name and avatar."
+ */
+const lookupByPhone = async (req, res, next) => {
+  try {
+    const phone = (req.query?.phone || '').toString().trim();
+    if (!phone) {
+      return res.status(400).json({
+        success: false,
+        error: 'phone query parameter is required',
+      });
+    }
+
+    const user = await User.findByPhoneNumber(phone);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    // Block self-lookup so the picker doesn't accidentally let a user add
+    // themselves to a group via this path; the existing self-detection in
+    // the device-contacts list handles the device-contacts path.
+    if (user.id === req.user.id) {
+      return res.json({
+        success: true,
+        data: {
+          id: user.id,
+          name: user.name,
+          avatarUrl: user.profile_image_base64 || null,
+          phoneSuffix: (user.phone_number || '').replace(/\D/g, '').slice(-4),
+          isSelf: true,
+        },
+      });
+    }
+
+    // Placeholder users are server-side stubs created during invite flows
+    // before the invitee signs up. Treat them as "not registered" so the
+    // picker falls through to its invite-CTA branch.
+    if (user.is_placeholder) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        id: user.id,
+        name: user.name,
+        avatarUrl: user.profile_image_base64 || null,
+        phoneSuffix: (user.phone_number || '').replace(/\D/g, '').slice(-4),
+        isSelf: false,
       },
     });
   } catch (error) {
@@ -383,6 +454,19 @@ const getDashboard = async (req, res, next) => {
       });
     }
 
+    // 60s cache covers the typical "open app → tab through screens"
+    // session. The cost of the WITH active_groups aggregation across
+    // every active group (and UNION-ed settlements) is non-trivial; on
+    // a cold dashboard hit the query alone walked >100ms in slow-log
+    // samples. Stale-ness is acceptable for a summary view, and every
+    // write path that affects balances has TTL ≤60s anyway so the lag
+    // is bounded.
+    const cacheKey = `user:${id}:dashboard:${recentLimit}`;
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      return res.json({ success: true, data: cached });
+    }
+
     // Per-group net position for this user, in one query.
     // Positive amount = others owe me, negative = I owe others.
     // Combines expenses (someone paying for someone else) AND settlements
@@ -394,6 +478,16 @@ const getDashboard = async (req, res, next) => {
     // groups.deleted_at filter, leftover expenses in soft-deleted groups
     // still counted into the dashboard total but vanished from the
     // breakdown — root cause of the ₹X mismatch.)
+    // Net debt with each (group, other-user) pair, NOT just per-group net.
+    //
+    // Why pair-level: per-group netting hides debts. If Akash owes me 2200 in
+    // the same group where I owe R Ansari 1633, per-group net = +566 which
+    // showed "you_owe = 0" — even though I genuinely owe R Ansari money.
+    // Splitwise-style behaviour aggregates positive pair balances into
+    // "you're owed" and negative pair balances into "you owe" separately.
+    //
+    // total = you_are_owed - you_owe (mathematically equal to the old per-group
+    // sum, so existing TOTAL invariants are preserved).
     const balancesResult = await query(
       `WITH active_groups AS (
          SELECT g.id AS group_id
@@ -402,38 +496,51 @@ const getDashboard = async (req, res, next) => {
          WHERE gm.user_id = $1
            AND gm.deleted_at IS NULL
            AND g.deleted_at IS NULL
+       ),
+       pair_deltas AS (
+         -- I paid → every other split row means that user owes me their share
+         SELECT e.group_id, es.user_id AS other_user_id, es.amount AS delta
+         FROM expenses e
+         JOIN expense_splits es ON es.expense_id = e.id
+         WHERE e.deleted_at IS NULL
+           AND e.paid_by = $1
+           AND es.user_id != $1
+           AND e.group_id IN (SELECT group_id FROM active_groups)
+         UNION ALL
+         -- Someone else paid → I owe THEM my split (delta negative)
+         SELECT e.group_id, e.paid_by AS other_user_id, -es.amount AS delta
+         FROM expenses e
+         JOIN expense_splits es ON es.expense_id = e.id
+         WHERE e.deleted_at IS NULL
+           AND e.paid_by != $1
+           AND es.user_id = $1
+           AND e.group_id IN (SELECT group_id FROM active_groups)
+         UNION ALL
+         -- I paid them a settlement → they owe me that much more (or I owe less)
+         SELECT s.group_id, s.to_user_id AS other_user_id, s.amount AS delta
+         FROM settlements s
+         WHERE s.deleted_at IS NULL
+           AND s.status = 'paid'
+           AND s.from_user_id = $1
+           AND s.group_id IN (SELECT group_id FROM active_groups)
+         UNION ALL
+         -- They paid me → I owe them more (or they owe me less)
+         SELECT s.group_id, s.from_user_id AS other_user_id, -s.amount AS delta
+         FROM settlements s
+         WHERE s.deleted_at IS NULL
+           AND s.status = 'paid'
+           AND s.to_user_id = $1
+           AND s.group_id IN (SELECT group_id FROM active_groups)
+       ),
+       pair_net AS (
+         SELECT group_id, other_user_id, SUM(delta) AS net
+         FROM pair_deltas
+         GROUP BY group_id, other_user_id
        )
        SELECT COALESCE(SUM(GREATEST(net, 0)), 0) AS you_are_owed,
               COALESCE(SUM(GREATEST(-net, 0)), 0) AS you_owe,
               COALESCE(SUM(net), 0) AS total
-       FROM (
-         SELECT group_id, SUM(contribution) AS net FROM (
-           SELECT e.group_id,
-                  SUM(CASE
-                    WHEN e.paid_by = $1 AND es.user_id != $1 THEN es.amount
-                    WHEN e.paid_by != $1 AND es.user_id = $1 THEN -es.amount
-                    ELSE 0
-                  END) AS contribution
-           FROM expenses e
-           JOIN expense_splits es ON es.expense_id = e.id
-           WHERE e.deleted_at IS NULL
-             AND e.group_id IN (SELECT group_id FROM active_groups)
-           GROUP BY e.group_id
-           UNION ALL
-           SELECT s.group_id,
-                  SUM(CASE
-                    WHEN s.from_user_id = $1 THEN s.amount
-                    WHEN s.to_user_id   = $1 THEN -s.amount
-                    ELSE 0
-                  END) AS contribution
-           FROM settlements s
-           WHERE s.deleted_at IS NULL
-             AND (s.status IS NULL OR s.status NOT IN ('failed', 'cancelled'))
-             AND s.group_id IN (SELECT group_id FROM active_groups)
-           GROUP BY s.group_id
-         ) all_contributions
-         GROUP BY group_id
-       ) per_group`,
+       FROM pair_net`,
       [id]
     );
 
@@ -507,14 +614,16 @@ const getDashboard = async (req, res, next) => {
       splits: splitsByExpense[e.id] || [],
     }));
 
+    const data = {
+      youAreOwed: parseFloat(balances.you_are_owed) || 0,
+      youOwe: parseFloat(balances.you_owe) || 0,
+      totalBalance: parseFloat(balances.total) || 0,
+      recentExpenses,
+    };
+    cache.set(cacheKey, data, 60);
     res.json({
       success: true,
-      data: {
-        youAreOwed: parseFloat(balances.you_are_owed) || 0,
-        youOwe: parseFloat(balances.you_owe) || 0,
-        totalBalance: parseFloat(balances.total) || 0,
-        recentExpenses,
-      },
+      data,
     });
   } catch (error) {
     next(error);
@@ -523,19 +632,58 @@ const getDashboard = async (req, res, next) => {
 
 /**
  * GET /api/v1/users/:id/export
- * Returns the user's data as a single JSON blob — profile, groups, expenses,
- * personal expenses, and settlements. Lets the client save a copy locally.
+ *
+ * Streams the user's data as JSON — profile, groups, expenses,
+ * personal expenses, and settlements.
+ *
+ * Why streamed instead of res.json(payload):
+ *   At the LIMIT 5000 ceilings below, the assembled payload is roughly
+ *   5–15 MB. A single JSON.stringify on that blob is fully synchronous
+ *   and pegs the event loop for 50–150 ms — every other in-flight
+ *   request waits behind it. By writing the JSON envelope manually and
+ *   stringifying each row independently, work splits into thousands of
+ *   ~10µs jobs that interleave naturally with other traffic, and the
+ *   client starts receiving bytes before the last query even runs.
+ *
+ * Error handling: once we've sent the first byte we can't switch to a
+ * JSON error envelope, so a mid-stream failure just severs the
+ * connection (logged for diagnosis). Pre-stream failures still go
+ * through next(err) the normal way.
  */
 const exportUserData = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    if (req.user.id !== id) {
-      return res.status(403).json({
-        success: false,
-        error: 'You can only export your own data',
-      });
-    }
+  const { id } = req.params;
+  if (req.user.id !== id) {
+    return res.status(403).json({
+      success: false,
+      error: 'You can only export your own data',
+    });
+  }
 
+  // Tiny helper: write a chunk and respect backpressure. Without this the
+  // node socket buffer can balloon for the full export size on a slow client.
+  const write = (chunk) =>
+    new Promise((resolve) => {
+      if (res.write(chunk)) return resolve();
+      res.once('drain', resolve);
+    });
+
+  // Per-row streamer. arrayKey is the JSON key, rows is the pg result rows,
+  // mapper turns each row into the export-shape object. Writes the array as
+  // a JSON literal, one row at a time, with comma separators.
+  const streamArray = async (arrayKey, rows, mapper) => {
+    await write(`,"${arrayKey}":[`);
+    let first = true;
+    for (let i = 0; i < rows.length; i++) {
+      const piece = JSON.stringify(mapper(rows[i]));
+      await write(first ? piece : `,${piece}`);
+      first = false;
+    }
+    await write(']');
+  };
+
+  try {
+    // Run the profile lookup before sending any headers — this is the only
+    // place we can still bail out with a proper JSON error.
     const profileRes = await query(
       `SELECT id, phone_number, name, email, profile_image_base64,
               preferred_currency, created_at, updated_at
@@ -557,16 +705,90 @@ const exportUserData = async (req, res, next) => {
       updatedAt: u.updated_at,
     };
 
-    const groupsRes = await query(
-      `SELECT g.id, g.name, g.description, g.currency, g.created_at,
-              gm.role, gm.joined_at
-       FROM groups g
-       JOIN group_members gm ON gm.group_id = g.id
-       WHERE gm.user_id = $1 AND g.deleted_at IS NULL
-       ORDER BY gm.joined_at DESC`,
-      [id]
+    // Fetch the four collections. We still pull them all before streaming
+    // because the JSON header needs the counts up-front — but we never
+    // materialize the full payload as a single object, and we never call
+    // JSON.stringify on more than one row at a time.
+    const [groupsRes, expensesRes, personalRes] = await Promise.all([
+      query(
+        `SELECT g.id, g.name, g.description, g.currency, g.created_at,
+                gm.role, gm.joined_at
+         FROM groups g
+         JOIN group_members gm ON gm.group_id = g.id
+         WHERE gm.user_id = $1 AND g.deleted_at IS NULL
+         ORDER BY gm.joined_at DESC`,
+        [id]
+      ),
+      query(
+        `SELECT e.id, e.group_id, e.description, e.amount, e.currency, e.category,
+                e.paid_by, e.split_type, e.notes, e.expense_date, e.created_at,
+                es.amount AS my_share, es.percentage AS my_percentage,
+                es.shares AS my_shares
+         FROM expenses e
+         LEFT JOIN expense_splits es ON es.expense_id = e.id AND es.user_id = $1
+         JOIN group_members gm ON gm.group_id = e.group_id AND gm.user_id = $1
+         WHERE e.deleted_at IS NULL
+         ORDER BY e.expense_date DESC
+         LIMIT 5000`,
+        [id]
+      ),
+      query(
+        `SELECT id, description, amount, currency, category, expense_date,
+                notes, created_at
+         FROM personal_expenses
+         WHERE user_id = $1 AND is_deleted = FALSE
+         ORDER BY expense_date DESC
+         LIMIT 5000`,
+        [id]
+      ),
+    ]);
+
+    let settlementsRows = [];
+    try {
+      const settlementsRes = await query(
+        `SELECT id, group_id, amount, currency, payer_id, payee_id, notes,
+                created_at
+         FROM settlements
+         WHERE (payer_id = $1 OR payee_id = $1)
+         ORDER BY created_at DESC
+         LIMIT 5000`,
+        [id]
+      );
+      settlementsRows = settlementsRes.rows;
+    } catch (_) {
+      // settlements table may not exist in all environments — skip silently
+    }
+
+    // Begin the response. From here on, errors can't be recovered into JSON.
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="kharchasplit-export-${id}-${Date.now()}.json"`,
     );
-    const groups = groupsRes.rows.map((r) => ({
+
+    // Envelope header — fixed-shape JSON literal containing the small,
+    // pre-known parts (status + metadata + profile + counts).
+    const envelope = {
+      success: true,
+      data: {
+        exportVersion: 1,
+        exportedAt: new Date().toISOString(),
+        profile,
+        counts: {
+          groups: groupsRes.rows.length,
+          expenses: expensesRes.rows.length,
+          personalExpenses: personalRes.rows.length,
+          settlements: settlementsRows.length,
+        },
+      },
+    };
+    // Strip the trailing '}}' so we can append the streamed arrays inside.
+    const envelopeStr = JSON.stringify(envelope);
+    await write(envelopeStr.slice(0, -2));
+
+    // Stream the four arrays inside data{...}. Each streamArray prepends a
+    // comma + key, so the result is a syntactically valid JSON object.
+    await streamArray('groups', groupsRes.rows, (r) => ({
       id: r.id,
       name: r.name,
       description: r.description,
@@ -575,21 +797,7 @@ const exportUserData = async (req, res, next) => {
       joinedAt: r.joined_at,
       groupCreatedAt: r.created_at,
     }));
-
-    const expensesRes = await query(
-      `SELECT e.id, e.group_id, e.description, e.amount, e.currency, e.category,
-              e.paid_by, e.split_type, e.notes, e.expense_date, e.created_at,
-              es.amount AS my_share, es.percentage AS my_percentage,
-              es.shares AS my_shares
-       FROM expenses e
-       LEFT JOIN expense_splits es ON es.expense_id = e.id AND es.user_id = $1
-       JOIN group_members gm ON gm.group_id = e.group_id AND gm.user_id = $1
-       WHERE e.deleted_at IS NULL
-       ORDER BY e.expense_date DESC
-       LIMIT 5000`,
-      [id]
-    );
-    const expenses = expensesRes.rows.map((r) => ({
+    await streamArray('expenses', expensesRes.rows, (r) => ({
       id: r.id,
       groupId: r.group_id,
       description: r.description,
@@ -606,17 +814,7 @@ const exportUserData = async (req, res, next) => {
       expenseDate: r.expense_date,
       createdAt: r.created_at,
     }));
-
-    const personalRes = await query(
-      `SELECT id, description, amount, currency, category, expense_date,
-              notes, created_at
-       FROM personal_expenses
-       WHERE user_id = $1 AND is_deleted = FALSE
-       ORDER BY expense_date DESC
-       LIMIT 5000`,
-      [id]
-    );
-    const personalExpenses = personalRes.rows.map((r) => ({
+    await streamArray('personalExpenses', personalRes.rows, (r) => ({
       id: r.id,
       title: r.description,
       amount: r.amount,
@@ -626,52 +824,28 @@ const exportUserData = async (req, res, next) => {
       notes: r.notes,
       createdAt: r.created_at,
     }));
+    await streamArray('settlements', settlementsRows, (r) => ({
+      id: r.id,
+      groupId: r.group_id,
+      amount: r.amount,
+      currency: r.currency,
+      payerId: r.payer_id,
+      payeeId: r.payee_id,
+      direction: r.payer_id === id ? 'paid' : 'received',
+      notes: r.notes,
+      createdAt: r.created_at,
+    }));
 
-    let settlements = [];
-    try {
-      const settlementsRes = await query(
-        `SELECT id, group_id, amount, currency, payer_id, payee_id, notes,
-                created_at
-         FROM settlements
-         WHERE (payer_id = $1 OR payee_id = $1)
-         ORDER BY created_at DESC
-         LIMIT 5000`,
-        [id]
-      );
-      settlements = settlementsRes.rows.map((r) => ({
-        id: r.id,
-        groupId: r.group_id,
-        amount: r.amount,
-        currency: r.currency,
-        payerId: r.payer_id,
-        payeeId: r.payee_id,
-        direction: r.payer_id === id ? 'paid' : 'received',
-        notes: r.notes,
-        createdAt: r.created_at,
-      }));
-    } catch (_) {
-      // settlements table may not exist in all environments — skip silently
-    }
-
-    const payload = {
-      exportVersion: 1,
-      exportedAt: new Date().toISOString(),
-      profile,
-      counts: {
-        groups: groups.length,
-        expenses: expenses.length,
-        personalExpenses: personalExpenses.length,
-        settlements: settlements.length,
-      },
-      groups,
-      expenses,
-      personalExpenses,
-      settlements,
-    };
-
-    res.json({ success: true, data: payload });
+    // Close data{...} and the outer envelope.
+    await write('}}');
+    res.end();
   } catch (error) {
-    next(error);
+    if (!res.headersSent) return next(error);
+    // Headers already flushed — can't switch to a JSON error envelope.
+    // Sever the connection so the client knows the export is incomplete,
+    // and surface it in logs for diagnosis.
+    console.error('[export] failed mid-stream:', error.message);
+    res.destroy(error);
   }
 };
 
@@ -727,6 +901,9 @@ const getReports = async (req, res, next) => {
     // you_owe / you_are_owed numbers. We intentionally do NOT period-window
     // these (debts don't have a "this month" — they're either outstanding
     // now or settled).
+    // Pair-level netting — same shape as the dashboard query so the Reports
+    // screen's you_are_owed / you_owe match the homescreen exactly. See the
+    // long comment in getDashboard for the why.
     const balancesResult = await query(
       `WITH active_groups AS (
          SELECT g.id AS group_id
@@ -735,37 +912,46 @@ const getReports = async (req, res, next) => {
          WHERE gm.user_id = $1
            AND gm.deleted_at IS NULL
            AND g.deleted_at IS NULL
+       ),
+       pair_deltas AS (
+         SELECT e.group_id, es.user_id AS other_user_id, es.amount AS delta
+         FROM expenses e
+         JOIN expense_splits es ON es.expense_id = e.id
+         WHERE e.deleted_at IS NULL
+           AND e.paid_by = $1
+           AND es.user_id != $1
+           AND e.group_id IN (SELECT group_id FROM active_groups)
+         UNION ALL
+         SELECT e.group_id, e.paid_by AS other_user_id, -es.amount AS delta
+         FROM expenses e
+         JOIN expense_splits es ON es.expense_id = e.id
+         WHERE e.deleted_at IS NULL
+           AND e.paid_by != $1
+           AND es.user_id = $1
+           AND e.group_id IN (SELECT group_id FROM active_groups)
+         UNION ALL
+         SELECT s.group_id, s.to_user_id AS other_user_id, s.amount AS delta
+         FROM settlements s
+         WHERE s.deleted_at IS NULL
+           AND s.status = 'paid'
+           AND s.from_user_id = $1
+           AND s.group_id IN (SELECT group_id FROM active_groups)
+         UNION ALL
+         SELECT s.group_id, s.from_user_id AS other_user_id, -s.amount AS delta
+         FROM settlements s
+         WHERE s.deleted_at IS NULL
+           AND s.status = 'paid'
+           AND s.to_user_id = $1
+           AND s.group_id IN (SELECT group_id FROM active_groups)
+       ),
+       pair_net AS (
+         SELECT group_id, other_user_id, SUM(delta) AS net
+         FROM pair_deltas
+         GROUP BY group_id, other_user_id
        )
        SELECT COALESCE(SUM(GREATEST(net, 0)), 0) AS you_are_owed,
               COALESCE(SUM(GREATEST(-net, 0)), 0) AS you_owe
-       FROM (
-         SELECT group_id, SUM(contribution) AS net FROM (
-           SELECT e.group_id,
-                  SUM(CASE
-                    WHEN e.paid_by = $1 AND es.user_id != $1 THEN es.amount
-                    WHEN e.paid_by != $1 AND es.user_id = $1 THEN -es.amount
-                    ELSE 0
-                  END) AS contribution
-           FROM expenses e
-           JOIN expense_splits es ON es.expense_id = e.id
-           WHERE e.deleted_at IS NULL
-             AND e.group_id IN (SELECT group_id FROM active_groups)
-           GROUP BY e.group_id
-           UNION ALL
-           SELECT s.group_id,
-                  SUM(CASE
-                    WHEN s.from_user_id = $1 THEN s.amount
-                    WHEN s.to_user_id   = $1 THEN -s.amount
-                    ELSE 0
-                  END) AS contribution
-           FROM settlements s
-           WHERE s.deleted_at IS NULL
-             AND (s.status IS NULL OR s.status NOT IN ('failed', 'cancelled'))
-             AND s.group_id IN (SELECT group_id FROM active_groups)
-           GROUP BY s.group_id
-         ) all_contributions
-         GROUP BY group_id
-       ) per_group`,
+       FROM pair_net`,
       [id]
     );
     const balances = balancesResult.rows[0] || {};
@@ -843,6 +1029,7 @@ const getReports = async (req, res, next) => {
 export default {
   getUser,
   getUserByPhone,
+  lookupByPhone,
   updateUser,
   deleteUser,
   checkRegisteredUsers,

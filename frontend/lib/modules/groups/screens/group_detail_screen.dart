@@ -1,8 +1,12 @@
+import 'dart:io';
+
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../widgets/edit_group_sheet.dart';
 import '../widgets/group_cover_thumb.dart';
@@ -19,7 +23,60 @@ import '../../auth/state/auth_provider.dart';
 import '../../settlements/state/pending_settlements_provider.dart';
 import '../state/group_detail_provider.dart';
 import '../state/groups_provider.dart';
+import '../../../core/services/haptic_service.dart';
 import '../widgets/contacts_picker_sheet.dart';
+import '../widgets/group_activity_tab.dart';
+
+/// Slim sticky header that hosts the 3-tab bar (Expenses / Balances /
+/// Activity). Pinned in a NestedScrollView so the group hero card scrolls
+/// away while the tabs remain visible at the top.
+class _StickyTabBarDelegate extends SliverPersistentHeaderDelegate {
+  _StickyTabBarDelegate({
+    required this.child,
+    required this.isDark,
+    this.height = 58,
+  });
+
+  final Widget child;
+  final bool isDark;
+  final double height;
+
+  @override
+  double get minExtent => height;
+  @override
+  double get maxExtent => height;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    return Material(
+      // Match the screen background so the pinned bar blends in when the
+      // hero card has scrolled past, and a 1-px hairline divider separates
+      // it from the content below.
+      color: AppColors.background(isDark),
+      elevation: overlapsContent ? 1 : 0,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Expanded(child: child),
+          Container(
+            height: 1,
+            color: AppColors.divider(isDark).withValues(alpha: 0.5),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  bool shouldRebuild(_StickyTabBarDelegate oldDelegate) =>
+      oldDelegate.child != child ||
+      oldDelegate.isDark != isDark ||
+      oldDelegate.height != height;
+}
 
 const String _kPlayStoreUrl =
     'https://play.google.com/store/apps/details?id=com.kharchasplit';
@@ -42,15 +99,21 @@ class GroupDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final screenWidth = MediaQuery.of(context).size.width;
+    final screenWidth = MediaQuery.sizeOf(context).width;
     final detailAsync = ref.watch(groupDetailProvider(groupId));
-    final tab = ref.watch(groupTabProvider);
-    final myId = ref.watch(authProvider).user?.id;
+    final myId = ref.watch(myIdProvider);
     final loadedDetail = detailAsync.value;
     final isAdmin = loadedDetail != null &&
         myId != null &&
         loadedDetail.group.createdBy == myId;
 
+    // NOTE on the inner Consumers below: `tab` deliberately is NOT
+    // watched here in the outer build. Tab switches are the most
+    // frequent state change on this screen; without the inner scoping
+    // every switch would rebuild the entire 2946-line widget tree
+    // (including _DetailTopBar, layout switches, and the refresh
+    // indicator). Confining the tab watch to the body + FAB Consumers
+    // means tab changes only repaint those two regions.
     return Scaffold(
       backgroundColor: AppColors.background(isDark),
       appBar: _DetailTopBar(
@@ -70,41 +133,53 @@ class GroupDetailScreen extends ConsumerWidget {
             : () => _openEditGroupSheet(context, ref, loadedDetail.group),
         onLeaveGroup: () => _confirmLeaveGroup(context, ref, myId),
         onDeleteGroup: () => _confirmDeleteGroup(context, ref),
+        onExportGroup:
+            loadedDetail == null ? null : () => _exportGroup(context, ref, loadedDetail.group),
       ),
       body: detailAsync.when(
         loading: () => const ShimmerList(type: ShimmerListType.group),
         error: (err, stack) => _buildErrorState(context, ref, err),
-        data: (detail) {
-          final body = screenWidth < 600
-              ? _buildCompactLayout(context, isDark, detail, tab, ref, myId, isAdmin)
-              : screenWidth < 1100
-                  ? _buildStandardLayout(context, isDark, detail, tab, ref, myId, isAdmin)
-                  : _buildLargeLayout(context, isDark, detail, tab, ref, myId, isAdmin);
-          return RefreshIndicator(
-            onRefresh: () async {
-              // Invalidate the family entry for this group + the pending
-              // settlement providers so the screen pulls fresh data on swipe.
-              ref.invalidate(groupDetailProvider(groupId));
-              ref.invalidate(pendingIncomingSettlementsProvider(groupId));
-              ref.invalidate(pendingOutgoingSettlementsProvider(groupId));
-              await ref.read(groupDetailProvider(groupId).future);
-            },
-            child: body,
+        data: (detail) => Consumer(
+          builder: (context, ref, _) {
+            final tab = ref.watch(groupTabProvider);
+            final body = screenWidth < 600
+                ? _buildCompactLayout(
+                    context, isDark, detail, tab, ref, myId, isAdmin)
+                : screenWidth < 1100
+                    ? _buildStandardLayout(
+                        context, isDark, detail, tab, ref, myId, isAdmin)
+                    : _buildLargeLayout(
+                        context, isDark, detail, tab, ref, myId, isAdmin);
+            return RefreshIndicator(
+              onRefresh: () async {
+                // Invalidate the family entry for this group + the pending
+                // settlement providers so the screen pulls fresh data on swipe.
+                ref.invalidate(groupDetailProvider(groupId));
+                ref.invalidate(pendingIncomingSettlementsProvider(groupId));
+                ref.invalidate(pendingOutgoingSettlementsProvider(groupId));
+                await ref.read(groupDetailProvider(groupId).future);
+              },
+              child: body,
+            );
+          },
+        ),
+      ),
+      floatingActionButton: Consumer(
+        builder: (context, ref, _) {
+          final tab = ref.watch(groupTabProvider);
+          if (tab != GroupTab.expenses) return const SizedBox.shrink();
+          return Semantics(
+            button: true,
+            label: 'Add expense button',
+            onTap: () => _navigateToAddExpense(context),
+            child: FloatingActionButton(
+              onPressed: () => _navigateToAddExpense(context),
+              backgroundColor: AppColors.brand,
+              child: const Icon(Icons.add_rounded, color: Colors.white),
+            ),
           );
         },
       ),
-      floatingActionButton: tab == GroupTab.expenses
-          ? Semantics(
-              button: true,
-              label: 'Add expense button',
-              onTap: () => _navigateToAddExpense(context),
-              child: FloatingActionButton(
-                onPressed: () => _navigateToAddExpense(context),
-                backgroundColor: AppColors.brand,
-                child: const Icon(Icons.add_rounded, color: Colors.white),
-              ),
-            )
-          : null,
     );
   }
 
@@ -491,6 +566,48 @@ class GroupDetailScreen extends ConsumerWidget {
     WidgetRef ref,
     UserModel member,
   ) async {
+    // Compute pairwise debts client-side from the already-loaded
+    // detail so we can show the right dialog up-front — no
+    // confirm → 409 → second dialog round trip. The 409 fallback
+    // path in [_performRemoveMember] still catches the rare race
+    // where the server saw debt the client didn't.
+    final detail = ref.read(groupDetailProvider(groupId)).value;
+    final pair = detail == null
+        ? const <String, double>{}
+        : _pairwiseDebts(myId: member.id, detail: detail);
+    final unsettled = pair.entries
+        .where((e) => e.value.abs() > 0.005)
+        .toList(growable: false);
+
+    if (unsettled.isNotEmpty) {
+      // Surface the write-off dialog with debt details derived from
+      // local state. UnsettledBalancesInfo's sign convention matches
+      // _pairwiseDebts: positive → member owes the other party.
+      final info = UnsettledBalancesInfo(
+        memberId: member.id,
+        memberName: member.name,
+        currency: detail!.group.currency,
+        pairwise: [
+          for (final e in unsettled)
+            PairwiseDebt(
+              userId: e.key,
+              userName: detail.members
+                      .firstWhereOrNull((m) => m.id == e.key)
+                      ?.name ??
+                  'Unknown',
+              amount: e.value,
+            ),
+        ],
+      );
+      HapticService.instance.error();
+      final proceed = await _showWriteOffDialog(context, member, info);
+      if (proceed != true || !context.mounted) return;
+      HapticService.instance.destructive();
+      await _performRemoveMember(context, ref, member, acknowledged: true);
+      return;
+    }
+
+    // Clean member — simple confirm + single-shot removal.
     final go = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -516,10 +633,25 @@ class GroupDetailScreen extends ConsumerWidget {
       ),
     );
     if (go != true || !context.mounted) return;
+    HapticService.instance.destructive();
+    await _performRemoveMember(context, ref, member, acknowledged: false);
+  }
+
+  /// Performs the actual `removeMember` call. On the first attempt
+  /// `acknowledged` is false; if the backend rejects with the
+  /// `UNSETTLED_BALANCES` code we surface a write-off dialog that
+  /// recurses back here with `acknowledged: true`.
+  Future<void> _performRemoveMember(
+    BuildContext context,
+    WidgetRef ref,
+    UserModel member, {
+    required bool acknowledged,
+  }) async {
     try {
       await ref.read(groupsRepositoryProvider).removeMember(
             groupId: groupId,
             userId: member.id,
+            acknowledgeUnsettledDebt: acknowledged,
           );
       ref.invalidate(groupDetailProvider(groupId));
       ref.invalidate(groupsProvider);
@@ -529,6 +661,21 @@ class GroupDetailScreen extends ConsumerWidget {
       );
     } on GroupsApiException catch (e) {
       if (!context.mounted) return;
+      // Backend's "you need to write off the unsettled debt first"
+      // signal — open the second-step dialog instead of dumping the raw
+      // message in a SnackBar.
+      if (!acknowledged &&
+          e.code == 'UNSETTLED_BALANCES' &&
+          e.data != null) {
+        HapticService.instance.error();
+        final info = UnsettledBalancesInfo.fromJson(e.data!);
+        final proceed = await _showWriteOffDialog(context, member, info);
+        if (proceed == true && context.mounted) {
+          HapticService.instance.destructive();
+          await _performRemoveMember(context, ref, member, acknowledged: true);
+        }
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.message)),
       );
@@ -538,6 +685,103 @@ class GroupDetailScreen extends ConsumerWidget {
         SnackBar(content: Text('Could not remove: $e')),
       );
     }
+  }
+
+  /// Second-step destructive dialog: lists every unsettled pairwise debt
+  /// the member is part of, then offers a single "Write off & remove"
+  /// red button. The user is informed in plain language that the writes
+  /// are permanent and not recoverable by re-adding the member.
+  Future<bool?> _showWriteOffDialog(
+    BuildContext context,
+    UserModel member,
+    UnsettledBalancesInfo info,
+  ) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final currency = info.currency == 'INR' ? '₹' : info.currency;
+    String fmt(double v) =>
+        '$currency${v.abs().toStringAsFixed(v.abs() == v.abs().roundToDouble() ? 0 : 2)}';
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('${info.memberName} has unsettled balances'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Removing them will permanently write off the amounts '
+              'below. The group balances will be cleaned up, but the '
+              'underlying debts cannot be recovered if you add them '
+              'back later.',
+              style: AppTextStyles.body2(isDark).copyWith(
+                color: AppColors.textSecondary(isDark),
+              ),
+            ),
+            const SizedBox(height: 14),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 220),
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (final p in info.pairwise) _writeOffRow(p, fmt, isDark),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.errorText(isDark),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Write off & remove'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _writeOffRow(
+    PairwiseDebt p,
+    String Function(double) fmt,
+    bool isDark,
+  ) {
+    // Sign convention from the backend payload: positive → the removed
+    // member owes that party; negative → that party owes the removed
+    // member. We always express the line from the removed member's
+    // perspective so the admin reads a consistent narrative.
+    final owes = p.amount > 0;
+    final color = owes ? AppColors.errorText(isDark) : AppColors.success;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              owes ? 'Owes ${p.userName}' : '${p.userName} owes them',
+              style: AppTextStyles.body2(isDark).copyWith(fontSize: 13),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            fmt(p.amount),
+            style: AppTextStyles.body2(isDark).copyWith(
+              color: color,
+              fontWeight: FontWeight.w700,
+              fontSize: 13,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _confirmLeaveGroup(
@@ -590,6 +834,71 @@ class GroupDetailScreen extends ConsumerWidget {
     }
   }
 
+  /// Download the group's .xlsx ledger and hand it to the OS share sheet so
+  /// the user can save it anywhere (Drive, email, WhatsApp, Files…).
+  ///
+  /// Flow:
+  ///   1. Show a non-dismissible spinner so the user knows work is happening.
+  ///   2. Fetch bytes from `/groups/:id/export` via the repository.
+  ///   3. Write bytes to a temp file in the platform temp dir (Android/iOS
+  ///      both support this; the OS reaps the file on its own schedule).
+  ///   4. Dismiss the spinner and call `Share.shareXFiles` so the user picks
+  ///      a destination.
+  ///
+  /// Errors at any step surface as a snackbar — never crash, never silently
+  /// fail.
+  Future<void> _exportGroup(
+    BuildContext context,
+    WidgetRef ref,
+    GroupModel group,
+  ) async {
+    HapticService.instance.selection();
+
+    // 1. Spinner
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      // 2. Download
+      final result =
+          await ref.read(groupsRepositoryProvider).exportGroup(groupId);
+
+      // 3. Write to temp
+      final tempDir = await getTemporaryDirectory();
+      final file = File('${tempDir.path}/${result.filename}');
+      await file.writeAsBytes(result.bytes, flush: true);
+
+      // 4. Dismiss spinner + share
+      if (!context.mounted) return;
+      Navigator.of(context, rootNavigator: true).pop();
+
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(file.path, mimeType:
+              'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')],
+          subject: 'KharchaSplit — ${group.name} ledger',
+          text:
+              'Group ledger for "${group.name}" — exported from KharchaSplit.',
+        ),
+      );
+    } on GroupsApiException catch (e) {
+      if (!context.mounted) return;
+      Navigator.of(context, rootNavigator: true).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      Navigator.of(context, rootNavigator: true).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not export: $e')),
+      );
+    }
+  }
+
   Future<void> _confirmDeleteGroup(BuildContext context, WidgetRef ref) async {
     final go = await showDialog<bool>(
       context: context,
@@ -616,6 +925,7 @@ class GroupDetailScreen extends ConsumerWidget {
       ),
     );
     if (go != true || !context.mounted) return;
+    HapticService.instance.destructive();
     try {
       await ref.read(groupsRepositoryProvider).delete(groupId);
       ref.invalidate(groupsProvider);
@@ -647,19 +957,46 @@ class GroupDetailScreen extends ConsumerWidget {
     bool isAdmin,
   ) {
     // Compact: <600px - full width, single column, tight spacing (16-20px)
-    return SingleChildScrollView(
+    return NestedScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
-      child: Column(
-        children: [
-          _buildCompactHeader(context, isDark, detail, ref, myId, isAdmin),
-          _buildTabs(context, isDark, tab, ref),
-          if (tab == GroupTab.expenses)
-            _buildExpensesList(context, isDark, detail)
-          else
-            _buildBalancesTab(context, isDark, detail, myId),
-        ],
-      ),
+      headerSliverBuilder: (ctx, _) => [
+        SliverToBoxAdapter(
+          child: _buildCompactHeader(
+              context, isDark, detail, ref, myId, isAdmin),
+        ),
+        SliverPersistentHeader(
+          pinned: true,
+          delegate: _StickyTabBarDelegate(
+            isDark: isDark,
+            child: _buildTabs(context, isDark, tab, ref),
+          ),
+        ),
+      ],
+      body: _buildTabBody(context, isDark, tab, detail, myId),
     );
+  }
+
+  /// Body for whichever tab is currently selected. Lives below the pinned
+  /// tab bar inside [NestedScrollView]; each branch is responsible for its
+  /// own internal scrolling.
+  Widget _buildTabBody(
+    BuildContext context,
+    bool isDark,
+    GroupTab tab,
+    GroupDetail detail,
+    String? myId,
+  ) {
+    switch (tab) {
+      case GroupTab.expenses:
+        return _buildExpensesList(context, isDark, detail);
+      case GroupTab.balances:
+        return SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: _buildBalancesTab(context, isDark, detail, myId),
+        );
+      case GroupTab.activity:
+        return GroupActivityTab(groupId: groupId);
+    }
   }
 
   Widget _buildStandardLayout(
@@ -671,19 +1008,24 @@ class GroupDetailScreen extends ConsumerWidget {
     String? myId,
     bool isAdmin,
   ) {
-    // Standard: 600-1100px - improved spacing (24-32px), better grouped layout
-    return SingleChildScrollView(
+    // Standard: 600-1100px — same sticky-tabs pattern as compact, with
+    // the standard header replacing the compact one.
+    return NestedScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
-      child: Column(
-        children: [
-          _buildStandardHeader(context, isDark, detail, ref, myId, isAdmin),
-          _buildTabs(context, isDark, tab, ref),
-          if (tab == GroupTab.expenses)
-            _buildExpensesList(context, isDark, detail)
-          else
-            _buildBalancesTab(context, isDark, detail, myId),
-        ],
-      ),
+      headerSliverBuilder: (ctx, _) => [
+        SliverToBoxAdapter(
+          child: _buildStandardHeader(
+              context, isDark, detail, ref, myId, isAdmin),
+        ),
+        SliverPersistentHeader(
+          pinned: true,
+          delegate: _StickyTabBarDelegate(
+            isDark: isDark,
+            child: _buildTabs(context, isDark, tab, ref),
+          ),
+        ),
+      ],
+      body: _buildTabBody(context, isDark, tab, detail, myId),
     );
   }
 
@@ -732,15 +1074,15 @@ class GroupDetailScreen extends ConsumerWidget {
             child: Column(
               children: [
                 _buildTabs(context, isDark, tab, ref),
+                // Hairline divider between tabs and content panel — matches
+                // the compact/standard layouts' sticky bar separator.
+                Container(
+                  height: 1,
+                  color: AppColors.divider(isDark).withValues(alpha: 0.5),
+                ),
                 Expanded(
-                  child: SingleChildScrollView(
-                    child: Padding(
-                      padding: const EdgeInsets.all(32),
-                      child: tab == GroupTab.expenses
-                          ? _buildExpensesList(context, isDark, detail)
-                          : _buildBalancesTab(context, isDark, detail, myId),
-                    ),
-                  ),
+                  child:
+                      _buildTabBody(context, isDark, tab, detail, myId),
                 ),
               ],
             ),
@@ -1261,7 +1603,7 @@ class GroupDetailScreen extends ConsumerWidget {
     // a second listener subscription per build (and a redundant rebuild).
     final detailAsync = ref.watch(groupDetailProvider(groupId));
     final detail = detailAsync.value;
-    final myId = ref.watch(authProvider).user?.id;
+    final myId = ref.watch(myIdProvider);
 
     // The Balances badge previously showed member count, which read as
     // "2 outstanding balances" on a brand-new group with zero expenses.
@@ -1274,27 +1616,60 @@ class GroupDetailScreen extends ConsumerWidget {
     }
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 14, 20, 4),
-      child: Row(
-        children: [
-          _TabButton(
-            label: 'Expenses',
-            count: detail?.expenses.length,
-            selected: tab == GroupTab.expenses,
-            isDark: isDark,
-            onTap: () =>
-                ref.read(groupTabProvider.notifier).state = GroupTab.expenses,
-          ),
-          const SizedBox(width: 22),
-          _TabButton(
-            label: 'Balances',
-            count: balancesCount,
-            selected: tab == GroupTab.balances,
-            isDark: isDark,
-            onTap: () =>
-                ref.read(groupTabProvider.notifier).state = GroupTab.balances,
-          ),
-        ],
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        child: Row(
+          children: [
+            _TabButton(
+              label: 'Expenses',
+              icon: Icons.receipt_long_rounded,
+              count: detail?.expenses.length,
+              selected: tab == GroupTab.expenses,
+              isDark: isDark,
+              onTap: () {
+                if (tab != GroupTab.expenses) {
+                  HapticService.instance.selection();
+                  ref.read(groupTabProvider.notifier).state =
+                      GroupTab.expenses;
+                }
+              },
+            ),
+            const SizedBox(width: 6),
+            _TabButton(
+              label: 'Balances',
+              icon: Icons.balance_rounded,
+              count: balancesCount,
+              selected: tab == GroupTab.balances,
+              isDark: isDark,
+              onTap: () {
+                if (tab != GroupTab.balances) {
+                  HapticService.instance.selection();
+                  ref.read(groupTabProvider.notifier).state =
+                      GroupTab.balances;
+                }
+              },
+            ),
+            const SizedBox(width: 6),
+            _TabButton(
+              label: 'Activity',
+              icon: Icons.history_rounded,
+              count: detail == null
+                  ? null
+                  : detail.expenses.length + detail.settlements.length,
+              selected: tab == GroupTab.activity,
+              isDark: isDark,
+              onTap: () {
+                if (tab != GroupTab.activity) {
+                  HapticService.instance.selection();
+                  ref.read(groupTabProvider.notifier).state =
+                      GroupTab.activity;
+                }
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1304,14 +1679,16 @@ class GroupDetailScreen extends ConsumerWidget {
       return EmptyStateWidget.noExpenses();
     }
 
-    final screenWidth = MediaQuery.of(context).size.width;
+    final screenWidth = MediaQuery.sizeOf(context).width;
     final isCompact = screenWidth < 600;
     final horizontalPadding = isCompact ? 16.0 : 24.0;
     final verticalSpacing = isCompact ? 8.0 : 12.0;
 
+    // Standalone-scrollable so it can act as the body of NestedScrollView
+    // (the outer header dismisses when the user scrolls this list).
     return ListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       itemCount: detail.expenses.length,
       itemBuilder: (context, index) {
         final expense = detail.expenses[index];
@@ -1398,7 +1775,7 @@ class GroupDetailScreen extends ConsumerWidget {
     GroupDetail detail,
     String? myId,
   ) {
-    final screenWidth = MediaQuery.of(context).size.width;
+    final screenWidth = MediaQuery.sizeOf(context).width;
     final isCompact = screenWidth < 600;
     final horizontalPadding = isCompact ? 16.0 : 24.0;
     final verticalSpacing = isCompact ? 8.0 : 12.0;
@@ -1645,6 +2022,7 @@ class _DetailTopBar extends StatelessWidget implements PreferredSizeWidget {
     required this.onEditGroup,
     required this.onLeaveGroup,
     required this.onDeleteGroup,
+    required this.onExportGroup,
     required this.isAdmin,
     required this.canManage,
   });
@@ -1658,6 +2036,9 @@ class _DetailTopBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback? onEditGroup;
   final VoidCallback onLeaveGroup;
   final VoidCallback onDeleteGroup;
+  /// Set when the group is loaded so the user can request a .xlsx ledger.
+  /// Null hides the option while still loading.
+  final VoidCallback? onExportGroup;
 
   /// True when the signed-in user is the group's admin/creator.
   final bool isAdmin;
@@ -1720,6 +2101,9 @@ class _DetailTopBar extends StatelessWidget implements PreferredSizeWidget {
                           break;
                         case 'add_member':
                           onAddMember();
+                          break;
+                        case 'export':
+                          onExportGroup?.call();
                           break;
                         case 'leave':
                           onLeaveGroup();
@@ -1792,6 +2176,24 @@ class _DetailTopBar extends StatelessWidget implements PreferredSizeWidget {
                               ),
                               const SizedBox(width: 10),
                               const Text('Leave group'),
+                            ],
+                          ),
+                        ),
+                      // Export to Excel: any member can export the ledger.
+                      // Placed right before Delete so admins still see Delete
+                      // as the final destructive action.
+                      if (onExportGroup != null)
+                        PopupMenuItem(
+                          value: 'export',
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.file_download_outlined,
+                                size: 18,
+                                color: AppColors.textPrimary(isDark),
+                              ),
+                              const SizedBox(width: 10),
+                              const Text('Export to Excel'),
                             ],
                           ),
                         ),
@@ -2083,9 +2485,13 @@ class _HeroStat extends StatelessWidget {
   }
 }
 
+/// Pill-shaped tab chip. Selected state: filled with brand teal + white
+/// content. Unselected: transparent with muted text and a 60%-opacity
+/// icon — matches the shadcn / Radix "rounded-full primary" tab pattern.
 class _TabButton extends StatelessWidget {
   const _TabButton({
     required this.label,
+    required this.icon,
     required this.selected,
     required this.isDark,
     required this.onTap,
@@ -2093,6 +2499,7 @@ class _TabButton extends StatelessWidget {
   });
 
   final String label;
+  final IconData icon;
   final bool selected;
   final bool isDark;
   final VoidCallback onTap;
@@ -2100,54 +2507,76 @@ class _TabButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fg = selected
-        ? AppColors.textPrimary(isDark)
+    final Color fg = selected
+        ? Colors.white
         : AppColors.textSecondary(isDark);
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(4),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+    final Color iconColor = selected
+        ? Colors.white
+        : AppColors.textSecondary(isDark).withValues(alpha: 0.7);
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '$label tab',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(999),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            curve: Curves.easeOut,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: selected
+                  ? AppColors.tealDark
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(999),
+              border: selected
+                  ? null
+                  : Border.all(color: AppColors.divider(isDark)),
+            ),
+            child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
+                Icon(icon, size: 15, color: iconColor),
+                const SizedBox(width: 6),
                 Text(
                   label,
-                  style: AppTextStyles.body1(isDark).copyWith(
+                  style: AppTextStyles.body2(isDark).copyWith(
                     color: fg,
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                    letterSpacing: -0.1,
                   ),
                 ),
                 if (count != null) ...[
                   const SizedBox(width: 6),
-                  Text(
-                    '$count',
-                    style: AppTextStyles.caption(isDark).copyWith(
-                      color: AppColors.textSecondary(isDark),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 1,
+                    ),
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? Colors.white.withValues(alpha: 0.22)
+                          : AppColors.tealDark.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      '$count',
+                      style: TextStyle(
+                        color: selected
+                            ? Colors.white
+                            : AppColors.tealDark,
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ],
               ],
             ),
-            const SizedBox(height: 5),
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              curve: Curves.easeOutCubic,
-              height: 2,
-              width: selected ? 24 : 0,
-              decoration: BoxDecoration(
-                color: AppColors.tealDark,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -2524,7 +2953,7 @@ class _EmailInviteSheetState extends State<_EmailInviteSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
     return Padding(
       padding: EdgeInsets.fromLTRB(20, 12, 20, 20 + bottomInset),
       child: Column(

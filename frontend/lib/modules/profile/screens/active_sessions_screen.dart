@@ -14,7 +14,7 @@ class ActiveSessionsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final screenWidth = MediaQuery.of(context).size.width;
+    final screenWidth = MediaQuery.sizeOf(context).width;
     final sessionsAsync = ref.watch(sessionsProvider);
 
     return Scaffold(

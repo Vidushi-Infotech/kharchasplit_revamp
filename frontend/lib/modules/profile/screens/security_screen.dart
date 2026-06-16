@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/services/haptic_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../auth/state/auth_provider.dart';
@@ -22,7 +23,7 @@ class _SecurityScreenState extends ConsumerState<SecurityScreen> {
   Widget build(BuildContext context) {
     final ref = this.ref;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final screenWidth = MediaQuery.of(context).size.width;
+    final screenWidth = MediaQuery.sizeOf(context).width;
     final user = ref.watch(authProvider).user;
 
     return Scaffold(
@@ -135,6 +136,7 @@ class _SecurityScreenState extends ConsumerState<SecurityScreen> {
     );
     if (ok != true || !context.mounted) return;
 
+    HapticService.instance.destructive();
     setState(() => _signingOutEverywhere = true);
     try {
       final revoked =
@@ -293,7 +295,7 @@ class _DeleteAccountSheetState extends State<_DeleteAccountSheet> {
       top: false,
       child: Padding(
         padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
+          bottom: MediaQuery.viewInsetsOf(context).bottom,
         ),
         child: Container(
           decoration: BoxDecoration(

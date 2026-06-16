@@ -1,5 +1,8 @@
+import ExcelJS from 'exceljs';
+
 import { query } from '../config/database.js';
 import Group from '../models/Group.js';
+import Settlement from '../models/Settlement.js';
 import GroupService from '../services/groupService.js';
 import ActivityService from '../services/activityService.js';
 import { NotificationService } from '../services/notificationService.js';
@@ -29,43 +32,77 @@ const getGroups = async (req, res, next) => {
     const groupIds = groups.map(g => g.id);
     const membersByGroup = await Group.getMembersByGroupIds(groupIds);
 
-    // Net balance for the requesting user in each of these groups, in one query.
-    // Positive = others owe me; negative = I owe others. Combines expense
-    // contributions and settlement contributions so myBalance reflects
-    // settled debts.
+    // Pair-level breakdown of the requesting user's position in each group.
+    //
+    // For each group we compute three numbers:
+    //   myBalance         = signed per-group net (positive = others owe me net,
+    //                       negative = I owe net). Used by the group card.
+    //   youAreOwedInGroup = sum of positive pair-nets (per other user)
+    //                       within this group. What "I'm owed" totals up to,
+    //                       independent of debts to other people.
+    //   youOweInGroup     = sum of |negative pair-nets| within this group.
+    //                       What "I owe" totals up to.
+    //
+    // Why both: home-screen detail screens ("You're owed" / "You owe") need
+    // pair-level totals so users see Group X even when their per-group net is
+    // positive but they owe one specific member there. The group card and
+    // simplify-debt math still want the net.
     const balancesByGroup = {};
     if (groupIds.length > 0) {
       const placeholders = groupIds.map((_, i) => `$${i + 2}`).join(', ');
       const balanceResult = await query(
-        `SELECT group_id, COALESCE(SUM(contribution), 0) AS net FROM (
-           SELECT e.group_id,
-                  SUM(CASE
-                    WHEN e.paid_by = $1 AND es.user_id != $1 THEN es.amount
-                    WHEN e.paid_by != $1 AND es.user_id = $1 THEN -es.amount
-                    ELSE 0
-                  END) AS contribution
+        `WITH pair_deltas AS (
+           -- I paid → each other split row means that user owes me
+           SELECT e.group_id, es.user_id AS other_user_id, es.amount AS delta
            FROM expenses e
            JOIN expense_splits es ON es.expense_id = e.id
-           WHERE e.deleted_at IS NULL AND e.group_id IN (${placeholders})
-           GROUP BY e.group_id
+           WHERE e.deleted_at IS NULL
+             AND e.paid_by = $1
+             AND es.user_id != $1
+             AND e.group_id IN (${placeholders})
            UNION ALL
-           SELECT s.group_id,
-                  SUM(CASE
-                    WHEN s.from_user_id = $1 THEN s.amount
-                    WHEN s.to_user_id   = $1 THEN -s.amount
-                    ELSE 0
-                  END) AS contribution
+           -- Other paid → I owe them my split
+           SELECT e.group_id, e.paid_by AS other_user_id, -es.amount AS delta
+           FROM expenses e
+           JOIN expense_splits es ON es.expense_id = e.id
+           WHERE e.deleted_at IS NULL
+             AND e.paid_by != $1
+             AND es.user_id = $1
+             AND e.group_id IN (${placeholders})
+           UNION ALL
+           SELECT s.group_id, s.to_user_id AS other_user_id, s.amount AS delta
            FROM settlements s
            WHERE s.deleted_at IS NULL
-             AND (s.status IS NULL OR s.status NOT IN ('failed', 'cancelled'))
+             AND s.status = 'paid'
+             AND s.from_user_id = $1
              AND s.group_id IN (${placeholders})
-           GROUP BY s.group_id
-         ) all_contributions
+           UNION ALL
+           SELECT s.group_id, s.from_user_id AS other_user_id, -s.amount AS delta
+           FROM settlements s
+           WHERE s.deleted_at IS NULL
+             AND s.status = 'paid'
+             AND s.to_user_id = $1
+             AND s.group_id IN (${placeholders})
+         ),
+         pair_net AS (
+           SELECT group_id, other_user_id, SUM(delta) AS net
+           FROM pair_deltas
+           GROUP BY group_id, other_user_id
+         )
+         SELECT group_id,
+                COALESCE(SUM(net), 0)                  AS my_balance,
+                COALESCE(SUM(GREATEST(net, 0)), 0)     AS you_are_owed_in_group,
+                COALESCE(SUM(GREATEST(-net, 0)), 0)    AS you_owe_in_group
+         FROM pair_net
          GROUP BY group_id`,
         [userId, ...groupIds]
       );
       for (const row of balanceResult.rows) {
-        balancesByGroup[row.group_id] = parseFloat(row.net);
+        balancesByGroup[row.group_id] = {
+          myBalance: parseFloat(row.my_balance),
+          youAreOwedInGroup: parseFloat(row.you_are_owed_in_group),
+          youOweInGroup: parseFloat(row.you_owe_in_group),
+        };
       }
     }
 
@@ -83,6 +120,11 @@ const getGroups = async (req, res, next) => {
         isPlaceholder: member.is_placeholder || false,
       }));
 
+      const bal = balancesByGroup[group.id] || {
+        myBalance: 0,
+        youAreOwedInGroup: 0,
+        youOweInGroup: 0,
+      };
       return {
         id: group.id,
         name: group.name,
@@ -96,7 +138,11 @@ const getGroups = async (req, res, next) => {
         memberCount: parseInt(group.member_count) || 0,
         expenseCount: parseInt(group.expense_count) || 0,
         totalExpenses: parseFloat(group.total_expenses) || 0,
-        myBalance: balancesByGroup[group.id] || 0,
+        myBalance: bal.myBalance,
+        // Pair-level aggregates so the "You're owed" / "You owe" detail
+        // screens can list this group even when myBalance net is positive.
+        youAreOwedInGroup: bal.youAreOwedInGroup,
+        youOweInGroup: bal.youOweInGroup,
         members: transformedMembers,
       };
     });
@@ -789,6 +835,70 @@ const removeGroupMember = async (req, res, next) => {
     ]);
     const member = members.find(m => m.user_id === userId);
 
+    // Admin-removing-another path: data-integrity gate. Soft-deleting a
+    // member with unsettled splits would leave phantom debt in the
+    // balance computation (the split rows still reference them, but the
+    // member list filters them out — UI can never settle the debt).
+    //
+    // Two-step protocol:
+    //   1. First call → if unsettled, return 409 with structured debt
+    //      list so the client can show a "write off and remove" prompt.
+    //   2. Second call sets acknowledgeUnsettledDebt:true → we create
+    //      completed write-off settlements for each pair, zeroing the
+    //      member's balance, before soft-deleting the membership.
+    let writeOffPairs = [];
+    if (!isRemovingSelf) {
+      const pair = await GroupService.getUserPairwiseDebts(id, userId);
+      writeOffPairs = [...pair.entries()]
+        .filter(([, amt]) => Math.abs(amt) > 0.005)
+        .map(([otherUserId, amount]) => ({ otherUserId, amount }));
+
+      const acknowledged = req.body?.acknowledgeUnsettledDebt === true;
+      if (writeOffPairs.length > 0 && !acknowledged) {
+        // Resolve names for the UI so it doesn't have to re-fetch.
+        const named = writeOffPairs.map(p => {
+          const other = members.find(m => m.user_id === p.otherUserId);
+          return {
+            userId: p.otherUserId,
+            userName: other?.name || 'Unknown',
+            // Sign convention matches getUserPairwiseDebts:
+            // amount > 0 → the member being removed owes that party.
+            // amount < 0 → that party owes the member being removed.
+            amount: Number(p.amount.toFixed(2)),
+          };
+        });
+        return res.status(409).json({
+          success: false,
+          error: 'Member has unsettled balances',
+          code: 'UNSETTLED_BALANCES',
+          data: {
+            memberId: userId,
+            memberName: member?.name || 'Member',
+            pairwise: named,
+            currency: group?.currency_code || 'INR',
+          },
+        });
+      }
+
+      // Acknowledged path — create write-off settlements before delete.
+      // Status is 'completed' so the balance compute treats them as
+      // already settled; notes carry an audit trail.
+      for (const p of writeOffPairs) {
+        const amount = Math.abs(p.amount);
+        const fromUserId = p.amount > 0 ? userId : p.otherUserId;
+        const toUserId = p.amount > 0 ? p.otherUserId : userId;
+        await Settlement.create({
+          groupId: id,
+          fromUserId,
+          toUserId,
+          amount,
+          currency: group?.currency_code || 'INR',
+          status: 'completed',
+          notes: `Written off — ${member?.name || 'member'} removed by admin`,
+        });
+      }
+    }
+
     const removed = await Group.removeMember(id, userId);
 
     if (!removed) {
@@ -1203,6 +1313,326 @@ const inviteByEmail = async (req, res, next) => {
   }
 };
 
+
+// ---------------------------------------------------------------------------
+// Export group ledger as .xlsx
+// ---------------------------------------------------------------------------
+
+/**
+ * GET /api/v1/groups/:id/export
+ *
+ * Builds a multi-sheet workbook (Summary, Members, Expenses, Pairwise debts,
+ * Settlements) and streams it back as application/vnd.openxmlformats. Any
+ * group member can export; the file represents the group ledger from their
+ * perspective (member identity is included so the receiver can audit).
+ *
+ * The workbook is small (typically <100KB even for hundreds of expenses) so
+ * we buffer it in memory before writing — no streaming complexity needed at
+ * KharchaSplit's scale.
+ */
+const exportGroup = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    await GroupService.validateGroupAccess(id, req.user.id);
+
+    const group = await Group.findByIdFull(id);
+    if (!group) {
+      return res.status(404).json({ success: false, error: 'Group not found' });
+    }
+
+    const members = await Group.getMembers(id);
+
+    const expensesResult = await query(
+      `SELECT e.id, e.description, e.amount, e.currency, e.category,
+              e.paid_by, e.split_type, e.notes, e.expense_date, e.created_at,
+              u.name AS paid_by_name
+       FROM expenses e
+       LEFT JOIN users u ON u.id = e.paid_by
+       WHERE e.group_id = $1 AND e.deleted_at IS NULL
+       ORDER BY e.expense_date DESC, e.created_at DESC`,
+      [id]
+    );
+    const expenses = expensesResult.rows;
+    const expenseIds = expenses.map(e => e.id);
+
+    const splitsByExpense = {};
+    if (expenseIds.length > 0) {
+      const splitsResult = await query(
+        `SELECT es.expense_id, es.user_id, es.amount, es.percentage, es.shares,
+                u.name AS user_name
+         FROM expense_splits es
+         LEFT JOIN users u ON u.id = es.user_id
+         WHERE es.expense_id = ANY($1::uuid[]) AND es.deleted_at IS NULL
+         ORDER BY es.amount DESC`,
+        [expenseIds]
+      );
+      for (const s of splitsResult.rows) {
+        if (!splitsByExpense[s.expense_id]) splitsByExpense[s.expense_id] = [];
+        splitsByExpense[s.expense_id].push(s);
+      }
+    }
+
+    const settlementsResult = await query(
+      `SELECT s.id, s.from_user_id, s.to_user_id, s.amount, s.currency,
+              s.status, s.notes, s.settled_at, s.created_at, s.confirmed_at,
+              fu.name AS from_name, tu.name AS to_name
+       FROM settlements s
+       LEFT JOIN users fu ON fu.id = s.from_user_id
+       LEFT JOIN users tu ON tu.id = s.to_user_id
+       WHERE s.group_id = $1 AND s.deleted_at IS NULL
+       ORDER BY s.created_at DESC`,
+      [id]
+    );
+    const settlements = settlementsResult.rows;
+
+    // Per-member totals (paid + share) — derived from expense rows.
+    const memberTotals = new Map();
+    const ensureMember = (uid, name) => {
+      if (!memberTotals.has(uid)) {
+        memberTotals.set(uid, { name: name || 'Unknown', paid: 0, share: 0 });
+      } else if (name && memberTotals.get(uid).name === 'Unknown') {
+        memberTotals.get(uid).name = name;
+      }
+      return memberTotals.get(uid);
+    };
+    for (const m of members) ensureMember(m.user_id, m.name);
+    for (const e of expenses) {
+      const m = ensureMember(e.paid_by, e.paid_by_name);
+      m.paid += parseFloat(e.amount);
+      for (const s of splitsByExpense[e.id] || []) {
+        const mm = ensureMember(s.user_id, s.user_name);
+        mm.share += parseFloat(s.amount);
+      }
+    }
+
+    // Pairwise net debts among all members (positive net = row owes column).
+    // O(n*m) over expenses+splits — fine for any realistic group.
+    const pairwise = new Map(); // key = `${ower}__${owed}`
+    const addPair = (ower, owed, amount) => {
+      if (!ower || !owed || ower === owed) return;
+      const key = `${ower}__${owed}`;
+      pairwise.set(key, (pairwise.get(key) || 0) + amount);
+    };
+    for (const e of expenses) {
+      const payer = e.paid_by;
+      for (const s of splitsByExpense[e.id] || []) {
+        if (s.user_id !== payer) addPair(s.user_id, payer, parseFloat(s.amount));
+      }
+    }
+    for (const st of settlements) {
+      if (st.status !== 'paid') continue;
+      // from_user paid to to_user → from owes less / to is owed less
+      addPair(st.from_user_id, st.to_user_id, -parseFloat(st.amount));
+    }
+    // Collapse symmetric pairs into one net edge.
+    const seen = new Set();
+    const netDebts = [];
+    for (const [key, amount] of pairwise.entries()) {
+      const [a, b] = key.split('__');
+      const reverseKey = `${b}__${a}`;
+      if (seen.has(key) || seen.has(reverseKey)) continue;
+      const reverse = pairwise.get(reverseKey) || 0;
+      const net = amount - reverse;
+      seen.add(key);
+      seen.add(reverseKey);
+      if (Math.abs(net) < 0.005) continue;
+      const nameOf = (uid) => memberTotals.get(uid)?.name || 'Unknown';
+      if (net > 0) {
+        netDebts.push({ from: nameOf(a), to: nameOf(b), amount: net });
+      } else {
+        netDebts.push({ from: nameOf(b), to: nameOf(a), amount: -net });
+      }
+    }
+    netDebts.sort((a, b) => b.amount - a.amount);
+
+    // Build workbook ---------------------------------------------------------
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'KharchaSplit';
+    wb.created = new Date();
+
+    const headerStyle = {
+      font: { bold: true, color: { argb: 'FFFFFFFF' } },
+      fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F4E78' } },
+      alignment: { vertical: 'middle', horizontal: 'left' },
+    };
+    const applyHeader = (row) => {
+      row.eachCell((cell) => {
+        cell.font = headerStyle.font;
+        cell.fill = headerStyle.fill;
+        cell.alignment = headerStyle.alignment;
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FFBFBFBF' } },
+          bottom: { style: 'thin', color: { argb: 'FFBFBFBF' } },
+          left: { style: 'thin', color: { argb: 'FFBFBFBF' } },
+          right: { style: 'thin', color: { argb: 'FFBFBFBF' } },
+        };
+      });
+      row.height = 22;
+    };
+
+    // ---------- Summary sheet ----------
+    const summary = wb.addWorksheet('Summary');
+    summary.columns = [
+      { width: 28 },
+      { width: 45 },
+    ];
+    summary.addRow(['KharchaSplit Group Export']).font = { bold: true, size: 16 };
+    summary.addRow([]);
+    const totalExpenseAmt = expenses.reduce((sum, e) => sum + parseFloat(e.amount), 0);
+    const summaryRows = [
+      ['Group Name', group.name],
+      ['Description', group.description || '—'],
+      ['Currency', group.currency || 'INR'],
+      ['Created At', group.created_at],
+      ['Total Members', members.length],
+      ['Total Expenses', expenses.length],
+      ['Total Expense Amount', totalExpenseAmt],
+      ['Total Settlements', settlements.length],
+      ['Exported By', req.user.name],
+      ['Exported At', new Date()],
+    ];
+    for (const [k, v] of summaryRows) {
+      const row = summary.addRow([k, v]);
+      row.getCell(1).font = { bold: true };
+      row.getCell(1).fill = {
+        type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDDEBF7' },
+      };
+    }
+
+    // ---------- Members sheet ----------
+    const memberSheet = wb.addWorksheet('Members');
+    memberSheet.columns = [
+      { header: 'Name', key: 'name', width: 28 },
+      { header: 'Phone', key: 'phone', width: 20 },
+      { header: 'Email', key: 'email', width: 30 },
+      { header: 'Role', key: 'role', width: 14 },
+      { header: 'Total Paid', key: 'paid', width: 16 },
+      { header: 'Total Share', key: 'share', width: 16 },
+      { header: 'Net Position', key: 'net', width: 16 },
+    ];
+    applyHeader(memberSheet.getRow(1));
+    for (const m of members) {
+      const totals = memberTotals.get(m.user_id) || { paid: 0, share: 0 };
+      const net = totals.paid - totals.share;
+      memberSheet.addRow({
+        name: m.name,
+        phone: m.phone_number || '—',
+        email: m.email || '—',
+        role: m.role,
+        paid: +totals.paid.toFixed(2),
+        share: +totals.share.toFixed(2),
+        net: +net.toFixed(2),
+      });
+    }
+    memberSheet.getColumn('paid').numFmt = '#,##0.00';
+    memberSheet.getColumn('share').numFmt = '#,##0.00';
+    memberSheet.getColumn('net').numFmt = '#,##0.00';
+
+    // ---------- Expenses sheet ----------
+    const expSheet = wb.addWorksheet('Expenses');
+    expSheet.columns = [
+      { header: 'Date', key: 'date', width: 12 },
+      { header: 'Description', key: 'desc', width: 35 },
+      { header: 'Category', key: 'cat', width: 14 },
+      { header: 'Amount', key: 'amount', width: 12 },
+      { header: 'Currency', key: 'curr', width: 10 },
+      { header: 'Paid By', key: 'payer', width: 22 },
+      { header: 'Split Type', key: 'splitType', width: 12 },
+      { header: 'Participants & Shares', key: 'participants', width: 50 },
+      { header: 'Notes', key: 'notes', width: 28 },
+    ];
+    applyHeader(expSheet.getRow(1));
+    for (const e of expenses) {
+      const parts = (splitsByExpense[e.id] || [])
+        .map(s => `${s.user_name || 'Unknown'}: ${parseFloat(s.amount).toFixed(2)}`)
+        .join('; ');
+      const row = expSheet.addRow({
+        date: e.expense_date ? new Date(e.expense_date) : null,
+        desc: e.description,
+        cat: e.category || '—',
+        amount: parseFloat(e.amount),
+        curr: e.currency || 'INR',
+        payer: e.paid_by_name || 'Unknown',
+        splitType: e.split_type || 'equal',
+        participants: parts,
+        notes: e.notes || '',
+      });
+      row.getCell('amount').numFmt = '#,##0.00';
+      row.getCell('date').numFmt = 'yyyy-mm-dd';
+      row.alignment = { wrapText: true, vertical: 'top' };
+    }
+
+    // ---------- Pairwise net debts ----------
+    const debtSheet = wb.addWorksheet('Net Debts');
+    debtSheet.columns = [
+      { header: 'From (Owes)', key: 'from', width: 28 },
+      { header: 'To (Receives)', key: 'to', width: 28 },
+      { header: 'Amount', key: 'amount', width: 16 },
+    ];
+    applyHeader(debtSheet.getRow(1));
+    if (netDebts.length === 0) {
+      debtSheet.addRow({ from: 'All settled up — no outstanding debts', to: '', amount: '' });
+    } else {
+      for (const d of netDebts) {
+        const r = debtSheet.addRow(d);
+        r.getCell('amount').numFmt = '#,##0.00';
+      }
+    }
+
+    // ---------- Settlements sheet ----------
+    const setSheet = wb.addWorksheet('Settlements');
+    setSheet.columns = [
+      { header: 'Date', key: 'date', width: 12 },
+      { header: 'From', key: 'from', width: 22 },
+      { header: 'To', key: 'to', width: 22 },
+      { header: 'Amount', key: 'amount', width: 14 },
+      { header: 'Currency', key: 'curr', width: 10 },
+      { header: 'Status', key: 'status', width: 12 },
+      { header: 'Confirmed At', key: 'confirmed', width: 18 },
+      { header: 'Notes', key: 'notes', width: 28 },
+    ];
+    applyHeader(setSheet.getRow(1));
+    if (settlements.length === 0) {
+      setSheet.addRow({ from: 'No settlements yet' });
+    } else {
+      for (const s of settlements) {
+        const r = setSheet.addRow({
+          date: s.settled_at ? new Date(s.settled_at) : null,
+          from: s.from_name || 'Unknown',
+          to: s.to_name || 'Unknown',
+          amount: parseFloat(s.amount),
+          curr: s.currency || 'INR',
+          status: s.status || 'pending',
+          confirmed: s.confirmed_at ? new Date(s.confirmed_at) : null,
+          notes: s.notes || '',
+        });
+        r.getCell('amount').numFmt = '#,##0.00';
+        r.getCell('date').numFmt = 'yyyy-mm-dd';
+        r.getCell('confirmed').numFmt = 'yyyy-mm-dd hh:mm';
+      }
+    }
+
+    const buffer = await wb.xlsx.writeBuffer();
+
+    const safeName = group.name.replace(/[^\w\-]+/g, '_').slice(0, 40) || 'group';
+    const stamp = new Date().toISOString().slice(0, 10);
+    const filename = `kharchasplit_${safeName}_${stamp}.xlsx`;
+
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', buffer.byteLength);
+    res.end(Buffer.from(buffer));
+  } catch (error) {
+    if (error.message === 'User is not a member of this group') {
+      return res.status(403).json({ success: false, error: error.message });
+    }
+    next(error);
+  }
+};
+
 export default {
   getGroups,
   getGroup,
@@ -1222,4 +1652,5 @@ export default {
   completeGroup,
   remindForBalance,
   inviteByEmail,
+  exportGroup,
 };

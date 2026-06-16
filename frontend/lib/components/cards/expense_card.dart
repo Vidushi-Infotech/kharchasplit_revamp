@@ -46,7 +46,7 @@ class ExpenseCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final meId = ref.watch(authProvider).user?.id;
+    final meId = ref.watch(myIdProvider);
     final view = _myView(meId);
 
     // Compute the headline amount + badge based on this user's relation to

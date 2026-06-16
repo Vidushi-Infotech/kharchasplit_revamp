@@ -129,6 +129,10 @@ const createExpense = async (req, res, next) => {
 
     // Invalidate group expense/balance caches
     Expense.invalidateGroupExpenses(groupId);
+    // Bust every group member's dashboard cache so "You owe / You're owed"
+    // on the homescreen reflects this expense immediately (otherwise stale
+    // until the 60s TTL on user:<id>:dashboard expires).
+    await GroupService.invalidateMemberDashboards(groupId);
 
     // Log activity
     await ActivityService.logExpenseAdded(
@@ -234,8 +238,9 @@ const updateExpense = async (req, res, next) => {
       ? await Expense.updateWithSplits(id, fields, participants)
       : await Expense.update(id, fields);
 
-    // Invalidate group expense/balance caches
+    // Invalidate group expense/balance caches + every member's dashboard.
     Expense.invalidateGroupExpenses(existingExpense.group_id);
+    await GroupService.invalidateMemberDashboards(existingExpense.group_id);
 
     res.json({
       success: true,
@@ -288,8 +293,9 @@ const deleteExpense = async (req, res, next) => {
       });
     }
 
-    // Invalidate group expense/balance caches
+    // Invalidate group expense/balance caches + every member's dashboard.
     Expense.invalidateGroupExpenses(expense.group_id);
+    await GroupService.invalidateMemberDashboards(expense.group_id);
 
     res.json({
       success: true,

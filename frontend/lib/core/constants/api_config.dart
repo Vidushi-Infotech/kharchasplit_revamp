@@ -13,7 +13,19 @@
 class ApiConfig {
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
+    // ─── Production (default) ───
     defaultValue: 'https://api.kharchasplit.com/api/v1',
+    // ─── Local dev toggle ───
+    // To run against a backend on your laptop, comment the production
+    // line above and uncomment ONE of the lines below. Replace the LAN
+    // IP with your own Mac's `ipconfig getifaddr en0`. The backend must
+    // listen on 0.0.0.0 (not just 127.0.0.1) for the phone to reach it,
+    // and `usesCleartextTraffic` is already allowed in the debug
+    // Android manifest so plain `http://` works.
+    //
+    // defaultValue: 'http://192.168.X.X:3000/api/v1',   // your Mac LAN IP
+    // defaultValue: 'http://10.0.2.2:3000/api/v1',      // Android emulator → host
+    // defaultValue: 'http://localhost:3000/api/v1',     // physical device + `adb reverse tcp:3000 tcp:3000`
   );
 
   static const Duration connectTimeout = Duration(seconds: 10);

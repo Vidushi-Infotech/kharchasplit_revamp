@@ -126,7 +126,7 @@ class _AddPersonalExpenseScreenState
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final screenWidth = MediaQuery.of(context).size.width;
+    final screenWidth = MediaQuery.sizeOf(context).width;
     final maxFormWidth = screenWidth < 600
         ? double.infinity
         : screenWidth < 1100

@@ -22,6 +22,10 @@ class OwedToMeScreen extends ConsumerWidget {
           : 'Across ${groups.length} ${groups.length == 1 ? 'group' : 'groups'}',
       accent: AppColors.success,
       groups: groups,
+      // Show the pair-level "owed to me" total for THIS group, not the per-
+      // group net. Otherwise a group where you net +566 but are actually
+      // owed +2200 by one member would display ₹566 instead of ₹2200.
+      amountExtractor: (g) => (g.youAreOwedInGroup as num).toDouble(),
       emptyEmoji: '🎉',
       emptyTitle: 'All settled up!',
       emptyMessage: 'No one owes you money right now.',

@@ -79,7 +79,7 @@ class _PersonalExpensesScreenState
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final screenWidth = MediaQuery.of(context).size.width;
+    final screenWidth = MediaQuery.sizeOf(context).width;
     final asyncExpenses = ref.watch(personalExpensesProvider);
 
     return Scaffold(

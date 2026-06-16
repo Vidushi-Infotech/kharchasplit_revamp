@@ -22,6 +22,10 @@ class IOweScreen extends ConsumerWidget {
           : 'Across ${groups.length} ${groups.length == 1 ? 'group' : 'groups'}',
       accent: AppColors.warning,
       groups: groups,
+      // Show the pair-level "I owe" total for THIS group, not the per-group
+      // net. The group appears in this list whenever you owe ANY member in
+      // it, even if your overall net in the group is positive.
+      amountExtractor: (g) => (g.youOweInGroup as num).toDouble(),
       emptyEmoji: '🥳',
       emptyTitle: 'No pending dues',
       emptyMessage: 'You don\'t owe anyone right now.',
