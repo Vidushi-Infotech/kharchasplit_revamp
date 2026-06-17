@@ -9,7 +9,7 @@ import { monitorEventLoopDelay } from 'perf_hooks';
 
 import { testConnection, pool, getPoolMetrics } from './config/database.js';
 import { initializeDatabase } from './config/initDatabase.js';
-import { initFirebase } from './config/firebaseAdmin.js';
+import { initFirebase, isFirebaseReady } from './config/firebaseAdmin.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
 import { cache } from './services/cacheService.js';
 import { logger } from './utils/logger.js';
@@ -122,7 +122,11 @@ if (process.env.NODE_ENV !== 'test') {
   }));
 }
 
-// Health check — includes pool + cache metrics for monitoring
+// Health check — includes pool + cache + firebase status for monitoring.
+// `firebase.ready` is the fastest way to verify push notifications can be
+// sent: false here means initFirebase() either couldn't find the service
+// account file (or the FIREBASE_SERVICE_ACCOUNT env var) or the credential
+// itself rejected. Push will silently no-op until this flips to true.
 app.get('/health', (req, res) => {
   res.json({
     success: true,
@@ -131,6 +135,7 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
     pool: getPoolMetrics(),
     cache: cache.getStats(),
+    firebase: { ready: isFirebaseReady() },
   });
 });
 
