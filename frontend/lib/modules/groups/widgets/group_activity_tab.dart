@@ -25,9 +25,19 @@ import '../state/group_detail_provider.dart';
 /// and settlements with expand-in-place detail, date grouping, filter
 /// chips, search, pull-to-refresh, and push-driven auto-refresh.
 class GroupActivityTab extends ConsumerStatefulWidget {
-  const GroupActivityTab({super.key, required this.groupId});
+  const GroupActivityTab({
+    super.key,
+    required this.groupId,
+    this.onRefresh,
+  });
 
   final String groupId;
+
+  /// Pull-to-refresh callback. When the parent (Group Detail screen)
+  /// supplies one, we delegate to it so a single swipe reloads ALL three
+  /// tabs' data — not just the activity feed. Falls back to a local
+  /// invalidate when null so the widget still works standalone.
+  final Future<void> Function()? onRefresh;
 
   @override
   ConsumerState<GroupActivityTab> createState() => _GroupActivityTabState();
@@ -90,6 +100,13 @@ class _GroupActivityTabState extends ConsumerState<GroupActivityTab> {
     // first few rows, leaving only the pinned tab bar at the top.
     return RefreshIndicator(
       onRefresh: () async {
+        // Delegate to the parent screen when one is provided so the swipe
+        // reloads every tab's data, not just the activity feed. Fall back
+        // to a local invalidate so the widget still works standalone.
+        if (widget.onRefresh != null) {
+          await widget.onRefresh!();
+          return;
+        }
         HapticService.instance.thresholdCrossed();
         ref.invalidate(groupDetailProvider(widget.groupId));
         await ref.read(groupDetailProvider(widget.groupId).future);

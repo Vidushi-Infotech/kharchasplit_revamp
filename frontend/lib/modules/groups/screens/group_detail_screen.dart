@@ -150,15 +150,15 @@ class GroupDetailScreen extends ConsumerWidget {
                         context, isDark, detail, tab, ref, myId, isAdmin)
                     : _buildLargeLayout(
                         context, isDark, detail, tab, ref, myId, isAdmin);
+            // Outer RefreshIndicator catches pulls from the very TOP of the
+            // header (above the sticky tab bar). Each tab body below also
+            // has its own RefreshIndicator so the swipe works from inside
+            // the list / scroll view — see _buildTabBody. All three call
+            // the same _refreshAllTabs so any pull always reloads the
+            // group's full state (balances, expenses, members, activity,
+            // pending settlements).
             return RefreshIndicator(
-              onRefresh: () async {
-                // Invalidate the family entry for this group + the pending
-                // settlement providers so the screen pulls fresh data on swipe.
-                ref.invalidate(groupDetailProvider(groupId));
-                ref.invalidate(pendingIncomingSettlementsProvider(groupId));
-                ref.invalidate(pendingOutgoingSettlementsProvider(groupId));
-                await ref.read(groupDetailProvider(groupId).future);
-              },
+              onRefresh: () => _refreshAllTabs(ref),
               child: body,
             );
           },
@@ -972,30 +972,66 @@ class GroupDetailScreen extends ConsumerWidget {
           ),
         ),
       ],
-      body: _buildTabBody(context, isDark, tab, detail, myId),
+      body: _buildTabBody(context, isDark, ref, tab, detail, myId),
     );
+  }
+
+  /// Invalidate every provider that feeds any of the 3 tabs on this screen,
+  /// then await the main fetch so the [RefreshIndicator] hides at the
+  /// moment fresh data lands. Called from:
+  ///   * the outer RefreshIndicator (top-of-header pull)
+  ///   * inline RefreshIndicators inside each tab body
+  ///   * GroupActivityTab's onRefresh
+  /// Same callback everywhere so users can pull from ANY tab and get the
+  /// full group state refreshed in one shot.
+  Future<void> _refreshAllTabs(WidgetRef ref) async {
+    HapticService.instance.thresholdCrossed();
+    ref.invalidate(groupDetailProvider(groupId));
+    ref.invalidate(pendingIncomingSettlementsProvider(groupId));
+    ref.invalidate(pendingOutgoingSettlementsProvider(groupId));
+    // groupFeedProvider (activity feed) derives from groupDetailProvider, so
+    // invalidating the parent above already refreshes the feed — no separate
+    // invalidate call needed.
+    await ref.read(groupDetailProvider(groupId).future);
   }
 
   /// Body for whichever tab is currently selected. Lives below the pinned
   /// tab bar inside [NestedScrollView]; each branch is responsible for its
   /// own internal scrolling.
+  ///
+  /// Each branch wraps its scrollable in a [RefreshIndicator] so the pull
+  /// gesture works from anywhere inside the tab — not just when the user
+  /// has scrolled to the absolute top (which is the only place the outer
+  /// RefreshIndicator triggers when wrapping a [NestedScrollView]).
   Widget _buildTabBody(
     BuildContext context,
     bool isDark,
+    WidgetRef ref,
     GroupTab tab,
     GroupDetail detail,
     String? myId,
   ) {
     switch (tab) {
       case GroupTab.expenses:
-        return _buildExpensesList(context, isDark, detail);
+        return RefreshIndicator(
+          onRefresh: () => _refreshAllTabs(ref),
+          child: _buildExpensesList(context, isDark, detail),
+        );
       case GroupTab.balances:
-        return SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          child: _buildBalancesTab(context, isDark, detail, myId),
+        return RefreshIndicator(
+          onRefresh: () => _refreshAllTabs(ref),
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: _buildBalancesTab(context, isDark, detail, myId),
+          ),
         );
       case GroupTab.activity:
-        return GroupActivityTab(groupId: groupId);
+        // GroupActivityTab has its own RefreshIndicator wired to the same
+        // shared callback so all 3 tabs behave identically.
+        return GroupActivityTab(
+          groupId: groupId,
+          onRefresh: () => _refreshAllTabs(ref),
+        );
     }
   }
 
@@ -1025,7 +1061,7 @@ class GroupDetailScreen extends ConsumerWidget {
           ),
         ),
       ],
-      body: _buildTabBody(context, isDark, tab, detail, myId),
+      body: _buildTabBody(context, isDark, ref, tab, detail, myId),
     );
   }
 
@@ -1081,8 +1117,8 @@ class GroupDetailScreen extends ConsumerWidget {
                   color: AppColors.divider(isDark).withValues(alpha: 0.5),
                 ),
                 Expanded(
-                  child:
-                      _buildTabBody(context, isDark, tab, detail, myId),
+                  child: _buildTabBody(
+                      context, isDark, ref, tab, detail, myId),
                 ),
               ],
             ),
