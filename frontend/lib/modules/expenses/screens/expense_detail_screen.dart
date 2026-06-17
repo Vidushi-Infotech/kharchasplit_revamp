@@ -290,71 +290,74 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              Semantics(
-                button: true,
-                label: 'More options',
-                child: PopupMenuButton<String>(
-                  onSelected: onMenuSelected,
-                  color: AppColors.cardBg(isDark),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    side: BorderSide(color: AppColors.divider(isDark)),
-                  ),
-                  icon: Container(
-                    width: 40,
-                    height: 40,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: AppColors.cardBg(isDark),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: AppColors.divider(isDark)),
+              // Only the person who added the expense (the payer) sees the
+              // three-dots menu at all — other members get no menu button.
+              if (canDelete)
+                Semantics(
+                  button: true,
+                  label: 'More options',
+                  child: PopupMenuButton<String>(
+                    onSelected: onMenuSelected,
+                    color: AppColors.cardBg(isDark),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(color: AppColors.divider(isDark)),
                     ),
-                    child: Icon(
-                      Icons.more_vert_rounded,
-                      size: 18,
-                      color: AppColors.textPrimary(isDark),
+                    icon: Container(
+                      width: 40,
+                      height: 40,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: AppColors.cardBg(isDark),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppColors.divider(isDark)),
+                      ),
+                      child: Icon(
+                        Icons.more_vert_rounded,
+                        size: 18,
+                        color: AppColors.textPrimary(isDark),
+                      ),
                     ),
+                    itemBuilder: (_) => [
+                      // Edit gates on the same payer-only rule as Delete: the
+                      // backend rejects PUT /expenses/:id with 403 if the
+                      // caller isn't the original payer.
+                      if (canDelete)
+                        PopupMenuItem(
+                          value: 'edit',
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.edit_rounded,
+                                size: 18,
+                                color: AppColors.textPrimary(isDark),
+                              ),
+                              const SizedBox(width: 10),
+                              const Text('Edit'),
+                            ],
+                          ),
+                        ),
+                      if (canDelete)
+                        PopupMenuItem(
+                          value: 'delete',
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.delete_outline_rounded,
+                                size: 18,
+                                color: AppColors.warning,
+                              ),
+                              const SizedBox(width: 10),
+                              Text(
+                                'Delete',
+                                style: TextStyle(color: AppColors.warning),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
                   ),
-                  itemBuilder: (_) => [
-                    // Edit gates on the same payer-only rule as Delete: the
-                    // backend rejects PUT /expenses/:id with 403 if the
-                    // caller isn't the original payer.
-                    if (canDelete)
-                      PopupMenuItem(
-                        value: 'edit',
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.edit_rounded,
-                              size: 18,
-                              color: AppColors.textPrimary(isDark),
-                            ),
-                            const SizedBox(width: 10),
-                            const Text('Edit'),
-                          ],
-                        ),
-                      ),
-                    if (canDelete)
-                      PopupMenuItem(
-                        value: 'delete',
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.delete_outline_rounded,
-                              size: 18,
-                              color: AppColors.warning,
-                            ),
-                            const SizedBox(width: 10),
-                            Text(
-                              'Delete',
-                              style: TextStyle(color: AppColors.warning),
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
                 ),
-              ),
               const SizedBox(width: 12),
             ],
           ),
