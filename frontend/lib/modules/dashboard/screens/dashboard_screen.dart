@@ -162,7 +162,11 @@ class DashboardScreen extends ConsumerWidget {
           title: 'Your Groups',
           onAdd: () => context.pushNamed('create-group'),
           addLabel: 'Create new group',
-          onSeeAll: () => context.go('/home/groups'),
+          // push (not go) so the All-Groups screen lands on top of the
+          // dashboard route and gets a back button. The bottom-nav tab
+          // still uses go, so tapping the Groups tab arrives without a
+          // back button (correct behaviour for a tab destination).
+          onSeeAll: () => context.push('/home/groups'),
         ),
         const SizedBox(height: 12),
         if (data.recentGroups.isEmpty)

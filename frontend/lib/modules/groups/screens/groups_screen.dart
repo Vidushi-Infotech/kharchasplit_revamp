@@ -349,12 +349,26 @@ class _ExpandedTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Show a back button ONLY when this screen was pushed onto a stack
+    // (i.e. reached from the dashboard's 'Your Groups >' link). When the
+    // user lands here via the bottom-nav Groups tab, canPop is false and
+    // no chevron is shown — Groups is a root destination in that case.
+    final canPop = Navigator.of(context).canPop();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
         Row(
           children: [
+            if (canPop) ...[
+              _IconAction(
+                icon: Icons.arrow_back_rounded,
+                isDark: isDark,
+                onTap: () => Navigator.of(context).pop(),
+                label: 'Back',
+              ),
+              const SizedBox(width: 4),
+            ],
             Expanded(
               child: Text(
                 'GROUPS',
@@ -413,12 +427,25 @@ class _CollapsedTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Same canPop guard as in _ExpandedTitle: back chevron only when
+    // pushed onto a stack, never when reached via the bottom tab.
+    final canPop = Navigator.of(context).canPop();
     return Align(
       alignment: Alignment.bottomLeft,
       child: Padding(
         padding: const EdgeInsets.only(bottom: 6),
         child: Row(
           children: [
+            if (canPop) ...[
+              _IconAction(
+                icon: Icons.arrow_back_rounded,
+                isDark: isDark,
+                onTap: () => Navigator.of(context).pop(),
+                label: 'Back',
+                compact: true,
+              ),
+              const SizedBox(width: 4),
+            ],
             Expanded(
               child: Text(
                 totalCount == 0 ? 'Groups' : 'Groups · $totalCount',
