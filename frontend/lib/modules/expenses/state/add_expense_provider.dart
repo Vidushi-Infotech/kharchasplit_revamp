@@ -24,6 +24,7 @@ class AddExpenseState {
   final String? invoiceImagePath;
   final bool isScanning;
   final bool invoiceScanned;
+
   /// Base64-encoded receipt image, posted to the backend as `receiptBase64`
   /// and rendered on the expense detail screen as proof.
   final String? receiptBase64;
@@ -100,7 +101,14 @@ class AddExpenseState {
     if (amount <= 0) {
       return false;
     }
+    return isSplitValid;
+  }
 
+  /// Whether the split breakdown itself is valid for the current split type,
+  /// independent of title/amount. Equal split (and the no-group case) is
+  /// always valid. Used to disable the split sheet's Done button and to flag
+  /// the Split row on the form.
+  bool get isSplitValid {
     // If no group selected, equal split is valid
     if (groupId == null) {
       return true;
@@ -117,7 +125,9 @@ class AddExpenseState {
     }
 
     final includedSum = splits.entries
-        .where((e) => includedMemberIds.isEmpty || includedMemberIds.contains(e.key))
+        .where(
+          (e) => includedMemberIds.isEmpty || includedMemberIds.contains(e.key),
+        )
         .fold<double>(0, (sum, e) => sum + e.value);
 
     switch (splitType) {
@@ -132,6 +142,34 @@ class AddExpenseState {
         return includedSum > 0;
       case SplitType.equal:
         return true;
+    }
+  }
+
+  /// Short reason the split is invalid, or null when valid. Surfaced on the
+  /// Split row so the user sees *why* it's blocking the save.
+  String? get splitError {
+    if (isSplitValid) return null;
+    if (splits.isEmpty) return 'Set each share';
+    final includedSum = splits.entries
+        .where(
+          (e) => includedMemberIds.isEmpty || includedMemberIds.contains(e.key),
+        )
+        .fold<double>(0, (sum, e) => sum + e.value);
+    switch (splitType) {
+      case SplitType.exact:
+        final diff = amount - includedSum;
+        return diff > 0
+            ? '₹${diff.toStringAsFixed(2)} left to assign'
+            : 'Over by ₹${(-diff).toStringAsFixed(2)}';
+      case SplitType.percentage:
+        final diff = 100 - includedSum;
+        return diff > 0
+            ? '${diff.toStringAsFixed(1)}% left to assign'
+            : 'Over by ${(-diff).toStringAsFixed(1)}%';
+      case SplitType.shares:
+        return 'Set at least one share';
+      case SplitType.equal:
+        return null;
     }
   }
 }
@@ -162,10 +200,8 @@ class EqualSplitDerived {
           _setEq.equals(includedMemberIds, other.includedMemberIds));
 
   @override
-  int get hashCode => Object.hash(
-        _mapEq.hash(splits),
-        _setEq.hash(includedMemberIds),
-      );
+  int get hashCode =>
+      Object.hash(_mapEq.hash(splits), _setEq.hash(includedMemberIds));
 }
 
 /// Derives the equal-split share map + initialised includedMemberIds
@@ -176,8 +212,10 @@ class EqualSplitDerived {
 /// writes on every frame. Pulling the math here means consumers can
 /// `ref.listen` it and apply the change exactly once per structural
 /// update.
-final equalSplitDerivedProvider =
-    Provider.family<EqualSplitDerived?, String?>((ref, groupId) {
+final equalSplitDerivedProvider = Provider.family<EqualSplitDerived?, String?>((
+  ref,
+  groupId,
+) {
   if (groupId == null) return null;
   final s = ref.watch(addExpenseProvider);
   if (s.splitType != SplitType.equal) return null;
@@ -196,12 +234,8 @@ final equalSplitDerivedProvider =
       : 0.0;
 
   final splits = <String, double>{
-    for (final m in members)
-      m.id: includedIds.contains(m.id) ? equalShare : 0,
+    for (final m in members) m.id: includedIds.contains(m.id) ? equalShare : 0,
   };
 
-  return EqualSplitDerived(
-    splits: splits,
-    includedMemberIds: includedIds,
-  );
+  return EqualSplitDerived(splits: splits, includedMemberIds: includedIds);
 });

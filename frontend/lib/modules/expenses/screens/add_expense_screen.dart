@@ -35,7 +35,7 @@ class AddExpenseScreen extends ConsumerStatefulWidget {
   final String? expenseId;
 
   const AddExpenseScreen({Key? key, this.groupId, this.expenseId})
-      : super(key: key);
+    : super(key: key);
 
   bool get isEditing => expenseId != null;
 
@@ -57,6 +57,11 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   bool _hydrating = false;
   String? _hydrateError;
 
+  /// Flipped on once the user taps the (disabled) Save bar with an invalid
+  /// form. Drives the red highlighting on the amount / title / split so the
+  /// user can see *which* field is blocking the save.
+  bool _showValidation = false;
+
   @override
   void initState() {
     super.initState();
@@ -65,7 +70,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
 
     if (widget.isEditing) {
       _hydrating = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) => _hydrateFromExpense());
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _hydrateFromExpense(),
+      );
     }
   }
 
@@ -134,8 +141,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     _notesController.dispose();
     if (widget.isEditing) {
       Future.microtask(() {
-        ref.read(addExpenseProvider.notifier).state =
-            AddExpenseState(date: DateTime.now());
+        ref.read(addExpenseProvider.notifier).state = AddExpenseState(
+          date: DateTime.now(),
+        );
       });
     }
     super.dispose();
@@ -162,17 +170,17 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                     children: [
                       Text(
                         'Could not load expense',
-                        style: AppTextStyles.body1(isDark).copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
+                        style: AppTextStyles.body1(
+                          isDark,
+                        ).copyWith(fontWeight: FontWeight.w700),
                       ),
                       const SizedBox(height: 8),
                       Text(
                         _hydrateError!,
                         textAlign: TextAlign.center,
-                        style: AppTextStyles.body2(isDark).copyWith(
-                          color: AppColors.textSecondary(isDark),
-                        ),
+                        style: AppTextStyles.body2(
+                          isDark,
+                        ).copyWith(color: AppColors.textSecondary(isDark)),
                       ),
                       const SizedBox(height: 16),
                       OutlinedButton(
@@ -202,8 +210,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       _groupIdSynced = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        ref.read(addExpenseProvider.notifier).state =
-            expenseState.copyWith(groupId: widget.groupId);
+        ref.read(addExpenseProvider.notifier).state = expenseState.copyWith(
+          groupId: widget.groupId,
+        );
       });
     }
 
@@ -250,13 +259,13 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     final double maxFormWidth = screenWidth < 600
         ? double.infinity
         : screenWidth < 1100
-            ? 600
-            : 700;
+        ? 600
+        : 700;
     final double horizontalPad = screenWidth < 600
         ? 16
         : screenWidth < 1100
-            ? 24
-            : 32;
+        ? 24
+        : 32;
 
     return PopScope(
       canPop: false,
@@ -287,11 +296,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                   child: Center(
                     child: ConstrainedBox(
                       constraints: BoxConstraints(maxWidth: maxFormWidth),
-                      child: _buildFormBody(
-                        isDark,
-                        expenseState,
-                        groupMembers,
-                      ),
+                      child: _buildFormBody(isDark, expenseState, groupMembers),
                     ),
                   ),
                 ),
@@ -305,6 +310,14 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                 label: widget.isEditing ? 'Save changes' : 'Save expense',
                 disabledHint: _missingFieldHint(expenseState),
                 onTap: _handleSave,
+                // Tapping the bar while it's disabled reveals which fields are
+                // wrong (red highlights) instead of doing nothing.
+                onDisabledTap: () {
+                  HapticService.instance.error();
+                  if (!_showValidation) {
+                    setState(() => _showValidation = true);
+                  }
+                },
               ),
             ],
           ),
@@ -332,6 +345,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   }
 
   Widget _buildHero(bool isDark, AddExpenseState state) {
+    final titleError = _showValidation && (state.title ?? '').trim().isEmpty;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 18),
       decoration: BoxDecoration(
@@ -348,9 +362,11 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               amount: state.amount,
               currency: state.currency,
               autoFocus: !widget.isEditing,
+              hasError: _showValidation && state.amount <= 0,
               onChanged: (amount) {
-                ref.read(addExpenseProvider.notifier).state =
-                    state.copyWith(amount: amount);
+                ref.read(addExpenseProvider.notifier).state = state.copyWith(
+                  amount: amount,
+                );
               },
             ),
           ),
@@ -367,14 +383,15 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
             child: TextField(
               controller: _titleController,
               textAlign: TextAlign.center,
-              style: AppTextStyles.body1(isDark).copyWith(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
+              style: AppTextStyles.body1(
+                isDark,
+              ).copyWith(fontSize: 16, fontWeight: FontWeight.w600),
               decoration: InputDecoration(
-                hintText: "What's this for?",
+                hintText: titleError ? 'Add a title' : "What's this for?",
                 hintStyle: AppTextStyles.body1(isDark).copyWith(
-                  color: AppColors.textSecondary(isDark),
+                  color: titleError
+                      ? AppColors.errorText(isDark)
+                      : AppColors.textSecondary(isDark),
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
                 ),
@@ -388,12 +405,24 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                 _titleDebounce?.cancel();
                 _titleDebounce = Timer(const Duration(milliseconds: 200), () {
                   if (!mounted) return;
-                  ref.read(addExpenseProvider.notifier).state =
-                      ref.read(addExpenseProvider).copyWith(title: value);
+                  ref.read(addExpenseProvider.notifier).state = ref
+                      .read(addExpenseProvider)
+                      .copyWith(title: value);
                 });
               },
             ),
           ),
+          if (titleError) ...[
+            const SizedBox(height: 2),
+            Text(
+              'Title is required',
+              style: AppTextStyles.caption(isDark).copyWith(
+                color: AppColors.errorText(isDark),
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -405,13 +434,13 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     List<UserModel> groupMembers,
   ) {
     final me = ref.watch(authProvider).user;
-    final UserModel? payer = state.paidBy ??
+    final UserModel? payer =
+        state.paidBy ??
         (me == null
             ? null
             : groupMembers.firstWhereOrNull((m) => m.id == me.id));
     final isMe = me != null && payer != null && payer.id == me.id;
-    final paidByText =
-        payer == null ? 'You' : (isMe ? 'You' : payer.name);
+    final paidByText = payer == null ? 'You' : (isMe ? 'You' : payer.name);
 
     return Container(
       decoration: BoxDecoration(
@@ -427,8 +456,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
             label: 'Paid by',
             value: paidByText,
             isDark: isDark,
-            onTap: () =>
-                _showPaidBySheet(isDark, state, groupMembers),
+            onTap: () => _showPaidBySheet(isDark, state, groupMembers),
           ),
           _RowDivider(isDark: isDark),
           _QuickRow(
@@ -437,8 +465,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
             label: 'Split',
             value: _splitSummary(state, groupMembers),
             isDark: isDark,
-            onTap: () =>
-                _showSplitSheet(isDark, state, groupMembers),
+            errorText: (_showValidation && !state.isSplitValid)
+                ? (state.splitError ?? 'Split doesn\'t add up')
+                : null,
+            onTap: () => _showSplitSheet(isDark, state, groupMembers),
           ),
           _RowDivider(isDark: isDark),
           _QuickRow(
@@ -465,7 +495,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   }
 
   Widget _buildMoreOptions(bool isDark, AddExpenseState state) {
-    final hasReceipt = state.invoiceImagePath != null ||
+    final hasReceipt =
+        state.invoiceImagePath != null ||
         (state.receiptBase64 != null && state.receiptBase64!.isNotEmpty);
     final notes = state.notes ?? '';
     final hasNotes = notes.trim().isNotEmpty;
@@ -494,9 +525,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
             iconColor: AppColors.tealDark,
             label: 'Notes',
             value: hasNotes
-                ? (notes.length > 24
-                    ? '${notes.substring(0, 22)}…'
-                    : notes)
+                ? (notes.length > 24 ? '${notes.substring(0, 22)}…' : notes)
                 : 'Optional',
             valueIsMuted: !hasNotes,
             isDark: isDark,
@@ -556,6 +585,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     if (!hasAmount) return 'Enter amount';
     if (!hasTitle) return 'Enter title';
     if (state.groupId == null) return 'Pick a group';
+    if (!state.isSplitValid) return 'Fix the split';
     return 'Complete required fields';
   }
 
@@ -568,8 +598,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     );
     if (picked != null) {
       HapticService.instance.selection();
-      ref.read(addExpenseProvider.notifier).state =
-          state.copyWith(date: picked);
+      ref.read(addExpenseProvider.notifier).state = state.copyWith(
+        date: picked,
+      );
     }
   }
 
@@ -581,9 +612,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     List<UserModel> groupMembers,
   ) {
     if (groupMembers.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No group selected.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('No group selected.')));
       return;
     }
     showModalBottomSheet(
@@ -617,8 +648,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                     return InkWell(
                       onTap: () {
                         HapticService.instance.tap();
-                        ref.read(addExpenseProvider.notifier).state =
-                            state.copyWith(paidBy: m);
+                        ref.read(addExpenseProvider.notifier).state = state
+                            .copyWith(paidBy: m);
                         Navigator.pop(ctx);
                       },
                       child: Container(
@@ -672,9 +703,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     List<UserModel> groupMembers,
   ) {
     if (groupMembers.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No group selected.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('No group selected.')));
       return;
     }
     showModalBottomSheet(
@@ -690,7 +721,15 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
           initialChildSize: 0.85,
           minChildSize: 0.5,
           maxChildSize: 0.95,
-          builder: (_, scrollController) {
+          builder: (sheetCtx, scrollController) {
+            // Keyboard height. A DraggableScrollableSheet does NOT resize
+            // when the keyboard opens (unlike a Scaffold body), so we
+            // shrink the scroll viewport by this amount below — that puts
+            // the viewport's bottom edge at the keyboard's top, letting
+            // Flutter's auto-reveal scroll a focused split-amount field
+            // (which lives mid-list) above the keyboard instead of behind
+            // it.
+            final keyboardInset = MediaQuery.viewInsetsOf(sheetCtx).bottom;
             return SafeArea(
               top: false,
               child: Column(
@@ -699,64 +738,93 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                   _SheetTitle(
                     text: 'Split',
                     isDark: isDark,
-                    trailing: TextButton(
-                      onPressed: () {
-                        HapticService.instance.success();
-                        Navigator.pop(ctx);
+                    // Done stays disabled until the split adds up correctly,
+                    // so the user can't leave an invalid split behind. The
+                    // breakdown widget below shows the live "remaining /
+                    // over by" status so they know what to fix.
+                    trailing: Consumer(
+                      builder: (_, ref, __) {
+                        final canClose = ref.watch(
+                          addExpenseProvider.select((s) => s.isSplitValid),
+                        );
+                        return TextButton(
+                          onPressed: canClose
+                              ? () {
+                                  HapticService.instance.success();
+                                  Navigator.pop(ctx);
+                                }
+                              : null,
+                          child: Text(
+                            'Done',
+                            style: AppTextStyles.body1(isDark).copyWith(
+                              color: canClose
+                                  ? AppColors.tealDark
+                                  : AppColors.textSecondary(isDark),
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14,
+                            ),
+                          ),
+                        );
                       },
-                      child: Text(
-                        'Done',
-                        style: AppTextStyles.body1(isDark).copyWith(
-                          color: AppColors.tealDark,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
-                        ),
-                      ),
                     ),
                   ),
                   Expanded(
-                    child: SingleChildScrollView(
-                      controller: scrollController,
-                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-                      child: Consumer(
-                        builder: (_, ref, __) {
-                          final s = ref.watch(addExpenseProvider);
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              SplitSelectorWidget(
-                                splitType: s.splitType,
-                                amount: s.amount,
-                                onSplitTypeChanged: (type) {
-                                  ref
-                                      .read(addExpenseProvider.notifier)
-                                      .state = s.copyWith(splitType: type);
-                                },
-                              ),
-                              const SizedBox(height: 12),
-                              SplitBreakdownWidget(
-                                splitType: s.splitType,
-                                totalAmount: s.amount,
-                                members: groupMembers,
-                                splits: s.splits,
-                                includedMemberIds: s.includedMemberIds,
-                                currentUserId:
-                                    ref.watch(myIdProvider),
-                                onSplitsChanged: (splits) {
-                                  ref
-                                      .read(addExpenseProvider.notifier)
-                                      .state = s.copyWith(splits: splits);
-                                },
-                                onIncludedMembersChanged: (included) {
-                                  ref
-                                      .read(addExpenseProvider.notifier)
-                                      .state = s.copyWith(
-                                          includedMemberIds: included);
-                                },
-                              ),
-                            ],
-                          );
-                        },
+                    child: Padding(
+                      padding: EdgeInsets.only(bottom: keyboardInset),
+                      child: SingleChildScrollView(
+                        controller: scrollController,
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                        child: Consumer(
+                          builder: (_, ref, __) {
+                            final s = ref.watch(addExpenseProvider);
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                SplitSelectorWidget(
+                                  splitType: s.splitType,
+                                  amount: s.amount,
+                                  onSplitTypeChanged: (type) {
+                                    ref
+                                        .read(addExpenseProvider.notifier)
+                                        .state = s.copyWith(
+                                      splitType: type,
+                                    );
+                                  },
+                                ),
+                                const SizedBox(height: 12),
+                                SplitBreakdownWidget(
+                                  splitType: s.splitType,
+                                  totalAmount: s.amount,
+                                  members: groupMembers,
+                                  splits: s.splits,
+                                  includedMemberIds: s.includedMemberIds,
+                                  currentUserId: ref.watch(myIdProvider),
+                                  onSplitsChanged: (splits) {
+                                    // Read the live state, not the captured `s`
+                                    // snapshot. _toggleMember fires this right
+                                    // after onIncludedMembersChanged; using the
+                                    // stale `s` here would clobber the just-set
+                                    // includedMemberIds back to its old value.
+                                    final notifier = ref.read(
+                                      addExpenseProvider.notifier,
+                                    );
+                                    notifier.state = notifier.state.copyWith(
+                                      splits: splits,
+                                    );
+                                  },
+                                  onIncludedMembersChanged: (included) {
+                                    final notifier = ref.read(
+                                      addExpenseProvider.notifier,
+                                    );
+                                    notifier.state = notifier.state.copyWith(
+                                      includedMemberIds: included,
+                                    );
+                                  },
+                                ),
+                              ],
+                            );
+                          },
+                        ),
                       ),
                     ),
                   ),
@@ -787,14 +855,12 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               _SheetHandle(isDark: isDark),
               _SheetTitle(text: 'Pick a category', isDark: isDark),
               Padding(
-                padding:
-                    const EdgeInsets.fromLTRB(16, 6, 16, 18),
+                padding: const EdgeInsets.fromLTRB(16, 6, 16, 18),
                 child: GridView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   itemCount: categories.length,
-                  gridDelegate:
-                      const SliverGridDelegateWithFixedCrossAxisCount(
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 4,
                     crossAxisSpacing: 10,
                     mainAxisSpacing: 10,
@@ -807,8 +873,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                     return InkWell(
                       onTap: () {
                         HapticService.instance.selection();
-                        ref.read(addExpenseProvider.notifier).state =
-                            state.copyWith(category: c);
+                        ref.read(addExpenseProvider.notifier).state = state
+                            .copyWith(category: c);
                         Navigator.pop(ctx);
                       },
                       borderRadius: BorderRadius.circular(14),
@@ -820,9 +886,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                               : AppColors.cardBg(isDark),
                           borderRadius: BorderRadius.circular(14),
                           border: Border.all(
-                            color: selected
-                                ? color
-                                : AppColors.divider(isDark),
+                            color: selected ? color : AppColors.divider(isDark),
                             width: selected ? 1.5 : 1,
                           ),
                         ),
@@ -889,11 +953,12 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                     try {
                       final bytes = await File(imagePath).readAsBytes();
                       final encoded = base64Encode(bytes);
-                      ref.read(addExpenseProvider.notifier).state =
-                          ref.read(addExpenseProvider).copyWith(
-                                invoiceImagePath: imagePath,
-                                receiptBase64: encoded,
-                              );
+                      ref.read(addExpenseProvider.notifier).state = ref
+                          .read(addExpenseProvider)
+                          .copyWith(
+                            invoiceImagePath: imagePath,
+                            receiptBase64: encoded,
+                          );
                     } catch (_) {
                       ref.read(addExpenseProvider.notifier).state = ref
                           .read(addExpenseProvider)
@@ -956,13 +1021,15 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                       fillColor: AppColors.cardBg(isDark),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide:
-                            BorderSide(color: AppColors.divider(isDark)),
+                        borderSide: BorderSide(
+                          color: AppColors.divider(isDark),
+                        ),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide:
-                            BorderSide(color: AppColors.divider(isDark)),
+                        borderSide: BorderSide(
+                          color: AppColors.divider(isDark),
+                        ),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -972,8 +1039,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                       ),
                     ),
                     onChanged: (value) {
-                      ref.read(addExpenseProvider.notifier).state =
-                          ref.read(addExpenseProvider).copyWith(notes: value);
+                      ref.read(addExpenseProvider.notifier).state = ref
+                          .read(addExpenseProvider)
+                          .copyWith(notes: value);
                     },
                   ),
                 ),
@@ -999,7 +1067,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     if (state.groupId == null) {
       HapticService.instance.error();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Pick a group before saving the expense.')),
+        const SnackBar(
+          content: Text('Pick a group before saving the expense.'),
+        ),
       );
       return;
     }
@@ -1008,7 +1078,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     if (currentUser == null) {
       HapticService.instance.error();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('You must be signed in to save an expense.')),
+        const SnackBar(
+          content: Text('You must be signed in to save an expense.'),
+        ),
       );
       return;
     }
@@ -1017,7 +1089,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     final group = groups.firstWhereOrNull((g) => g.id == groupId);
     final members = group?.members ?? const <UserModel>[];
 
-    final paidBy = state.paidBy ??
+    final paidBy =
+        state.paidBy ??
         members.firstWhereOrNull((m) => m.id == currentUser.id) ??
         UserModel(
           id: currentUser.id,
@@ -1045,7 +1118,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
           return state.amount * raw / 100;
         case SplitType.shares:
           final totalShares = includedIds.fold<double>(
-              0, (sum, mid) => sum + (state.splits[mid] ?? 0));
+            0,
+            (sum, mid) => sum + (state.splits[mid] ?? 0),
+          );
           if (totalShares <= 0) return 0;
           return state.amount * raw / totalShares;
       }
@@ -1064,8 +1139,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       }
     }
 
-    double? percentageFor(String id) =>
-        state.splitType == SplitType.percentage ? (state.splits[id] ?? 0) : null;
+    double? percentageFor(String id) => state.splitType == SplitType.percentage
+        ? (state.splits[id] ?? 0)
+        : null;
     int? sharesFor(String id) => state.splitType == SplitType.shares
         ? (state.splits[id] ?? 0).round()
         : null;
@@ -1089,8 +1165,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
             );
           }).toList();
 
-    ref.read(addExpenseProvider.notifier).state =
-        state.copyWith(isLoading: true, error: null);
+    ref.read(addExpenseProvider.notifier).state = state.copyWith(
+      isLoading: true,
+      error: null,
+    );
 
     try {
       final repo = ref.read(expensesRepositoryProvider);
@@ -1127,11 +1205,13 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     } catch (e) {
       if (!mounted) return;
       HapticService.instance.error();
-      ref.read(addExpenseProvider.notifier).state =
-          state.copyWith(isLoading: false, error: e.toString());
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not save expense: $e')),
+      ref.read(addExpenseProvider.notifier).state = state.copyWith(
+        isLoading: false,
+        error: e.toString(),
       );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not save expense: $e')));
       return;
     }
 
@@ -1143,11 +1223,14 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
 
     if (!mounted) return;
     HapticService.instance.success();
-    ref.read(addExpenseProvider.notifier).state =
-        AddExpenseState(date: DateTime.now());
+    ref.read(addExpenseProvider.notifier).state = AddExpenseState(
+      date: DateTime.now(),
+    );
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(widget.isEditing ? '✓ Expense updated' : '✓ Expense saved'),
+        content: Text(
+          widget.isEditing ? '✓ Expense updated' : '✓ Expense saved',
+        ),
         backgroundColor: AppColors.success,
         duration: const Duration(seconds: 2),
       ),
@@ -1176,6 +1259,7 @@ class _QuickRow extends StatelessWidget {
     required this.isDark,
     required this.onTap,
     this.valueIsMuted = false,
+    this.errorText,
   });
 
   final IconData icon;
@@ -1186,8 +1270,19 @@ class _QuickRow extends StatelessWidget {
   final bool valueIsMuted;
   final VoidCallback onTap;
 
+  /// When non-null, the row is in an error state: the value renders red and
+  /// this message is shown beneath the row so the user knows what to fix.
+  final String? errorText;
+
   @override
   Widget build(BuildContext context) {
+    final hasError = errorText != null;
+    final errorColor = AppColors.errorText(isDark);
+    final valueColor = hasError
+        ? errorColor
+        : (valueIsMuted
+              ? AppColors.textSecondary(isDark)
+              : AppColors.textPrimary(isDark));
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -1197,50 +1292,81 @@ class _QuickRow extends StatelessWidget {
         },
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 34,
-                height: 34,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: iconColor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(icon, size: 17, color: iconColor),
+              Row(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: iconColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(icon, size: 17, color: iconColor),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    label,
+                    style: AppTextStyles.body2(isDark).copyWith(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                      color: AppColors.textSecondary(isDark),
+                    ),
+                  ),
+                  const Spacer(),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 180),
+                    child: Text(
+                      value,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.end,
+                      style: AppTextStyles.body2(isDark).copyWith(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13.5,
+                        color: valueColor,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    size: 18,
+                    color: hasError
+                        ? errorColor
+                        : AppColors.textSecondary(isDark),
+                  ),
+                ],
               ),
-              const SizedBox(width: 12),
-              Text(
-                label,
-                style: AppTextStyles.body2(isDark).copyWith(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
-                  color: AppColors.textSecondary(isDark),
-                ),
-              ),
-              const Spacer(),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 180),
-                child: Text(
-                  value,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.end,
-                  style: AppTextStyles.body2(isDark).copyWith(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13.5,
-                    color: valueIsMuted
-                        ? AppColors.textSecondary(isDark)
-                        : AppColors.textPrimary(isDark),
+              if (hasError) ...[
+                const SizedBox(height: 6),
+                Padding(
+                  padding: const EdgeInsets.only(left: 46),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.error_outline_rounded,
+                        size: 13,
+                        color: errorColor,
+                      ),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          errorText!,
+                          style: AppTextStyles.caption(isDark).copyWith(
+                            color: errorColor,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-              const SizedBox(width: 6),
-              Icon(
-                Icons.chevron_right_rounded,
-                size: 18,
-                color: AppColors.textSecondary(isDark),
-              ),
+              ],
             ],
           ),
         ),
@@ -1285,11 +1411,7 @@ class _SheetHandle extends StatelessWidget {
 }
 
 class _SheetTitle extends StatelessWidget {
-  const _SheetTitle({
-    required this.text,
-    required this.isDark,
-    this.trailing,
-  });
+  const _SheetTitle({required this.text, required this.isDark, this.trailing});
   final String text;
   final bool isDark;
   final Widget? trailing;
@@ -1326,6 +1448,7 @@ class _StickyCreateBar extends StatelessWidget {
     required this.label,
     required this.onTap,
     this.disabledHint,
+    this.onDisabledTap,
   });
 
   final bool isDark;
@@ -1336,6 +1459,10 @@ class _StickyCreateBar extends StatelessWidget {
   final String label;
   final String? disabledHint;
   final VoidCallback onTap;
+
+  /// Called when the user taps the bar while it's disabled (not loading) —
+  /// used to surface validation errors rather than silently ignoring the tap.
+  final VoidCallback? onDisabledTap;
 
   @override
   Widget build(BuildContext context) {
@@ -1351,12 +1478,7 @@ class _StickyCreateBar extends StatelessWidget {
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: EdgeInsets.fromLTRB(
-            horizontalPad,
-            10,
-            horizontalPad,
-            10,
-          ),
+          padding: EdgeInsets.fromLTRB(horizontalPad, 10, horizontalPad, 10),
           child: Center(
             child: ConstrainedBox(
               constraints: BoxConstraints(maxWidth: maxFormWidth),
@@ -1369,7 +1491,7 @@ class _StickyCreateBar extends StatelessWidget {
                   child: Material(
                     color: Colors.transparent,
                     child: InkWell(
-                      onTap: enabled ? onTap : null,
+                      onTap: enabled ? onTap : (loading ? null : onDisabledTap),
                       borderRadius: BorderRadius.circular(14),
                       child: Ink(
                         height: 52,
@@ -1377,17 +1499,15 @@ class _StickyCreateBar extends StatelessWidget {
                           gradient: const LinearGradient(
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
-                            colors: [
-                              AppColors.tealLight,
-                              AppColors.tealDark,
-                            ],
+                            colors: [AppColors.tealLight, AppColors.tealDark],
                           ),
                           borderRadius: BorderRadius.circular(14),
                           boxShadow: (enabled || loading)
                               ? [
                                   BoxShadow(
-                                    color: AppColors.tealDark
-                                        .withValues(alpha: 0.30),
+                                    color: AppColors.tealDark.withValues(
+                                      alpha: 0.30,
+                                    ),
                                     blurRadius: 12,
                                     offset: const Offset(0, 6),
                                   ),
@@ -1404,7 +1524,8 @@ class _StickyCreateBar extends StatelessWidget {
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
                                   valueColor: AlwaysStoppedAnimation<Color>(
-                                      Colors.white),
+                                    Colors.white,
+                                  ),
                                 ),
                               )
                             else
@@ -1421,8 +1542,8 @@ class _StickyCreateBar extends StatelessWidget {
                                 loading
                                     ? 'Saving…'
                                     : (enabled
-                                        ? label
-                                        : (disabledHint ?? label)),
+                                          ? label
+                                          : (disabledHint ?? label)),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: AppTextStyles.body1(isDark).copyWith(

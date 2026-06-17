@@ -29,21 +29,18 @@ class DashboardScreen extends ConsumerWidget {
           SafeArea(
             bottom: false,
             child: dashboardAsync.when(
-              loading: () =>
-                  const ShimmerList(type: ShimmerListType.dashboard),
+              loading: () => const ShimmerList(type: ShimmerListType.dashboard),
               error: (err, _) => _DashboardError(
                 message: err.toString(),
-                onRetry: () =>
-                    ref.read(dashboardProvider.notifier).refresh(),
+                onRetry: () => ref.read(dashboardProvider.notifier).refresh(),
               ),
               data: (data) => RefreshIndicator(
-                onRefresh: () =>
-                    ref.read(dashboardProvider.notifier).refresh(),
+                onRefresh: () => ref.read(dashboardProvider.notifier).refresh(),
                 child: screenWidth < 600
                     ? _buildCompactLayout(context, isDark, data)
                     : screenWidth < 1100
-                        ? _buildStandardLayout(context, isDark, data)
-                        : _buildLargeLayout(context, isDark, data),
+                    ? _buildStandardLayout(context, isDark, data)
+                    : _buildLargeLayout(context, isDark, data),
               ),
             ),
           ),
@@ -52,7 +49,11 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildCompactLayout(BuildContext context, bool isDark, DashboardData data) {
+  Widget _buildCompactLayout(
+    BuildContext context,
+    bool isDark,
+    DashboardData data,
+  ) {
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
       child: Column(
@@ -70,7 +71,11 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildStandardLayout(BuildContext context, bool isDark, DashboardData data) {
+  Widget _buildStandardLayout(
+    BuildContext context,
+    bool isDark,
+    DashboardData data,
+  ) {
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(24, 24, 24, 110),
       child: Center(
@@ -102,7 +107,11 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildLargeLayout(BuildContext context, bool isDark, DashboardData data) {
+  Widget _buildLargeLayout(
+    BuildContext context,
+    bool isDark,
+    DashboardData data,
+  ) {
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(32, 32, 32, 110),
       child: Center(
@@ -147,14 +156,19 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildBalanceCard(BuildContext context, bool isDark, DashboardData data) {
-    return BalanceCard(
-      totalBalance: data.totalBalance,
-      currency: '₹',
-    );
+  Widget _buildBalanceCard(
+    BuildContext context,
+    bool isDark,
+    DashboardData data,
+  ) {
+    return BalanceCard(totalBalance: data.totalBalance, currency: '₹');
   }
 
-  Widget _buildRecentGroupsSection(BuildContext context, bool isDark, DashboardData data) {
+  Widget _buildRecentGroupsSection(
+    BuildContext context,
+    bool isDark,
+    DashboardData data,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -204,10 +218,19 @@ class DashboardScreen extends ConsumerWidget {
     return RecentExpensesSection(
       expenses: preview,
       groups: data.recentGroups,
+      onExpenseTap: (expense) => _openExpenseGroup(context, expense),
       onSeeAll: all.length > _previewExpenseCount
           ? () => _openAllExpensesSheet(context, data)
           : null,
     );
+  }
+
+  /// Tapping a recent expense opens the group it belongs to. Personal
+  /// expenses (no groupId) have no group to open, so they're a no-op.
+  void _openExpenseGroup(BuildContext context, ExpenseModel expense) {
+    final groupId = expense.groupId;
+    if (groupId == null || groupId.isEmpty) return;
+    context.push('/home/groups/$groupId');
   }
 
   void _openAllExpensesSheet(BuildContext context, DashboardData data) {
@@ -221,6 +244,11 @@ class DashboardScreen extends ConsumerWidget {
       builder: (_) => _AllExpensesSheet(
         expenses: data.recentExpenses,
         groups: data.recentGroups,
+        onExpenseTap: (expense) {
+          // Close the sheet first, then route to the expense's group.
+          Navigator.of(context, rootNavigator: true).pop();
+          _openExpenseGroup(context, expense);
+        },
       ),
     );
   }
@@ -410,16 +438,16 @@ class _EmptyGroupsCard extends StatelessWidget {
                   children: [
                     Text(
                       'No groups yet',
-                      style: AppTextStyles.body1(isDark).copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+                      style: AppTextStyles.body1(
+                        isDark,
+                      ).copyWith(fontWeight: FontWeight.w700),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       'Create one to start splitting',
-                      style: AppTextStyles.caption(isDark).copyWith(
-                        color: AppColors.textSecondary(isDark),
-                      ),
+                      style: AppTextStyles.caption(
+                        isDark,
+                      ).copyWith(color: AppColors.textSecondary(isDark)),
                     ),
                   ],
                 ),
@@ -435,10 +463,15 @@ class _EmptyGroupsCard extends StatelessWidget {
 /// Draggable bottom sheet that lists every recent expense, opened from the
 /// home screen's "Recent Expenses >" header.
 class _AllExpensesSheet extends StatelessWidget {
-  const _AllExpensesSheet({required this.expenses, required this.groups});
+  const _AllExpensesSheet({
+    required this.expenses,
+    required this.groups,
+    this.onExpenseTap,
+  });
 
   final List<ExpenseModel> expenses;
   final List<GroupModel> groups;
+  final void Function(ExpenseModel expense)? onExpenseTap;
 
   @override
   Widget build(BuildContext context) {
@@ -452,13 +485,8 @@ class _AllExpensesSheet extends StatelessWidget {
         return Container(
           decoration: BoxDecoration(
             color: AppColors.background(isDark),
-            borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(24),
-            ),
-            border: Border.all(
-              color: AppColors.divider(isDark),
-              width: 1,
-            ),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            border: Border.all(color: AppColors.divider(isDark), width: 1),
           ),
           child: Column(
             children: [
@@ -489,9 +517,9 @@ class _AllExpensesSheet extends StatelessWidget {
                     ),
                     Text(
                       '${expenses.length} ${expenses.length == 1 ? 'item' : 'items'}',
-                      style: AppTextStyles.caption(isDark).copyWith(
-                        color: AppColors.textSecondary(isDark),
-                      ),
+                      style: AppTextStyles.caption(
+                        isDark,
+                      ).copyWith(color: AppColors.textSecondary(isDark)),
                     ),
                     const SizedBox(width: 8),
                     Material(
@@ -508,8 +536,9 @@ class _AllExpensesSheet extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: AppColors.cardBg(isDark),
                             shape: BoxShape.circle,
-                            border:
-                                Border.all(color: AppColors.divider(isDark)),
+                            border: Border.all(
+                              color: AppColors.divider(isDark),
+                            ),
                           ),
                           child: Icon(
                             Icons.close_rounded,
@@ -529,6 +558,8 @@ class _AllExpensesSheet extends StatelessWidget {
                   child: RecentExpensesSection(
                     expenses: expenses,
                     groups: groups,
+                    onExpenseTap: onExpenseTap,
+                    showHeader: false,
                   ),
                 ),
               ),
