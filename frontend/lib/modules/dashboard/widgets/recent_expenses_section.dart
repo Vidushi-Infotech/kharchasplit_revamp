@@ -16,12 +16,17 @@ class RecentExpensesSection extends ConsumerWidget {
     required this.groups,
     this.onExpenseTap,
     this.onSeeAll,
+    this.showHeader = true,
   });
 
   final List<ExpenseModel> expenses;
   final List<GroupModel> groups;
   final void Function(ExpenseModel expense)? onExpenseTap;
   final VoidCallback? onSeeAll;
+
+  /// Whether to render the "Recent Expenses" header. Disabled when embedded in
+  /// the "see all" sheet, which provides its own title (avoids a duplicate).
+  final bool showHeader;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -38,8 +43,10 @@ class RecentExpensesSection extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _Header(isDark: isDark, onSeeAll: onSeeAll),
-        const SizedBox(height: 12),
+        if (showHeader) ...[
+          _Header(isDark: isDark, onSeeAll: onSeeAll),
+          const SizedBox(height: 12),
+        ],
         if (expenses.isEmpty)
           _EmptyState(isDark: isDark)
         else
@@ -189,8 +196,7 @@ class _ExpenseRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final youPaid =
-        currentUserId != null && expense.paidBy.id == currentUserId;
+    final youPaid = currentUserId != null && expense.paidBy.id == currentUserId;
     final categoryColor = _parseHex(expense.category.colorHex);
     final isSettled = expense.isSettled;
 
@@ -232,10 +238,9 @@ class _ExpenseRow extends StatelessWidget {
                   children: [
                     Text(
                       expense.title,
-                      style: AppTextStyles.body1(isDark).copyWith(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                      ),
+                      style: AppTextStyles.body1(
+                        isDark,
+                      ).copyWith(fontWeight: FontWeight.w600, fontSize: 14),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -262,6 +267,15 @@ class _ExpenseRow extends StatelessWidget {
                   letterSpacing: -0.2,
                 ),
               ),
+              // Chevron affordance — signals the row opens the expense's group.
+              if (onTap != null) ...[
+                const SizedBox(width: 4),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 18,
+                  color: AppColors.textSecondary(isDark),
+                ),
+              ],
             ],
           ),
         ),
@@ -329,16 +343,16 @@ class _EmptyState extends StatelessWidget {
           const SizedBox(height: 10),
           Text(
             'No expenses yet',
-            style: AppTextStyles.body1(isDark).copyWith(
-              fontWeight: FontWeight.w700,
-            ),
+            style: AppTextStyles.body1(
+              isDark,
+            ).copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 2),
           Text(
             'Your recent activity will appear here',
-            style: AppTextStyles.caption(isDark).copyWith(
-              color: AppColors.textSecondary(isDark),
-            ),
+            style: AppTextStyles.caption(
+              isDark,
+            ).copyWith(color: AppColors.textSecondary(isDark)),
             textAlign: TextAlign.center,
           ),
         ],

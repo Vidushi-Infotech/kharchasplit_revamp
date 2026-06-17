@@ -7,10 +7,15 @@ class AmountInputWidget extends StatefulWidget {
   final double amount;
   final String currency;
   final Function(double) onChanged;
+
   /// When true, the input claims focus and pops the keyboard on first
   /// build. Use for fresh "Add expense" so the user can type immediately;
   /// leave false for edit mode where the form is already populated.
   final bool autoFocus;
+
+  /// When true, the amount is invalid (e.g. zero) and the user has tried to
+  /// save — render the underline and helper text in red.
+  final bool hasError;
 
   const AmountInputWidget({
     Key? key,
@@ -18,6 +23,7 @@ class AmountInputWidget extends StatefulWidget {
     required this.currency,
     required this.onChanged,
     this.autoFocus = false,
+    this.hasError = false,
   }) : super(key: key);
 
   @override
@@ -67,6 +73,11 @@ class _AmountInputWidgetState extends State<AmountInputWidget> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final errorColor = AppColors.errorText(isDark);
+    final enabledBorderColor = widget.hasError
+        ? errorColor
+        : AppColors.inputBorder(isDark);
+    final focusedBorderColor = widget.hasError ? errorColor : AppColors.brand;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -112,15 +123,12 @@ class _AmountInputWidgetState extends State<AmountInputWidget> {
                   ),
                   enabledBorder: UnderlineInputBorder(
                     borderSide: BorderSide(
-                      color: AppColors.inputBorder(isDark),
+                      color: enabledBorderColor,
                       width: 1.5,
                     ),
                   ),
                   focusedBorder: UnderlineInputBorder(
-                    borderSide: BorderSide(
-                      color: AppColors.brand,
-                      width: 2,
-                    ),
+                    borderSide: BorderSide(color: focusedBorderColor, width: 2),
                   ),
                   contentPadding: EdgeInsets.zero,
                 ),
@@ -134,10 +142,15 @@ class _AmountInputWidgetState extends State<AmountInputWidget> {
         ),
         const SizedBox(height: 4),
         Text(
-          'Tap to enter amount',
+          widget.hasError
+              ? 'Enter an amount greater than 0'
+              : 'Tap to enter amount',
           style: AppTextStyles.caption(isDark).copyWith(
-            color: AppColors.textSecondary(isDark),
+            color: widget.hasError
+                ? errorColor
+                : AppColors.textSecondary(isDark),
             fontSize: 11,
+            fontWeight: widget.hasError ? FontWeight.w600 : FontWeight.w400,
           ),
         ),
       ],

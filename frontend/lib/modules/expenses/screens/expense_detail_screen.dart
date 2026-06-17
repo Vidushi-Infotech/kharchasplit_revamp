@@ -10,6 +10,7 @@ import '../../../components/components.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/date_formatter.dart';
+import '../../../data/contacts/contact_name_resolver.dart';
 import '../../../data/expenses/expenses_repository.dart';
 import '../../../models/models.dart';
 import '../../auth/state/auth_provider.dart';
@@ -41,7 +42,8 @@ class ExpenseDetailScreen extends ConsumerWidget {
     final screenWidth = MediaQuery.sizeOf(context).width;
     final expenseAsync = ref.watch(expenseDetailProvider(expenseId));
     final myId = ref.watch(myIdProvider);
-    final canDelete = expenseAsync.value != null &&
+    final canDelete =
+        expenseAsync.value != null &&
         myId != null &&
         expenseAsync.value!.paidBy.id == myId;
 
@@ -68,70 +70,123 @@ class ExpenseDetailScreen extends ConsumerWidget {
             message: 'Unable to fetch expense details. Please try again.',
             onRetry: () {},
           ),
-          data: (expense) => RefreshIndicator(
-            onRefresh: () async {
-              ref.invalidate(expenseDetailProvider(expenseId));
-              await ref.read(expenseDetailProvider(expenseId).future);
-            },
-            child: Center(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxWidth: screenWidth < 1100 ? 720 : 900,
+          data: (expense) {
+            // Some split rows arrive from the backend with an empty
+            // userName (and no avatar URL) — they'd render a "?" avatar
+            // and a blank name. Build a userId → member lookup from the
+            // group so the rows can fall back to the member's real name
+            // and avatar.
+            final members = expense.groupId != null
+                ? ref
+                          .watch(groupDetailProvider(expense.groupId!))
+                          .value
+                          ?.members ??
+                      const <UserModel>[]
+                : const <UserModel>[];
+            final memberById = <String, UserModel>{
+              for (final m in members) m.id: m,
+            };
+
+            // Names that arrive blank (or as a bare phone number) from the
+            // backend — users who registered by phone and never set a display
+            // name — are upgraded to the name saved for that phone in the
+            // device address book, matched via the group member's phone.
+            final contactNameByPhone = ref.watch(contactNameByPhoneProvider);
+
+            // "Paid by" has the same blank/"Unknown" problem: the per-group
+            // endpoint sends a flat paid_by id + name with no avatar. Resolve
+            // the name (real → contact → phone) and avatar from the group
+            // member so the Paid-by card stays consistent with the split rows.
+            final paidByMember = memberById[expense.paidBy.id];
+            final paidByName = resolveDisplayName(
+              backendName: expense.paidBy.name,
+              phone: paidByMember?.phone ?? '',
+              contactNameByPhone: contactNameByPhone,
+              placeholder: 'Unknown',
+            );
+            final ownPaidByAvatar = expense.paidBy.avatarUrl;
+            final paidByAvatar =
+                (ownPaidByAvatar != null && ownPaidByAvatar.isNotEmpty)
+                ? ownPaidByAvatar
+                : paidByMember?.avatarUrl;
+
+            // Per-split display names, resolved the same way.
+            final splitDisplayNames = <String, String>{
+              for (final s in expense.splits)
+                s.userId: resolveDisplayName(
+                  backendName: s.userName,
+                  phone: memberById[s.userId]?.phone ?? '',
+                  contactNameByPhone: contactNameByPhone,
+                ),
+            };
+
+            return RefreshIndicator(
+              onRefresh: () async {
+                ref.invalidate(expenseDetailProvider(expenseId));
+                await ref.read(expenseDetailProvider(expenseId).future);
+              },
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: screenWidth < 1100 ? 720 : 900,
+                  ),
+                  child: ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
+                    children: [
+                      _Hero(expense: expense, isDark: isDark),
+                      const SizedBox(height: 22),
+                      _SectionLabel(label: 'PAID BY', isDark: isDark),
+                      const SizedBox(height: 8),
+                      _PersonCard(
+                        name: paidByName,
+                        imageUrl: paidByAvatar,
+                        amount: expense.amount,
+                        currency: expense.currency,
+                        accent: AppColors.success,
+                        isDark: isDark,
+                        isSelf: myId != null && expense.paidBy.id == myId,
+                      ),
+                      const SizedBox(height: 22),
+                      _SectionLabel(
+                        label:
+                            'SPLIT AMONG · ${expense.splits.length} · ${_splitTypeLabel(expense.splitType).toUpperCase()}',
+                        isDark: isDark,
+                      ),
+                      const SizedBox(height: 8),
+                      _SplitsCard(
+                        splits: expense.splits,
+                        currency: expense.currency,
+                        isDark: isDark,
+                        splitType: expense.splitType,
+                        totalAmount: expense.amount,
+                        currentUserId: myId,
+                        memberById: memberById,
+                        displayNames: splitDisplayNames,
+                      ),
+                      if (expense.receiptBase64 != null &&
+                          expense.receiptBase64!.isNotEmpty) ...[
+                        const SizedBox(height: 22),
+                        _SectionLabel(label: 'RECEIPT', isDark: isDark),
+                        const SizedBox(height: 8),
+                        _ReceiptCard(
+                          base64Data: expense.receiptBase64!,
+                          isDark: isDark,
+                        ),
+                      ],
+                      if (expense.notes != null &&
+                          (expense.notes as String).isNotEmpty) ...[
+                        const SizedBox(height: 22),
+                        _SectionLabel(label: 'NOTES', isDark: isDark),
+                        const SizedBox(height: 8),
+                        _NotesCard(notes: expense.notes!, isDark: isDark),
+                      ],
+                    ],
+                  ),
+                ),
               ),
-              child: ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
-                children: [
-                  _Hero(expense: expense, isDark: isDark),
-                  const SizedBox(height: 22),
-                  _SectionLabel(label: 'PAID BY', isDark: isDark),
-                  const SizedBox(height: 8),
-                  _PersonCard(
-                    name: expense.paidBy.name,
-                    imageUrl: expense.paidBy.avatarUrl,
-                    amount: expense.amount,
-                    currency: expense.currency,
-                    accent: AppColors.success,
-                    isDark: isDark,
-                    isSelf: myId != null && expense.paidBy.id == myId,
-                  ),
-                  const SizedBox(height: 22),
-                  _SectionLabel(
-                    label:
-                        'SPLIT AMONG · ${expense.splits.length} · ${_splitTypeLabel(expense.splitType).toUpperCase()}',
-                    isDark: isDark,
-                  ),
-                  const SizedBox(height: 8),
-                  _SplitsCard(
-                    splits: expense.splits,
-                    currency: expense.currency,
-                    isDark: isDark,
-                    splitType: expense.splitType,
-                    totalAmount: expense.amount,
-                    currentUserId: myId,
-                  ),
-                  if (expense.receiptBase64 != null &&
-                      expense.receiptBase64!.isNotEmpty) ...[
-                    const SizedBox(height: 22),
-                    _SectionLabel(label: 'RECEIPT', isDark: isDark),
-                    const SizedBox(height: 8),
-                    _ReceiptCard(
-                      base64Data: expense.receiptBase64!,
-                      isDark: isDark,
-                    ),
-                  ],
-                  if (expense.notes != null &&
-                      (expense.notes as String).isNotEmpty) ...[
-                    const SizedBox(height: 22),
-                    _SectionLabel(label: 'NOTES', isDark: isDark),
-                    const SizedBox(height: 8),
-                    _NotesCard(notes: expense.notes!, isDark: isDark),
-                  ],
-                ],
-              ),
-            ),
-          ),
-          ),
+            );
+          },
         ),
       ),
     );
@@ -144,8 +199,9 @@ class ExpenseDetailScreen extends ConsumerWidget {
         icon: const Icon(Icons.warning_amber_rounded, color: Colors.orange),
         title: const Text('Delete this expense?'),
         content: const Text(
-            'This will remove the expense from the group. Balances will '
-            'recalculate for everyone. This can\'t be undone.'),
+          'This will remove the expense from the group. Balances will '
+          'recalculate for everyone. This can\'t be undone.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -163,8 +219,7 @@ class ExpenseDetailScreen extends ConsumerWidget {
 
     // Capture groupId BEFORE the expense is gone — we need it to invalidate
     // the right group detail provider after the delete succeeds.
-    final cachedExpense =
-        ref.read(expenseDetailProvider(expenseId)).value;
+    final cachedExpense = ref.read(expenseDetailProvider(expenseId)).value;
     final groupId = cachedExpense?.groupId;
 
     try {
@@ -174,15 +229,15 @@ class ExpenseDetailScreen extends ConsumerWidget {
         ref.invalidate(groupDetailProvider(groupId));
       }
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Expense deleted')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Expense deleted')));
       context.pop();
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not delete: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not delete: $e')));
     }
   }
 }
@@ -343,11 +398,7 @@ class _CircleIcon extends StatelessWidget {
               shape: BoxShape.circle,
               border: Border.all(color: AppColors.divider(isDark)),
             ),
-            child: Icon(
-              icon,
-              size: 18,
-              color: AppColors.textPrimary(isDark),
-            ),
+            child: Icon(icon, size: 18, color: AppColors.textPrimary(isDark)),
           ),
         ),
       ),
@@ -531,6 +582,7 @@ class _PersonCard extends StatelessWidget {
   final String currency;
   final Color accent;
   final bool isDark;
+
   /// When true, the person is the signed-in user; we append " (Me)" so
   /// they spot their own row at a glance.
   final bool isSelf;
@@ -561,10 +613,9 @@ class _PersonCard extends StatelessWidget {
               children: [
                 Text(
                   isSelf ? '$name (Me)' : name,
-                  style: AppTextStyles.body1(isDark).copyWith(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
-                  ),
+                  style: AppTextStyles.body1(
+                    isDark,
+                  ).copyWith(fontWeight: FontWeight.w700, fontSize: 14),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -603,6 +654,8 @@ class _SplitsCard extends StatefulWidget {
     required this.splitType,
     required this.totalAmount,
     this.currentUserId,
+    this.memberById = const {},
+    this.displayNames = const {},
   });
 
   final List<SplitModel> splits;
@@ -611,6 +664,13 @@ class _SplitsCard extends StatefulWidget {
   final SplitType splitType;
   final String? currentUserId;
   final double totalAmount;
+
+  /// userId → group member, used to backfill an avatar when a split row's own
+  /// avatar is empty.
+  final Map<String, UserModel> memberById;
+
+  /// userId → resolved display name (real name → device contact → phone).
+  final Map<String, String> displayNames;
 
   @override
   State<_SplitsCard> createState() => _SplitsCardState();
@@ -648,7 +708,10 @@ class _SplitsCardState extends State<_SplitsCard> {
               totalAmount: widget.totalAmount,
               totalShares: totalShares,
               showWorking: _expanded,
-              isSelf: widget.currentUserId != null &&
+              fallbackMember: widget.memberById[widget.splits[i].userId],
+              displayName: widget.displayNames[widget.splits[i].userId],
+              isSelf:
+                  widget.currentUserId != null &&
                   widget.splits[i].userId == widget.currentUserId,
             ),
             if (i < widget.splits.length - 1)
@@ -668,8 +731,7 @@ class _SplitsCardState extends State<_SplitsCard> {
               color: AppColors.divider(isDark).withValues(alpha: 0.6),
             ),
             Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               child: Row(
                 children: [
                   Icon(
@@ -717,6 +779,8 @@ class _SplitRow extends StatelessWidget {
     required this.totalAmount,
     required this.totalShares,
     required this.showWorking,
+    this.fallbackMember,
+    this.displayName,
     this.isSelf = false,
   });
 
@@ -727,13 +791,38 @@ class _SplitRow extends StatelessWidget {
   final double totalAmount;
   final double totalShares;
   final bool showWorking;
+
+  /// Group member resolved from the split's userId — used when the split's
+  /// own avatar is blank so the row still shows the member's photo.
+  final UserModel? fallbackMember;
+
+  /// Pre-resolved display name (real name → device contact → phone). When
+  /// null, falls back to the split/member name locally.
+  final String? displayName;
   final bool isSelf;
 
+  /// Name to show: the pre-resolved [displayName], else the split's own
+  /// userName, else the group member's name, else a safe placeholder.
+  String get _displayName {
+    final resolved = displayName?.trim() ?? '';
+    if (resolved.isNotEmpty) return resolved;
+    if (split.userName.trim().isNotEmpty) return split.userName;
+    final memberName = fallbackMember?.name.trim() ?? '';
+    return memberName.isNotEmpty ? memberName : 'Unknown member';
+  }
+
+  /// Avatar URL to show: the split's own, else the resolved member's.
+  String? get _displayAvatarUrl {
+    final own = split.userAvatarUrl;
+    if (own != null && own.isNotEmpty) return own;
+    return fallbackMember?.avatarUrl;
+  }
+
   String _amount(double v) => NumberFormat.currency(
-        locale: 'en_IN',
-        symbol: currency,
-        decimalDigits: 0,
-      ).format(v);
+    locale: 'en_IN',
+    symbol: currency,
+    decimalDigits: 0,
+  ).format(v);
 
   /// Resolve percentage to display: prefer the value stored at create time,
   /// otherwise derive it from the resolved amount (works for legacy rows
@@ -793,8 +882,8 @@ class _SplitRow extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(top: 2),
             child: AvatarWidget(
-              name: split.userName,
-              imageUrl: split.userAvatarUrl,
+              name: _displayName,
+              imageUrl: _displayAvatarUrl,
               radius: 16,
             ),
           ),
@@ -804,11 +893,10 @@ class _SplitRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  isSelf ? '${split.userName} (Me)' : split.userName,
-                  style: AppTextStyles.body1(isDark).copyWith(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                  ),
+                  isSelf ? '$_displayName (Me)' : _displayName,
+                  style: AppTextStyles.body1(
+                    isDark,
+                  ).copyWith(fontWeight: FontWeight.w600, fontSize: 14),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -841,9 +929,9 @@ class _SplitRow extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   chip,
-                  style: AppTextStyles.caption(isDark).copyWith(
-                    color: AppColors.textSecondary(isDark),
-                  ),
+                  style: AppTextStyles.caption(
+                    isDark,
+                  ).copyWith(color: AppColors.textSecondary(isDark)),
                 ),
               ],
             ],
@@ -940,19 +1028,18 @@ class _ReceiptCardState extends State<_ReceiptCard> {
                   children: [
                     Text(
                       canShow ? 'View receipt' : 'Receipt unavailable',
-                      style: AppTextStyles.body1(isDark).copyWith(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                      ),
+                      style: AppTextStyles.body1(
+                        isDark,
+                      ).copyWith(fontWeight: FontWeight.w600, fontSize: 14),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       canShow
                           ? 'Tap to open the bill image'
                           : "Couldn't decode the saved image",
-                      style: AppTextStyles.caption(isDark).copyWith(
-                        color: AppColors.textSecondary(isDark),
-                      ),
+                      style: AppTextStyles.caption(
+                        isDark,
+                      ).copyWith(color: AppColors.textSecondary(isDark)),
                     ),
                   ],
                 ),
@@ -1019,10 +1106,9 @@ class _NotesCard extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       child: Text(
         notes,
-        style: AppTextStyles.body2(isDark).copyWith(
-          color: AppColors.textPrimary(isDark),
-          height: 1.45,
-        ),
+        style: AppTextStyles.body2(
+          isDark,
+        ).copyWith(color: AppColors.textPrimary(isDark), height: 1.45),
       ),
     );
   }

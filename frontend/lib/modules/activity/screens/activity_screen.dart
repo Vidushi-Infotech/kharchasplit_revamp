@@ -54,9 +54,8 @@ class ActivityScreen extends ConsumerWidget {
                       loading: () => const _LoadingState(),
                       error: (_, __) => _ErrorState(
                         isDark: isDark,
-                        onRetry: () => ref
-                            .read(activityFeedProvider.notifier)
-                            .refresh(),
+                        onRetry: () =>
+                            ref.read(activityFeedProvider.notifier).refresh(),
                       ),
                       data: (activities) {
                         if (activities.isEmpty) {
@@ -315,10 +314,7 @@ class _Chip extends StatelessWidget {
           decoration: BoxDecoration(
             color: bg,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: borderColor,
-              width: selected ? 1.2 : 1,
-            ),
+            border: Border.all(color: borderColor, width: selected ? 1.2 : 1),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -369,9 +365,14 @@ class _ActivityList extends StatelessWidget {
     }
     final keys = grouped.keys.toList();
 
+    // The shell's floating bottom bar (extendBody: true) overlays the bottom
+    // of this list. Pad past it (bar footprint ≈ 76 + safe-area inset) so the
+    // last rows aren't hidden behind it.
+    final bottomClear = MediaQuery.paddingOf(context).bottom + 88;
+
     return ListView.builder(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(20, 6, 20, 40),
+      padding: EdgeInsets.fromLTRB(20, 6, 20, bottomClear),
       itemCount: keys.length,
       itemBuilder: (_, i) {
         final dateKey = keys[i];
@@ -412,8 +413,9 @@ class _ActivityList extends StatelessWidget {
                         Container(
                           margin: const EdgeInsets.symmetric(horizontal: 14),
                           height: 1,
-                          color: AppColors.divider(isDark)
-                              .withValues(alpha: 0.6),
+                          color: AppColors.divider(
+                            isDark,
+                          ).withValues(alpha: 0.6),
                         ),
                     ],
                   ],
@@ -505,7 +507,8 @@ class _ActivityRowState extends State<_ActivityRow>
     final actorName = activity.actorUser?.name.trim() ?? '';
     final body = activity.description;
     final unread = !activity.isRead;
-    final hasDetails = body.isNotEmpty ||
+    final hasDetails =
+        body.isNotEmpty ||
         actorName.isNotEmpty ||
         (activity.group != null && activity.group!.name.isNotEmpty);
 
@@ -653,8 +656,7 @@ class _ActivityRowState extends State<_ActivityRow>
                                 children: [
                                   Text(
                                     'Open',
-                                    style: AppTextStyles.body2(isDark)
-                                        .copyWith(
+                                    style: AppTextStyles.body2(isDark).copyWith(
                                       color: AppColors.tealDark,
                                       fontWeight: FontWeight.w700,
                                       fontSize: 12.5,
@@ -685,16 +687,11 @@ class _ActivityRowState extends State<_ActivityRow>
       ),
     );
   }
-
 }
 
 // Subtle pill chip used for actor/group meta on the row.
 class _Pill extends StatelessWidget {
-  const _Pill({
-    required this.isDark,
-    required this.icon,
-    required this.text,
-  });
+  const _Pill({required this.isDark, required this.icon, required this.text});
 
   final bool isDark;
   final IconData icon;
@@ -746,7 +743,12 @@ class _EmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(20, 80, 20, 40),
+      padding: EdgeInsets.fromLTRB(
+        20,
+        80,
+        20,
+        MediaQuery.paddingOf(context).bottom + 88,
+      ),
       children: [
         Column(
           children: [
@@ -767,19 +769,17 @@ class _EmptyState extends StatelessWidget {
             const SizedBox(height: 18),
             Text(
               'No activity yet',
-              style: AppTextStyles.body1(isDark).copyWith(
-                fontWeight: FontWeight.w700,
-                fontSize: 16,
-              ),
+              style: AppTextStyles.body1(
+                isDark,
+              ).copyWith(fontWeight: FontWeight.w700, fontSize: 16),
             ),
             const SizedBox(height: 6),
             Text(
               'Expenses, settlements and group events will appear here.',
               textAlign: TextAlign.center,
-              style: AppTextStyles.body2(isDark).copyWith(
-                color: AppColors.textSecondary(isDark),
-                height: 1.4,
-              ),
+              style: AppTextStyles.body2(
+                isDark,
+              ).copyWith(color: AppColors.textSecondary(isDark), height: 1.4),
             ),
           ],
         ),
@@ -795,7 +795,12 @@ class _LoadingState extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
+      padding: EdgeInsets.fromLTRB(
+        20,
+        12,
+        20,
+        MediaQuery.paddingOf(context).bottom + 88,
+      ),
       itemCount: 4,
       separatorBuilder: (_, __) => const SizedBox(height: 14),
       itemBuilder: (_, i) => Column(
@@ -834,7 +839,12 @@ class _ErrorState extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(20, 80, 20, 40),
+      padding: EdgeInsets.fromLTRB(
+        20,
+        80,
+        20,
+        MediaQuery.paddingOf(context).bottom + 88,
+      ),
       children: [
         Column(
           children: [
@@ -846,9 +856,9 @@ class _ErrorState extends StatelessWidget {
             const SizedBox(height: 14),
             Text(
               'Couldn\'t load activity',
-              style: AppTextStyles.body1(isDark).copyWith(
-                fontWeight: FontWeight.w600,
-              ),
+              style: AppTextStyles.body1(
+                isDark,
+              ).copyWith(fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 12),
             TextButton(
