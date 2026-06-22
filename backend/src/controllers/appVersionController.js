@@ -23,9 +23,15 @@ const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.kharch
 const getAppVersion = async (req, res) => {
   const latest = process.env.LATEST_APP_VERSION || '3.3.0';
   const minSupported = process.env.MIN_SUPPORTED_APP_VERSION || '3.0.0';
+  // When true (the default), ANY version below `latest` is force-updated
+  // (blocking) — the client won't let the user past the update gate until
+  // they're on the newest release. Set FORCE_UPDATE_ENABLED=false to fall
+  // back to a dismissible "soft" prompt for non-critical releases.
+  const forceUpdate =
+    (process.env.FORCE_UPDATE_ENABLED || 'true').toLowerCase() !== 'false';
   const forceUpdateMessage =
     process.env.FORCE_UPDATE_MESSAGE ||
-    'A critical update is required to keep using KharchaSplit.';
+    'A new version of KharchaSplit is available. Please update to continue.';
   const softUpdateMessage =
     process.env.SOFT_UPDATE_MESSAGE ||
     'A new version of KharchaSplit is available with improvements and fixes.';
@@ -35,6 +41,7 @@ const getAppVersion = async (req, res) => {
     data: {
       latestVersion: latest,
       minSupportedVersion: minSupported,
+      forceUpdate,
       forceUpdateMessage,
       softUpdateMessage,
       storeUrls: {

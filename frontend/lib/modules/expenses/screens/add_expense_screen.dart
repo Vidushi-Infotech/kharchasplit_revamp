@@ -139,13 +139,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     _titleDebounce?.cancel();
     _titleController.dispose();
     _notesController.dispose();
-    if (widget.isEditing) {
-      Future.microtask(() {
-        ref.read(addExpenseProvider.notifier).state = AddExpenseState(
-          date: DateTime.now(),
-        );
-      });
-    }
+    // No manual provider reset here: addExpenseProvider is autoDispose, so it
+    // tears down and re-creates fresh state once this screen stops watching
+    // it. (Mutating it via a post-dispose microtask was unreliable — `ref` is
+    // already invalid by then.)
     super.dispose();
   }
 
@@ -1217,6 +1214,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
 
     ref.invalidate(dashboardProvider);
     ref.invalidate(groupDetailProvider(groupId));
+    // Re-fetch the groups list so the dashboard "Your Groups" carousel picks
+    // up the new recency order (this group jumps to the front now that the
+    // backend bumped its updated_at).
+    ref.invalidate(groupsProvider);
     if (widget.isEditing) {
       ref.invalidate(expenseDetailProvider(widget.expenseId!));
     }

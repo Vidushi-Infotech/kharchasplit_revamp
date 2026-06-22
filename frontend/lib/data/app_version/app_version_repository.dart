@@ -8,6 +8,7 @@ class AppVersionConfig {
   AppVersionConfig({
     required this.latestVersion,
     required this.minSupportedVersion,
+    required this.forceUpdate,
     required this.forceUpdateMessage,
     required this.softUpdateMessage,
     required this.androidStoreUrl,
@@ -20,6 +21,11 @@ class AppVersionConfig {
   /// Anything strictly below this triggers a FORCE update.
   final String minSupportedVersion;
 
+  /// When true, being below [latestVersion] (not just [minSupportedVersion])
+  /// triggers a blocking FORCE update — i.e. the user can't use the app until
+  /// they update to the newest release.
+  final bool forceUpdate;
+
   /// Shown in the blocking dialog when current < minSupportedVersion.
   final String forceUpdateMessage;
 
@@ -30,17 +36,23 @@ class AppVersionConfig {
   final String iosStoreUrl;
 
   factory AppVersionConfig.fromJson(Map<String, dynamic> json) {
-    final stores = (json['storeUrls'] as Map?)?.cast<String, dynamic>() ?? const {};
+    final stores =
+        (json['storeUrls'] as Map?)?.cast<String, dynamic>() ?? const {};
     return AppVersionConfig(
       latestVersion: (json['latestVersion'] as String?) ?? '0.0.0',
       minSupportedVersion: (json['minSupportedVersion'] as String?) ?? '0.0.0',
-      forceUpdateMessage: (json['forceUpdateMessage'] as String?) ??
+      forceUpdate: (json['forceUpdate'] as bool?) ?? false,
+      forceUpdateMessage:
+          (json['forceUpdateMessage'] as String?) ??
           'A critical update is required.',
-      softUpdateMessage: (json['softUpdateMessage'] as String?) ??
+      softUpdateMessage:
+          (json['softUpdateMessage'] as String?) ??
           'A new version is available.',
-      androidStoreUrl: (stores['android'] as String?) ??
+      androidStoreUrl:
+          (stores['android'] as String?) ??
           'https://play.google.com/store/apps/details?id=com.kharchasplit',
-      iosStoreUrl: (stores['ios'] as String?) ??
+      iosStoreUrl:
+          (stores['ios'] as String?) ??
           'https://apps.apple.com/app/id6754237285',
     );
   }
