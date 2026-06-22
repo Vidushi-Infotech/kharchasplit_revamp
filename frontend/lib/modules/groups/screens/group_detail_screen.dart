@@ -26,6 +26,8 @@ import '../state/groups_provider.dart';
 import '../../../core/services/haptic_service.dart';
 import '../widgets/contacts_picker_sheet.dart';
 import '../widgets/group_activity_tab.dart';
+import '../widgets/balance_summary_cards.dart';
+import '../widgets/balance_expense_logs.dart';
 
 /// Slim sticky header that hosts the 3-tab bar (Expenses / Balances /
 /// Activity). Pinned in a NestedScrollView so the group hero card scrolls
@@ -91,10 +93,7 @@ const String _kInviteMessage =
 class GroupDetailScreen extends ConsumerWidget {
   final String groupId;
 
-  const GroupDetailScreen({
-    Key? key,
-    required this.groupId,
-  }) : super(key: key);
+  const GroupDetailScreen({Key? key, required this.groupId}) : super(key: key);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -103,7 +102,8 @@ class GroupDetailScreen extends ConsumerWidget {
     final detailAsync = ref.watch(groupDetailProvider(groupId));
     final myId = ref.watch(myIdProvider);
     final loadedDetail = detailAsync.value;
-    final isAdmin = loadedDetail != null &&
+    final isAdmin =
+        loadedDetail != null &&
         myId != null &&
         loadedDetail.group.createdBy == myId;
 
@@ -133,8 +133,9 @@ class GroupDetailScreen extends ConsumerWidget {
             : () => _openEditGroupSheet(context, ref, loadedDetail.group),
         onLeaveGroup: () => _confirmLeaveGroup(context, ref, myId),
         onDeleteGroup: () => _confirmDeleteGroup(context, ref),
-        onExportGroup:
-            loadedDetail == null ? null : () => _exportGroup(context, ref, loadedDetail.group),
+        onExportGroup: loadedDetail == null
+            ? null
+            : () => _exportGroup(context, ref, loadedDetail.group),
       ),
       body: detailAsync.when(
         loading: () => const ShimmerList(type: ShimmerListType.group),
@@ -144,12 +145,33 @@ class GroupDetailScreen extends ConsumerWidget {
             final tab = ref.watch(groupTabProvider);
             final body = screenWidth < 600
                 ? _buildCompactLayout(
-                    context, isDark, detail, tab, ref, myId, isAdmin)
+                    context,
+                    isDark,
+                    detail,
+                    tab,
+                    ref,
+                    myId,
+                    isAdmin,
+                  )
                 : screenWidth < 1100
-                    ? _buildStandardLayout(
-                        context, isDark, detail, tab, ref, myId, isAdmin)
-                    : _buildLargeLayout(
-                        context, isDark, detail, tab, ref, myId, isAdmin);
+                ? _buildStandardLayout(
+                    context,
+                    isDark,
+                    detail,
+                    tab,
+                    ref,
+                    myId,
+                    isAdmin,
+                  )
+                : _buildLargeLayout(
+                    context,
+                    isDark,
+                    detail,
+                    tab,
+                    ref,
+                    myId,
+                    isAdmin,
+                  );
             return RefreshIndicator(
               onRefresh: () async {
                 // Invalidate the family entry for this group + the pending
@@ -184,7 +206,10 @@ class GroupDetailScreen extends ConsumerWidget {
   }
 
   void _navigateToAddExpense(BuildContext context) {
-    context.pushNamed('add-expense-to-group', pathParameters: {'groupId': groupId});
+    context.pushNamed(
+      'add-expense-to-group',
+      pathParameters: {'groupId': groupId},
+    );
   }
 
   Widget _buildErrorState(BuildContext context, WidgetRef ref, Object err) {
@@ -195,13 +220,13 @@ class GroupDetailScreen extends ConsumerWidget {
     final title = isAccessDenied
         ? "You don't have access to this group"
         : isMissing
-            ? 'This group no longer exists'
-            : 'Failed to load group details';
+        ? 'This group no longer exists'
+        : 'Failed to load group details';
     final message = isAccessDenied
         ? "It looks like you're no longer a member, or this group belongs to a different account."
         : isMissing
-            ? "The group may have been deleted. Pick another from your list."
-            : (err is GroupsApiException ? err.message : err.toString());
+        ? "The group may have been deleted. Pick another from your list."
+        : (err is GroupsApiException ? err.message : err.toString());
 
     final showRetry = !isAccessDenied && !isMissing;
 
@@ -238,9 +263,8 @@ class GroupDetailScreen extends ConsumerWidget {
   Future<void> _showInviteDialog(BuildContext context, WidgetRef ref) async {
     // Pull current members so the picker can mark them as already-added.
     final loaded = ref.read(groupDetailProvider(groupId)).value;
-    final existingPhones = loaded?.members
-            .map((m) => m.phone)
-            .where((p) => p.isNotEmpty) ??
+    final existingPhones =
+        loaded?.members.map((m) => m.phone).where((p) => p.isNotEmpty) ??
         const <String>[];
 
     final selfPhone = ref.read(authProvider).user?.phone ?? '';
@@ -275,7 +299,9 @@ class GroupDetailScreen extends ConsumerWidget {
           );
           added++;
         } catch (e) {
-          failures.add('${c.displayName}: ${e is GroupsApiException ? e.message : e}');
+          failures.add(
+            '${c.displayName}: ${e is GroupsApiException ? e.message : e}',
+          );
         }
       } else if (email.isEmpty) {
         // Neither phone nor email — nothing we can do.
@@ -287,11 +313,7 @@ class GroupDetailScreen extends ConsumerWidget {
       // email for this contact (regardless of whether WATI accepted it).
       if (email.isNotEmpty) {
         try {
-          await repo.inviteByEmail(
-            groupId: groupId,
-            email: email,
-            name: name,
-          );
+          await repo.inviteByEmail(groupId: groupId, email: email, name: name);
           emailsSent++;
         } catch (_) {
           emailsFailed++;
@@ -366,8 +388,9 @@ class GroupDetailScreen extends ConsumerWidget {
                         children: [
                           Text(
                             isSelf ? '${member.name} (you)' : member.name,
-                            style: AppTextStyles.body1(isDark)
-                                .copyWith(fontWeight: FontWeight.w600),
+                            style: AppTextStyles.body1(
+                              isDark,
+                            ).copyWith(fontWeight: FontWeight.w600),
                           ),
                           if (member.phone.isNotEmpty)
                             Text(
@@ -385,7 +408,9 @@ class GroupDetailScreen extends ConsumerWidget {
                   const SizedBox(height: 10),
                   Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 5),
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.warning.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
@@ -393,8 +418,11 @@ class GroupDetailScreen extends ConsumerWidget {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.schedule_rounded,
-                            size: 14, color: AppColors.warning),
+                        Icon(
+                          Icons.schedule_rounded,
+                          size: 14,
+                          color: AppColors.warning,
+                        ),
                         const SizedBox(width: 6),
                         Text(
                           'Not yet on KharchaSplit',
@@ -414,8 +442,7 @@ class GroupDetailScreen extends ConsumerWidget {
                     isDark: isDark,
                     onTap: () {
                       Navigator.pop(sheetCtx);
-                      _showEmailInviteDialog(
-                          context, ref, member);
+                      _showEmailInviteDialog(context, ref, member);
                     },
                   ),
                   const SizedBox(height: 8),
@@ -432,11 +459,9 @@ class GroupDetailScreen extends ConsumerWidget {
                           final phone = member.phone
                               .replaceAll('+', '')
                               .replaceAll(' ', '');
-                          final encoded =
-                              Uri.encodeComponent(_kInviteMessage);
+                          final encoded = Uri.encodeComponent(_kInviteMessage);
                           launchUrl(
-                            Uri.parse(
-                                'https://wa.me/$phone?text=$encoded'),
+                            Uri.parse('https://wa.me/$phone?text=$encoded'),
                             mode: LaunchMode.externalApplication,
                           );
                         },
@@ -449,12 +474,13 @@ class GroupDetailScreen extends ConsumerWidget {
                     isDark: isDark,
                     onTap: () {
                       Clipboard.setData(
-                          const ClipboardData(text: _kInviteMessage));
+                        const ClipboardData(text: _kInviteMessage),
+                      );
                       Navigator.pop(sheetCtx);
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                            content: Text(
-                                'Invite message copied to clipboard')),
+                          content: Text('Invite message copied to clipboard'),
+                        ),
                       );
                     },
                   ),
@@ -490,10 +516,9 @@ class GroupDetailScreen extends ConsumerWidget {
     UserModel debtor,
   ) async {
     try {
-      await ref.read(groupsRepositoryProvider).sendReminder(
-            groupId: groupId,
-            userId: debtor.id,
-          );
+      await ref
+          .read(groupsRepositoryProvider)
+          .sendReminder(groupId: groupId, userId: debtor.id);
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -506,10 +531,7 @@ class GroupDetailScreen extends ConsumerWidget {
       // Surface the message verbatim so the user sees the real reason.
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.message),
-          behavior: SnackBarBehavior.floating,
-        ),
+        SnackBar(content: Text(e.message), behavior: SnackBarBehavior.floating),
       );
     } catch (e) {
       if (!context.mounted) return;
@@ -535,28 +557,24 @@ class GroupDetailScreen extends ConsumerWidget {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (ctx) => _EmailInviteSheet(
-        memberName: member.name,
-        isDark: isDark,
-      ),
+      builder: (ctx) =>
+          _EmailInviteSheet(memberName: member.name, isDark: isDark),
     );
     if (email == null || email.isEmpty || !context.mounted) return;
     try {
-      await ref.read(groupsRepositoryProvider).inviteByEmail(
-            groupId: groupId,
-            email: email,
-            name: member.name,
-          );
+      await ref
+          .read(groupsRepositoryProvider)
+          .inviteByEmail(groupId: groupId, email: email, name: member.name);
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Invite sent to $email')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Invite sent to $email')));
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to send invite: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to send invite: $e')));
       }
     }
   }
@@ -591,9 +609,8 @@ class GroupDetailScreen extends ConsumerWidget {
           for (final e in unsettled)
             PairwiseDebt(
               userId: e.key,
-              userName: detail.members
-                      .firstWhereOrNull((m) => m.id == e.key)
-                      ?.name ??
+              userName:
+                  detail.members.firstWhereOrNull((m) => m.id == e.key)?.name ??
                   'Unknown',
               amount: e.value,
             ),
@@ -648,7 +665,9 @@ class GroupDetailScreen extends ConsumerWidget {
     required bool acknowledged,
   }) async {
     try {
-      await ref.read(groupsRepositoryProvider).removeMember(
+      await ref
+          .read(groupsRepositoryProvider)
+          .removeMember(
             groupId: groupId,
             userId: member.id,
             acknowledgeUnsettledDebt: acknowledged,
@@ -664,9 +683,7 @@ class GroupDetailScreen extends ConsumerWidget {
       // Backend's "you need to write off the unsettled debt first"
       // signal — open the second-step dialog instead of dumping the raw
       // message in a SnackBar.
-      if (!acknowledged &&
-          e.code == 'UNSETTLED_BALANCES' &&
-          e.data != null) {
+      if (!acknowledged && e.code == 'UNSETTLED_BALANCES' && e.data != null) {
         HapticService.instance.error();
         final info = UnsettledBalancesInfo.fromJson(e.data!);
         final proceed = await _showWriteOffDialog(context, member, info);
@@ -676,14 +693,14 @@ class GroupDetailScreen extends ConsumerWidget {
         }
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not remove: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not remove: $e')));
     }
   }
 
@@ -713,9 +730,9 @@ class GroupDetailScreen extends ConsumerWidget {
               'below. The group balances will be cleaned up, but the '
               'underlying debts cannot be recovered if you add them '
               'back later.',
-              style: AppTextStyles.body2(isDark).copyWith(
-                color: AppColors.textSecondary(isDark),
-              ),
+              style: AppTextStyles.body2(
+                isDark,
+              ).copyWith(color: AppColors.textSecondary(isDark)),
             ),
             const SizedBox(height: 14),
             ConstrainedBox(
@@ -773,11 +790,9 @@ class GroupDetailScreen extends ConsumerWidget {
           const SizedBox(width: 8),
           Text(
             fmt(p.amount),
-            style: AppTextStyles.body2(isDark).copyWith(
-              color: color,
-              fontWeight: FontWeight.w700,
-              fontSize: 13,
-            ),
+            style: AppTextStyles.body2(
+              isDark,
+            ).copyWith(color: color, fontWeight: FontWeight.w700, fontSize: 13),
           ),
         ],
       ),
@@ -817,20 +832,20 @@ class GroupDetailScreen extends ConsumerWidget {
       ref.invalidate(groupsProvider);
       ref.invalidate(groupDetailProvider(groupId));
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Left the group.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Left the group.')));
       context.go('/home/groups');
     } on GroupsApiException catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not leave: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not leave: $e')));
     }
   }
 
@@ -863,8 +878,9 @@ class GroupDetailScreen extends ConsumerWidget {
 
     try {
       // 2. Download
-      final result =
-          await ref.read(groupsRepositoryProvider).exportGroup(groupId);
+      final result = await ref
+          .read(groupsRepositoryProvider)
+          .exportGroup(groupId);
 
       // 3. Write to temp
       final tempDir = await getTemporaryDirectory();
@@ -877,8 +893,13 @@ class GroupDetailScreen extends ConsumerWidget {
 
       await SharePlus.instance.share(
         ShareParams(
-          files: [XFile(file.path, mimeType:
-              'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')],
+          files: [
+            XFile(
+              file.path,
+              mimeType:
+                  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            ),
+          ],
           subject: 'KharchaSplit — ${group.name} ledger',
           text:
               'Group ledger for "${group.name}" — exported from KharchaSplit.',
@@ -887,15 +908,15 @@ class GroupDetailScreen extends ConsumerWidget {
     } on GroupsApiException catch (e) {
       if (!context.mounted) return;
       Navigator.of(context, rootNavigator: true).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
     } catch (e) {
       if (!context.mounted) return;
       Navigator.of(context, rootNavigator: true).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not export: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not export: $e')));
     }
   }
 
@@ -930,20 +951,20 @@ class GroupDetailScreen extends ConsumerWidget {
       await ref.read(groupsRepositoryProvider).delete(groupId);
       ref.invalidate(groupsProvider);
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Group deleted.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Group deleted.')));
       context.go('/home/groups');
     } on GroupsApiException catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not delete: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not delete: $e')));
     }
   }
 
@@ -962,7 +983,13 @@ class GroupDetailScreen extends ConsumerWidget {
       headerSliverBuilder: (ctx, _) => [
         SliverToBoxAdapter(
           child: _buildCompactHeader(
-              context, isDark, detail, ref, myId, isAdmin),
+            context,
+            isDark,
+            detail,
+            ref,
+            myId,
+            isAdmin,
+          ),
         ),
         SliverPersistentHeader(
           pinned: true,
@@ -972,7 +999,7 @@ class GroupDetailScreen extends ConsumerWidget {
           ),
         ),
       ],
-      body: _buildTabBody(context, isDark, tab, detail, myId),
+      body: _buildTabBody(context, ref, isDark, tab, detail, myId),
     );
   }
 
@@ -981,6 +1008,7 @@ class GroupDetailScreen extends ConsumerWidget {
   /// own internal scrolling.
   Widget _buildTabBody(
     BuildContext context,
+    WidgetRef ref,
     bool isDark,
     GroupTab tab,
     GroupDetail detail,
@@ -990,10 +1018,7 @@ class GroupDetailScreen extends ConsumerWidget {
       case GroupTab.expenses:
         return _buildExpensesList(context, isDark, detail);
       case GroupTab.balances:
-        return SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          child: _buildBalancesTab(context, isDark, detail, myId),
-        );
+        return _buildBalancesTab(context, ref, isDark, detail, myId);
       case GroupTab.activity:
         return GroupActivityTab(groupId: groupId);
     }
@@ -1015,7 +1040,13 @@ class GroupDetailScreen extends ConsumerWidget {
       headerSliverBuilder: (ctx, _) => [
         SliverToBoxAdapter(
           child: _buildStandardHeader(
-              context, isDark, detail, ref, myId, isAdmin),
+            context,
+            isDark,
+            detail,
+            ref,
+            myId,
+            isAdmin,
+          ),
         ),
         SliverPersistentHeader(
           pinned: true,
@@ -1025,7 +1056,7 @@ class GroupDetailScreen extends ConsumerWidget {
           ),
         ),
       ],
-      body: _buildTabBody(context, isDark, tab, detail, myId),
+      body: _buildTabBody(context, ref, isDark, tab, detail, myId),
     );
   }
 
@@ -1052,7 +1083,14 @@ class GroupDetailScreen extends ConsumerWidget {
                 children: [
                   _buildLargeHeader(context, isDark, detail),
                   const SizedBox(height: 32),
-                  _buildMembersSection(context, isDark, detail, ref, myId, isAdmin),
+                  _buildMembersSection(
+                    context,
+                    isDark,
+                    detail,
+                    ref,
+                    myId,
+                    isAdmin,
+                  ),
                 ],
               ),
             ),
@@ -1065,10 +1103,7 @@ class GroupDetailScreen extends ConsumerWidget {
             decoration: BoxDecoration(
               color: AppColors.surface(isDark),
               border: Border(
-                left: BorderSide(
-                  color: AppColors.divider(isDark),
-                  width: 1,
-                ),
+                left: BorderSide(color: AppColors.divider(isDark), width: 1),
               ),
             ),
             child: Column(
@@ -1081,8 +1116,7 @@ class GroupDetailScreen extends ConsumerWidget {
                   color: AppColors.divider(isDark).withValues(alpha: 0.5),
                 ),
                 Expanded(
-                  child:
-                      _buildTabBody(context, isDark, tab, detail, myId),
+                  child: _buildTabBody(context, ref, isDark, tab, detail, myId),
                 ),
               ],
             ),
@@ -1123,9 +1157,7 @@ class GroupDetailScreen extends ConsumerWidget {
                     ),
                   ),
                 ),
-                _AddMemberButton(
-                  onTap: () => _showInviteDialog(context, ref),
-                ),
+                _AddMemberButton(onTap: () => _showInviteDialog(context, ref)),
               ],
             ),
           ),
@@ -1149,10 +1181,7 @@ class GroupDetailScreen extends ConsumerWidget {
       decoration: BoxDecoration(
         color: AppColors.surface(isDark),
         border: Border(
-          bottom: BorderSide(
-            color: AppColors.divider(isDark),
-            width: 1,
-          ),
+          bottom: BorderSide(color: AppColors.divider(isDark), width: 1),
         ),
       ),
       child: Column(
@@ -1224,9 +1253,7 @@ class GroupDetailScreen extends ConsumerWidget {
                   ),
                 ),
               ),
-              _AddMemberButton(
-                onTap: () => _showInviteDialog(context, ref),
-              ),
+              _AddMemberButton(onTap: () => _showInviteDialog(context, ref)),
             ],
           ),
           const SizedBox(height: 12),
@@ -1238,7 +1265,11 @@ class GroupDetailScreen extends ConsumerWidget {
   }
 
   // Large header: >1100px - generous spacing (32-48px)
-  Widget _buildLargeHeader(BuildContext context, bool isDark, GroupDetail detail) {
+  Widget _buildLargeHeader(
+    BuildContext context,
+    bool isDark,
+    GroupDetail detail,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1313,10 +1344,7 @@ class GroupDetailScreen extends ConsumerWidget {
       decoration: BoxDecoration(
         color: AppColors.surface(isDark),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: AppColors.divider(isDark),
-          width: 1,
-        ),
+        border: Border.all(color: AppColors.divider(isDark), width: 1),
       ),
       child: Row(
         children: [
@@ -1326,16 +1354,13 @@ class GroupDetailScreen extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  label,
-                  style: AppTextStyles.caption(isDark),
-                ),
+                Text(label, style: AppTextStyles.caption(isDark)),
                 const SizedBox(height: 4),
                 Text(
                   value,
-                  style: AppTextStyles.headline3(isDark).copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: AppTextStyles.headline3(
+                    isDark,
+                  ).copyWith(fontWeight: FontWeight.w600),
                 ),
               ],
             ),
@@ -1362,10 +1387,9 @@ class GroupDetailScreen extends ConsumerWidget {
         const SizedBox(height: 2),
         Text(
           value,
-          style: AppTextStyles.body2(isDark).copyWith(
-            fontWeight: FontWeight.w600,
-            fontSize: 14,
-          ),
+          style: AppTextStyles.body2(
+            isDark,
+          ).copyWith(fontWeight: FontWeight.w600, fontSize: 14),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
@@ -1383,17 +1407,13 @@ class GroupDetailScreen extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: AppTextStyles.caption(isDark),
-        ),
+        Text(label, style: AppTextStyles.caption(isDark)),
         const SizedBox(height: 4),
         Text(
           value,
-          style: AppTextStyles.headline3(isDark).copyWith(
-            fontWeight: FontWeight.w600,
-            fontSize: 18,
-          ),
+          style: AppTextStyles.headline3(
+            isDark,
+          ).copyWith(fontWeight: FontWeight.w600, fontSize: 18),
         ),
       ],
     );
@@ -1506,9 +1526,7 @@ class GroupDetailScreen extends ConsumerWidget {
                 style: AppTextStyles.headline3(isDark),
               ),
             ),
-            _AddMemberButton(
-              onTap: () => _showInviteDialog(context, ref),
-            ),
+            _AddMemberButton(onTap: () => _showInviteDialog(context, ref)),
           ],
         ),
         const SizedBox(height: 12),
@@ -1516,81 +1534,82 @@ class GroupDetailScreen extends ConsumerWidget {
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           itemCount: detail.members.length,
-            itemBuilder: (context, index) {
-              final member = detail.members[index];
-              final isSelf = member.id == myId;
-              final canRemove = isAdmin && !isSelf;
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(10),
-                    onTap: () => _showMemberActionsSheet(
-                      context: context,
-                      ref: ref,
-                      member: member,
-                      isAdmin: isAdmin,
-                      isSelf: isSelf,
+          itemBuilder: (context, index) {
+            final member = detail.members[index];
+            final isSelf = member.id == myId;
+            final canRemove = isAdmin && !isSelf;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(10),
+                  onTap: () => _showMemberActionsSheet(
+                    context: context,
+                    ref: ref,
+                    member: member,
+                    isAdmin: isAdmin,
+                    isSelf: isSelf,
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface(isDark),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: AppColors.divider(isDark),
+                        width: 1,
+                      ),
                     ),
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppColors.surface(isDark),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: AppColors.divider(isDark),
-                          width: 1,
+                    child: Row(
+                      children: [
+                        AvatarWidget(
+                          imageUrl: member.avatarUrl,
+                          name: member.name,
+                          radius: 18,
                         ),
-                      ),
-                      child: Row(
-                        children: [
-                          AvatarWidget(
-                            imageUrl: member.avatarUrl,
-                            name: member.name,
-                            radius: 18,
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  member.name,
-                                  style: AppTextStyles.body2(isDark),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                Text(
-                                  member.email.isEmpty ? 'No email' : member.email,
-                                  style: AppTextStyles.caption(isDark),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
-                            ),
-                          ),
-                          if (canRemove)
-                            IconButton(
-                              tooltip: 'Remove from group',
-                              icon: Icon(
-                                Icons.person_remove_outlined,
-                                color: AppColors.errorText(isDark),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                member.name,
+                                style: AppTextStyles.body2(isDark),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                              onPressed: () => _confirmRemoveMember(
-                                context, ref, member,
+                              Text(
+                                member.email.isEmpty
+                                    ? 'No email'
+                                    : member.email,
+                                style: AppTextStyles.caption(isDark),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
+                            ],
+                          ),
+                        ),
+                        if (canRemove)
+                          IconButton(
+                            tooltip: 'Remove from group',
+                            icon: Icon(
+                              Icons.person_remove_outlined,
+                              color: AppColors.errorText(isDark),
                             ),
-                        ],
-                      ),
+                            onPressed: () =>
+                                _confirmRemoveMember(context, ref, member),
+                          ),
+                      ],
                     ),
                   ),
                 ),
-              );
-            },
-          ),
-        ],
-      );
+              ),
+            );
+          },
+        ),
+      ],
+    );
   }
 
   Widget _buildTabs(
@@ -1631,8 +1650,7 @@ class GroupDetailScreen extends ConsumerWidget {
               onTap: () {
                 if (tab != GroupTab.expenses) {
                   HapticService.instance.selection();
-                  ref.read(groupTabProvider.notifier).state =
-                      GroupTab.expenses;
+                  ref.read(groupTabProvider.notifier).state = GroupTab.expenses;
                 }
               },
             ),
@@ -1646,8 +1664,7 @@ class GroupDetailScreen extends ConsumerWidget {
               onTap: () {
                 if (tab != GroupTab.balances) {
                   HapticService.instance.selection();
-                  ref.read(groupTabProvider.notifier).state =
-                      GroupTab.balances;
+                  ref.read(groupTabProvider.notifier).state = GroupTab.balances;
                 }
               },
             ),
@@ -1663,8 +1680,7 @@ class GroupDetailScreen extends ConsumerWidget {
               onTap: () {
                 if (tab != GroupTab.activity) {
                   HapticService.instance.selection();
-                  ref.read(groupTabProvider.notifier).state =
-                      GroupTab.activity;
+                  ref.read(groupTabProvider.notifier).state = GroupTab.activity;
                 }
               },
             ),
@@ -1674,7 +1690,11 @@ class GroupDetailScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildExpensesList(BuildContext context, bool isDark, GroupDetail detail) {
+  Widget _buildExpensesList(
+    BuildContext context,
+    bool isDark,
+    GroupDetail detail,
+  ) {
     if (detail.expenses.isEmpty) {
       return EmptyStateWidget.noExpenses();
     }
@@ -1715,58 +1735,245 @@ class GroupDetailScreen extends ConsumerWidget {
 
   Widget _buildBalancesTab(
     BuildContext context,
+    WidgetRef ref,
     bool isDark,
     GroupDetail detail,
     String? myId,
   ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _PendingIncomingSettlementsSection(groupId: groupId),
-        _PendingOutgoingSettlementsSection(groupId: groupId),
-        _buildBalancesList(context, isDark, detail, myId),
+    final isCompact = MediaQuery.sizeOf(context).width < 600;
+    final pad = isCompact ? 16.0 : 24.0;
+
+    // What I've already got in pending (unconfirmed) settlements to each
+    // person — so Settle Up only asks for the not-yet-in-flight remainder.
+    final pendingOut = myId == null
+        ? const <String, double>{}
+        : computePendingOutgoing(myId: myId, settlements: detail.settlements);
+
+    final cards = myId == null
+        ? const <BalanceCardData>[]
+        : _balanceCardData(myId: myId, detail: detail, pendingOut: pendingOut);
+
+    // Net pairwise balance with each person — used to gate the Settle Up /
+    // Remind buttons on the log rows. pair[id] > 0 ⇒ I owe them; < 0 ⇒ they
+    // owe me; ~0 ⇒ settled (so no button — this is what "disables Settle Up
+    // once everything's settled" rather than reacting to a single expense).
+    final pair = myId == null
+        ? const <String, double>{}
+        : _pairwiseDebts(myId: myId, detail: detail);
+
+    // Per-split log entries, computed once and rendered lazily below.
+    final logEntries = buildSplitLogEntries(
+      expenses: detail.expenses,
+      currentUserId: myId,
+      memberById: {for (final m in detail.members) m.id: m},
+    );
+
+    // CustomScrollView so the (potentially long) per-split log builds lazily
+    // via a SliverList.builder instead of all at once.
+    return CustomScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      slivers: [
+        SliverToBoxAdapter(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _PendingIncomingSettlementsSection(groupId: groupId),
+              _PendingOutgoingSettlementsSection(groupId: groupId),
+              if (cards.isEmpty)
+                _buildAllSettledCard(isDark, pad)
+              else ...[
+                _buildSectionHeader('Balances', isDark: isDark, padding: pad),
+                const SizedBox(height: 8),
+                BalanceSummaryCards(
+                  entries: cards,
+                  horizontalPadding: pad,
+                  onTap: (entry) {
+                    // No drill-in for your own card or a settled member.
+                    if (entry.isMe || entry.settled) return;
+                    context.push(
+                      '/home/groups/$groupId/settlements-with/${entry.member.id}',
+                    );
+                  },
+                  onSettle: (entry) => context.push(
+                    '/settle/${entry.member.id}?groupId=$groupId'
+                    '&amount=${entry.settleAmount.toStringAsFixed(2)}',
+                  ),
+                  onRemind: (entry) =>
+                      _sendReminder(context, ref, entry.member),
+                ),
+              ],
+              if (logEntries.isNotEmpty) ...[
+                const SizedBox(height: 22),
+                _buildSectionHeader(
+                  'Expense log',
+                  isDark: isDark,
+                  padding: pad,
+                ),
+                const SizedBox(height: 8),
+              ],
+            ],
+          ),
+        ),
+        // Lazily-built per-split log rows.
+        SliverList.builder(
+          itemCount: logEntries.length,
+          itemBuilder: (_, i) {
+            final entry = logEntries[i];
+            // Gate the action by the NET balance with this person, not the
+            // single expense's share. Once the net is settled, neither button
+            // shows (and Remind won't hit a backend "no balance" error).
+            final net = pair[entry.personId] ?? 0;
+            final iOweNet = net > 0.01; // I still owe them overall
+            final theyOweMeNet = net < -0.01; // they still owe me overall
+            // Settle only what isn't already in a pending settlement. Guard
+            // the clamp: when net <= 0 (they owe me) there's nothing to settle,
+            // and clamp(0, negative) would throw.
+            final pendOut = pendingOut[entry.personId] ?? 0;
+            final toSettle = net > 0
+                ? (net - pendOut).clamp(0, net).toDouble()
+                : 0.0;
+            return Padding(
+              padding: EdgeInsets.fromLTRB(pad, 0, pad, 10),
+              child: SplitLogRow(
+                entry: entry,
+                onTap: () => context.push('/expense/${entry.expense.id}'),
+                // Remind only when they net-owe me; Settle Up only when I
+                // net-owe them. Settle the OUTSTANDING net amount, not this
+                // row's per-expense share.
+                onRemind: (entry.theyOweMe && theyOweMeNet)
+                    ? () => _sendReminder(
+                        context,
+                        ref,
+                        detail.members.firstWhere(
+                          (m) => m.id == entry.personId,
+                          orElse: () => UserModel(
+                            id: entry.personId,
+                            name: entry.personName,
+                            email: '',
+                            phone: '',
+                            createdAt: DateTime.now(),
+                          ),
+                        ),
+                      )
+                    : null,
+                onSettle: (!entry.theyOweMe && iOweNet && toSettle > 0.01)
+                    ? () => context.push(
+                        '/settle/${entry.personId}?groupId=$groupId'
+                        '&amount=${toSettle.toStringAsFixed(2)}',
+                      )
+                    : null,
+              ),
+            );
+          },
+        ),
+        const SliverToBoxAdapter(child: SizedBox(height: 12)),
       ],
     );
   }
 
-  /// Pairwise debts from the current user's perspective:
-  ///   pairwise[otherId] > 0  → I owe them that much
-  ///   pairwise[otherId] < 0  → they owe me that much
-  ///
-  /// Built from expense splits + settlements, excluding failed settlements.
+  /// Per-person net balances vs. the current user, sorted by magnitude
+  /// (largest first) for the balance cards carousel.
+  List<BalanceCardData> _balanceCardData({
+    required String myId,
+    required GroupDetail detail,
+    Map<String, double> pendingOut = const {},
+  }) {
+    final pair = _pairwiseDebts(myId: myId, detail: detail);
+    final cards = <BalanceCardData>[];
+
+    // "You" card first — my net across the group (positive = I'm owed).
+    final me = detail.members.firstWhereOrNull((m) => m.id == myId);
+    if (me != null) {
+      final sumIOwe = pair.values.fold<double>(0, (s, v) => s + v);
+      final myNet = -sumIOwe; // >0 ⇒ others owe me overall
+      cards.add(
+        BalanceCardData(
+          member: me,
+          amount: myNet.abs(),
+          iOweThem: myNet < 0,
+          isMe: true,
+          settled: myNet.abs() <= 0.01,
+        ),
+      );
+    }
+
+    // Every other member — including those who are settled up.
+    final others = <BalanceCardData>[];
+    for (final m in detail.members) {
+      if (m.id == myId) continue;
+      final v = pair[m.id] ?? 0;
+      final iOwe = v > 0;
+      // Only my outgoing pending matters for Settle Up.
+      final pend = iOwe ? (pendingOut[m.id] ?? 0).clamp(0, v).toDouble() : 0.0;
+      final settle = iOwe ? (v - pend).clamp(0, v).toDouble() : 0.0;
+      others.add(
+        BalanceCardData(
+          member: m,
+          amount: v.abs(),
+          iOweThem: iOwe,
+          settled: v.abs() <= 0.01,
+          settleAmount: settle,
+          pendingAmount: pend,
+        ),
+      );
+    }
+    // Outstanding balances first (largest first), settled members last.
+    others.sort((a, b) {
+      if (a.settled != b.settled) return a.settled ? 1 : -1;
+      return b.amount.compareTo(a.amount);
+    });
+
+    cards.addAll(others);
+    return cards;
+  }
+
+  Widget _buildAllSettledCard(bool isDark, double padding) {
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: padding, vertical: 24),
+      child: Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: AppColors.surface(isDark),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.divider(isDark), width: 1),
+        ),
+        child: Column(
+          children: [
+            const Text('🎉', style: TextStyle(fontSize: 40)),
+            const SizedBox(height: 8),
+            Text(
+              'All settled up',
+              style: AppTextStyles.body1(
+                isDark,
+              ).copyWith(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'No one owes anyone in this group.',
+              textAlign: TextAlign.center,
+              style: AppTextStyles.caption(
+                isDark,
+              ).copyWith(color: AppColors.textSecondary(isDark)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Pairwise debts from the current user's perspective. Delegates to the
+  /// shared [computePairwiseDebts] so the screen, the log rows and the
+  /// expense-detail buttons all agree (and match the backend, which counts
+  /// only confirmed settlements).
   Map<String, double> _pairwiseDebts({
     required String myId,
     required GroupDetail detail,
   }) {
-    final pair = <String, double>{};
-    for (final expense in detail.expenses) {
-      final paidBy = expense.paidBy.id;
-      if (paidBy == myId) {
-        // I paid → each other split-user owes me their share.
-        for (final split in expense.splits) {
-          if (split.userId == myId) continue;
-          pair[split.userId] = (pair[split.userId] ?? 0) - split.owedShare;
-        }
-      } else {
-        // Someone else paid → if I'm in the splits, I owe them my share.
-        for (final split in expense.splits) {
-          if (split.userId != myId) continue;
-          pair[paidBy] = (pair[paidBy] ?? 0) + split.owedShare;
-        }
-      }
-    }
-    for (final s in detail.settlements) {
-      if (s.status == SettlementStatus.failed) continue;
-      if (s.fromUser.id == myId) {
-        // I paid them → my debt to them shrinks.
-        pair[s.toUser.id] = (pair[s.toUser.id] ?? 0) - s.amount;
-      } else if (s.toUser.id == myId) {
-        // They paid me → effectively reduces what they owe me
-        // (or, equivalently, increases my net debt to them).
-        pair[s.fromUser.id] = (pair[s.fromUser.id] ?? 0) + s.amount;
-      }
-    }
-    return pair;
+    return computePairwiseDebts(
+      myId: myId,
+      expenses: detail.expenses,
+      settlements: detail.settlements,
+    );
   }
 
   Widget _buildBalancesList(
@@ -1782,13 +1989,9 @@ class GroupDetailScreen extends ConsumerWidget {
 
     if (myId == null) return const SizedBox.shrink();
     final pair = _pairwiseDebts(myId: myId, detail: detail);
-    final iOwe = pair.entries
-        .where((e) => e.value > 0.01)
-        .toList()
+    final iOwe = pair.entries.where((e) => e.value > 0.01).toList()
       ..sort((a, b) => b.value.compareTo(a.value));
-    final owedToMe = pair.entries
-        .where((e) => e.value < -0.01)
-        .toList()
+    final owedToMe = pair.entries.where((e) => e.value < -0.01).toList()
       ..sort((a, b) => a.value.compareTo(b.value));
 
     if (iOwe.isEmpty && owedToMe.isEmpty) {
@@ -1810,16 +2013,17 @@ class GroupDetailScreen extends ConsumerWidget {
               const SizedBox(height: 8),
               Text(
                 'All settled up',
-                style: AppTextStyles.body1(isDark)
-                    .copyWith(fontWeight: FontWeight.w600),
+                style: AppTextStyles.body1(
+                  isDark,
+                ).copyWith(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 4),
               Text(
                 'No one owes anyone in this group.',
                 textAlign: TextAlign.center,
-                style: AppTextStyles.caption(isDark).copyWith(
-                  color: AppColors.textSecondary(isDark),
-                ),
+                style: AppTextStyles.caption(
+                  isDark,
+                ).copyWith(color: AppColors.textSecondary(isDark)),
               ),
             ],
           ),
@@ -1836,16 +2040,18 @@ class GroupDetailScreen extends ConsumerWidget {
             isDark: isDark,
             padding: horizontalPadding,
           ),
-          ...iOwe.map((e) => _buildPairRow(
-                context: context,
-                isDark: isDark,
-                detail: detail,
-                otherId: e.key,
-                amount: e.value, // positive
-                iOweThem: true,
-                horizontalPadding: horizontalPadding,
-                verticalSpacing: verticalSpacing,
-              )),
+          ...iOwe.map(
+            (e) => _buildPairRow(
+              context: context,
+              isDark: isDark,
+              detail: detail,
+              otherId: e.key,
+              amount: e.value, // positive
+              iOweThem: true,
+              horizontalPadding: horizontalPadding,
+              verticalSpacing: verticalSpacing,
+            ),
+          ),
         ],
         if (owedToMe.isNotEmpty) ...[
           _buildSectionHeader(
@@ -1853,16 +2059,18 @@ class GroupDetailScreen extends ConsumerWidget {
             isDark: isDark,
             padding: horizontalPadding,
           ),
-          ...owedToMe.map((e) => _buildPairRow(
-                context: context,
-                isDark: isDark,
-                detail: detail,
-                otherId: e.key,
-                amount: e.value.abs(),
-                iOweThem: false,
-                horizontalPadding: horizontalPadding,
-                verticalSpacing: verticalSpacing,
-              )),
+          ...owedToMe.map(
+            (e) => _buildPairRow(
+              context: context,
+              isDark: isDark,
+              detail: detail,
+              otherId: e.key,
+              amount: e.value.abs(),
+              iOweThem: false,
+              horizontalPadding: horizontalPadding,
+              verticalSpacing: verticalSpacing,
+            ),
+          ),
         ],
       ],
     );
@@ -1920,8 +2128,7 @@ class GroupDetailScreen extends ConsumerWidget {
             decoration: BoxDecoration(
               color: AppColors.surface(isDark),
               borderRadius: BorderRadius.circular(12),
-              border:
-                  Border.all(color: AppColors.divider(isDark), width: 1),
+              border: Border.all(color: AppColors.divider(isDark), width: 1),
             ),
             child: Row(
               children: [
@@ -1937,8 +2144,9 @@ class GroupDetailScreen extends ConsumerWidget {
                     children: [
                       Text(
                         member.name,
-                        style: AppTextStyles.body2(isDark)
-                            .copyWith(fontWeight: FontWeight.w600),
+                        style: AppTextStyles.body2(
+                          isDark,
+                        ).copyWith(fontWeight: FontWeight.w600),
                       ),
                       const SizedBox(height: 2),
                       Text(caption, style: AppTextStyles.caption(isDark)),
@@ -1950,17 +2158,18 @@ class GroupDetailScreen extends ConsumerWidget {
                   children: [
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
                         color: accent.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
                         CurrencyFormatter.format(amount),
-                        style: AppTextStyles.body2(isDark).copyWith(
-                          color: accent,
-                          fontWeight: FontWeight.w600,
-                        ),
+                        style: AppTextStyles.body2(
+                          isDark,
+                        ).copyWith(color: accent, fontWeight: FontWeight.w600),
                       ),
                     ),
                     if (iOweThem) ...[
@@ -1974,7 +2183,9 @@ class GroupDetailScreen extends ConsumerWidget {
                         style: TextButton.styleFrom(
                           visualDensity: VisualDensity.compact,
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 0),
+                            horizontal: 8,
+                            vertical: 0,
+                          ),
                           minimumSize: const Size(0, 28),
                         ),
                         child: const Text('Settle Up'),
@@ -1983,8 +2194,7 @@ class GroupDetailScreen extends ConsumerWidget {
                       const SizedBox(height: 6),
                       Consumer(
                         builder: (context, ref, _) => TextButton.icon(
-                          onPressed: () =>
-                              _sendReminder(context, ref, member),
+                          onPressed: () => _sendReminder(context, ref, member),
                           icon: Icon(
                             Icons.notifications_active_rounded,
                             size: 14,
@@ -1997,7 +2207,9 @@ class GroupDetailScreen extends ConsumerWidget {
                           style: TextButton.styleFrom(
                             visualDensity: VisualDensity.compact,
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 0),
+                              horizontal: 8,
+                              vertical: 0,
+                            ),
                             minimumSize: const Size(0, 28),
                           ),
                         ),
@@ -2036,6 +2248,7 @@ class _DetailTopBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback? onEditGroup;
   final VoidCallback onLeaveGroup;
   final VoidCallback onDeleteGroup;
+
   /// Set when the group is loaded so the user can request a .xlsx ledger.
   /// Null hides the option while still loading.
   final VoidCallback? onExportGroup;
@@ -2265,11 +2478,7 @@ class _CircleButton extends StatelessWidget {
               shape: BoxShape.circle,
               border: Border.all(color: AppColors.divider(isDark)),
             ),
-            child: Icon(
-              icon,
-              size: 18,
-              color: AppColors.textPrimary(isDark),
-            ),
+            child: Icon(icon, size: 18, color: AppColors.textPrimary(isDark)),
           ),
         ),
       ),
@@ -2389,10 +2598,7 @@ class _HeroCard extends StatelessWidget {
                   Row(
                     children: [
                       Expanded(
-                        child: _HeroStat(
-                          label: 'TOTAL SPENT',
-                          value: total,
-                        ),
+                        child: _HeroStat(label: 'TOTAL SPENT', value: total),
                       ),
                       Container(
                         width: 1,
@@ -2507,9 +2713,7 @@ class _TabButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color fg = selected
-        ? Colors.white
-        : AppColors.textSecondary(isDark);
+    final Color fg = selected ? Colors.white : AppColors.textSecondary(isDark);
     final Color iconColor = selected
         ? Colors.white
         : AppColors.textSecondary(isDark).withValues(alpha: 0.7);
@@ -2527,9 +2731,7 @@ class _TabButton extends StatelessWidget {
             curve: Curves.easeOut,
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
-              color: selected
-                  ? AppColors.tealDark
-                  : Colors.transparent,
+              color: selected ? AppColors.tealDark : Colors.transparent,
               borderRadius: BorderRadius.circular(999),
               border: selected
                   ? null
@@ -2565,9 +2767,7 @@ class _TabButton extends StatelessWidget {
                     child: Text(
                       '$count',
                       style: TextStyle(
-                        color: selected
-                            ? Colors.white
-                            : AppColors.tealDark,
+                        color: selected ? Colors.white : AppColors.tealDark,
                         fontSize: 10.5,
                         fontWeight: FontWeight.w700,
                       ),
@@ -2603,21 +2803,24 @@ class _PendingIncomingSettlementsSection extends ConsumerWidget {
         decoration: BoxDecoration(
           color: AppColors.warning.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(12),
-          border:
-              Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
+          border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Icon(Icons.handshake_rounded,
-                    size: 18, color: AppColors.warning),
+                Icon(
+                  Icons.handshake_rounded,
+                  size: 18,
+                  color: AppColors.warning,
+                ),
                 const SizedBox(width: 8),
                 Text(
                   'Confirm payments received',
-                  style: AppTextStyles.body2(isDark)
-                      .copyWith(fontWeight: FontWeight.w600),
+                  style: AppTextStyles.body2(
+                    isDark,
+                  ).copyWith(fontWeight: FontWeight.w600),
                 ),
               ],
             ),
@@ -2665,16 +2868,16 @@ class _PendingSettlementTileState
       ref.invalidate(pendingIncomingSettlementsProvider(widget.groupId));
       ref.invalidate(groupDetailProvider(widget.groupId));
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Settlement confirmed')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Settlement confirmed')));
     } catch (e) {
       // "Settlement already confirmed / not found" means our intent already
       // succeeded — usually a duplicate tap that slipped past the rebuild.
       // Treat as success: refresh providers, no scary snackbar.
       final msg = e.toString().toLowerCase();
-      final benign = msg.contains('already confirmed') ||
-          msg.contains('not found');
+      final benign =
+          msg.contains('already confirmed') || msg.contains('not found');
       if (benign) {
         ref.invalidate(pendingIncomingSettlementsProvider(widget.groupId));
         ref.invalidate(groupDetailProvider(widget.groupId));
@@ -2682,9 +2885,9 @@ class _PendingSettlementTileState
       }
       if (!mounted) return;
       setState(() => _busy = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not confirm: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not confirm: $e')));
     }
   }
 
@@ -2716,7 +2919,9 @@ class _PendingSettlementTileState
                     width: 14,
                     height: 14,
                     child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white),
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
                   )
                 : const Text('Confirm'),
           ),
@@ -2753,13 +2958,17 @@ class _PendingOutgoingSettlementsSection extends ConsumerWidget {
           children: [
             Row(
               children: [
-                Icon(Icons.schedule_send_rounded,
-                    size: 18, color: AppColors.brand),
+                Icon(
+                  Icons.schedule_send_rounded,
+                  size: 18,
+                  color: AppColors.brand,
+                ),
                 const SizedBox(width: 8),
                 Text(
                   'Awaiting confirmation',
-                  style: AppTextStyles.body2(isDark)
-                      .copyWith(fontWeight: FontWeight.w600),
+                  style: AppTextStyles.body2(
+                    isDark,
+                  ).copyWith(fontWeight: FontWeight.w600),
                 ),
               ],
             ),
@@ -2803,8 +3012,9 @@ class _OutgoingSettlementTileState
       builder: (ctx) => AlertDialog(
         title: const Text('Cancel this pending settlement?'),
         content: const Text(
-            'The recipient will no longer see this payment as pending. '
-            'You can record it again later.'),
+          'The recipient will no longer see this payment as pending. '
+          'You can record it again later.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -2828,15 +3038,15 @@ class _OutgoingSettlementTileState
       ref.invalidate(pendingOutgoingSettlementsProvider(widget.groupId));
       ref.invalidate(groupDetailProvider(widget.groupId));
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Settlement cancelled')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Settlement cancelled')));
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not cancel: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not cancel: $e')));
     }
   }
 
@@ -2903,10 +3113,9 @@ class _AddMemberButton extends StatelessWidget {
               const SizedBox(width: 4),
               Text(
                 'Add',
-                style: AppTextStyles.caption(isDark).copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.brand,
-                ),
+                style: AppTextStyles.caption(
+                  isDark,
+                ).copyWith(fontWeight: FontWeight.w700, color: AppColors.brand),
               ),
             ],
           ),
@@ -2917,10 +3126,7 @@ class _AddMemberButton extends StatelessWidget {
 }
 
 class _EmailInviteSheet extends StatefulWidget {
-  const _EmailInviteSheet({
-    required this.memberName,
-    required this.isDark,
-  });
+  const _EmailInviteSheet({required this.memberName, required this.isDark});
 
   final String memberName;
   final bool isDark;
@@ -2973,8 +3179,9 @@ class _EmailInviteSheetState extends State<_EmailInviteSheet> {
           ),
           Text(
             'Invite ${widget.memberName}',
-            style: AppTextStyles.body1(widget.isDark)
-                .copyWith(fontWeight: FontWeight.w700, fontSize: 17),
+            style: AppTextStyles.body1(
+              widget.isDark,
+            ).copyWith(fontWeight: FontWeight.w700, fontSize: 17),
           ),
           const SizedBox(height: 16),
           Form(

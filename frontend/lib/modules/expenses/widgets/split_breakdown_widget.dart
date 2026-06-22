@@ -13,6 +13,7 @@ class SplitBreakdownWidget extends StatefulWidget {
   final Set<String> includedMemberIds;
   final Function(Map<String, double>) onSplitsChanged;
   final Function(Set<String>) onIncludedMembersChanged;
+
   /// Id of the signed-in user. When non-null, that member's row shows
   /// "Name (Me)" so users can spot themselves at a glance.
   final String? currentUserId;
@@ -54,9 +55,110 @@ class _SplitBreakdownWidgetState extends State<SplitBreakdownWidget> {
     for (final member in widget.members) {
       final value = widget.splits[member.id] ?? 0;
       _controllers[member.id] = TextEditingController(
-        text: value > 0 ? value.toString() : '',
+        // Format on first view too — otherwise the raw equal-split double
+        // (e.g. 6.77777777…) shows until the user switches modes and back.
+        text: value > 0 ? _formatNum(value) : '',
       );
     }
+  }
+
+  @override
+  void didUpdateWidget(covariant SplitBreakdownWidget old) {
+    super.didUpdateWidget(old);
+    // When the user switches split method, the per-member inputs must not
+    // carry the previous method's numbers (e.g. the equal-split ₹ amounts
+    // showing up as "666%" after switching to percentage).
+    if (old.splitType != widget.splitType) {
+      _resetForSplitType();
+    } else if (widget.splitType == SplitType.equal &&
+        old.totalAmount != widget.totalAmount) {
+      // Amount changed while in equal mode → refresh the per-head display.
+      _applyEqualShares();
+    }
+  }
+
+  /// In equal mode, fill each included member's field with the live equal
+  /// share (totalAmount / includedCount) and blank out excluded members.
+  /// Re-run whenever the amount or the included set changes so the displayed
+  /// per-head amount stays correct (e.g. deselecting one of 9 recalculates
+  /// for the remaining 8).
+  void _applyEqualShares() {
+    final included = _localIncludedMembers;
+    final share =
+        included.isEmpty ? 0.0 : widget.totalAmount / included.length;
+    for (final member in widget.members) {
+      final c = _controllers[member.id];
+      if (c == null) continue;
+      c.text = (included.contains(member.id) && share > 0)
+          ? _formatNum(share)
+          : '';
+    }
+  }
+
+  /// Re-seed the input fields for the newly selected split method:
+  ///   - equal  → show each included member's equal share (informational)
+  ///   - others → clear to empty so the user starts from zero
+  void _resetForSplitType() {
+    if (widget.splitType == SplitType.equal) {
+      _applyEqualShares();
+    } else {
+      for (final c in _controllers.values) {
+        c.text = '';
+      }
+    }
+    // Push the reset splits up after this frame — mutating the parent
+    // provider synchronously during a rebuild is not allowed.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _updateSplits();
+    });
+  }
+
+  String _formatNum(double v) =>
+      v == v.roundToDouble() ? v.toInt().toString() : v.toStringAsFixed(2);
+
+  void _setControllerNumber(TextEditingController c, double v) {
+    final formatted = v == v.roundToDouble()
+        ? v.toInt().toString()
+        : v.toStringAsFixed(1);
+    c.value = TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
+    );
+  }
+
+  /// Percentage convenience: as the user types a %, auto-balance the rest to
+  /// total 100. With exactly two members, the other member gets the remainder;
+  /// with more than two, the LAST included member absorbs the remainder.
+  void _autofillPercentage({required String editedMemberId}) {
+    final included = widget.members
+        .where((m) => _localIncludedMembers.contains(m.id))
+        .toList();
+    if (included.length < 2) return;
+
+    if (included.length == 2) {
+      final entered =
+          (double.tryParse(_controllers[editedMemberId]?.text ?? '') ?? 0)
+              .clamp(0, 100)
+              .toDouble();
+      final otherId = included
+          .firstWhereOrNull((m) => m.id != editedMemberId)
+          ?.id;
+      final other = otherId == null ? null : _controllers[otherId];
+      if (other != null) _setControllerNumber(other, 100 - entered);
+      return;
+    }
+
+    // > 2 members — keep the last one as the running balancer.
+    final lastId = included.last.id;
+    if (editedMemberId == lastId) return; // don't fight the user editing it
+    double sumOthers = 0;
+    for (final m in included) {
+      if (m.id == lastId) continue;
+      sumOthers += double.tryParse(_controllers[m.id]?.text ?? '') ?? 0;
+    }
+    final remaining = (100 - sumOthers).clamp(0, 100).toDouble();
+    final last = _controllers[lastId];
+    if (last != null) _setControllerNumber(last, remaining);
   }
 
   @override
@@ -110,6 +212,12 @@ class _SplitBreakdownWidgetState extends State<SplitBreakdownWidget> {
       } else {
         _localIncludedMembers.add(memberId);
       }
+      // Equal mode: recompute everyone's per-head amount for the new count so
+      // the displayed shares stay correct (and a re-selected member doesn't
+      // show ₹0).
+      if (widget.splitType == SplitType.equal) {
+        _applyEqualShares();
+      }
     });
     widget.onIncludedMembersChanged(_localIncludedMembers);
     _updateSplits();
@@ -118,6 +226,7 @@ class _SplitBreakdownWidgetState extends State<SplitBreakdownWidget> {
   void _selectAll() {
     setState(() {
       _localIncludedMembers = Set<String>.from(widget.members.map((m) => m.id));
+      if (widget.splitType == SplitType.equal) _applyEqualShares();
     });
     widget.onIncludedMembersChanged(_localIncludedMembers);
     _updateSplits();
@@ -126,6 +235,7 @@ class _SplitBreakdownWidgetState extends State<SplitBreakdownWidget> {
   void _deselectAll() {
     setState(() {
       _localIncludedMembers.clear();
+      if (widget.splitType == SplitType.equal) _applyEqualShares();
     });
     widget.onIncludedMembersChanged(_localIncludedMembers);
     _updateSplits();
@@ -142,18 +252,30 @@ class _SplitBreakdownWidgetState extends State<SplitBreakdownWidget> {
         if ((diff).abs() < 0.01) {
           return (label: '✓ Balanced', color: AppColors.success);
         } else if (diff > 0) {
-          return (label: '₹${diff.toStringAsFixed(2)} remaining', color: AppColors.warning);
+          return (
+            label: '₹${diff.toStringAsFixed(2)} remaining',
+            color: AppColors.warning,
+          );
         } else {
-          return (label: 'Over by ₹${(-diff).toStringAsFixed(2)}', color: AppColors.warning);
+          return (
+            label: 'Over by ₹${(-diff).toStringAsFixed(2)}',
+            color: AppColors.warning,
+          );
         }
       case SplitType.percentage:
         final diff = 100 - includedSum;
         if ((diff).abs() < 0.01) {
           return (label: '✓ Balanced (100%)', color: AppColors.success);
         } else if (diff > 0) {
-          return (label: '${diff.toStringAsFixed(1)}% remaining', color: AppColors.warning);
+          return (
+            label: '${diff.toStringAsFixed(1)}% remaining',
+            color: AppColors.warning,
+          );
         } else {
-          return (label: 'Over by ${(-diff).toStringAsFixed(1)}%', color: AppColors.warning);
+          return (
+            label: 'Over by ${(-diff).toStringAsFixed(1)}%',
+            color: AppColors.warning,
+          );
         }
       case SplitType.shares:
         if (includedSum > 0) {
@@ -205,8 +327,9 @@ class _SplitBreakdownWidgetState extends State<SplitBreakdownWidget> {
                       children: [
                         Text(
                           'Split Breakdown ($includedMembers members)',
-                          style: AppTextStyles.body2(isDark)
-                              .copyWith(fontWeight: FontWeight.w600),
+                          style: AppTextStyles.body2(
+                            isDark,
+                          ).copyWith(fontWeight: FontWeight.w600),
                         ),
                       ],
                     ),
@@ -252,21 +375,34 @@ class _SplitBreakdownWidgetState extends State<SplitBreakdownWidget> {
                 decoration: InputDecoration(
                   hintText: 'Search members...',
                   hintStyle: TextStyle(color: AppColors.textSecondary(isDark)),
-                  prefixIcon: Icon(Icons.search, color: AppColors.brand, size: 20),
+                  prefixIcon: Icon(
+                    Icons.search,
+                    color: AppColors.brand,
+                    size: 20,
+                  ),
                   suffixIcon: _searchController.text.isNotEmpty
                       ? GestureDetector(
                           onTap: () {
                             _searchController.clear();
                             setState(() {});
                           },
-                          child: Icon(Icons.close, color: AppColors.brand, size: 20),
+                          child: Icon(
+                            Icons.close,
+                            color: AppColors.brand,
+                            size: 20,
+                          ),
                         )
                       : null,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: AppColors.inputBorder(isDark)),
+                    borderSide: BorderSide(
+                      color: AppColors.inputBorder(isDark),
+                    ),
                   ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
                 ),
                 onChanged: (_) => setState(() {}),
               ),
@@ -348,8 +484,9 @@ class _SplitBreakdownWidgetState extends State<SplitBreakdownWidget> {
           Text(totalLabel, style: AppTextStyles.body2(isDark)),
           Text(
             totalValue,
-            style: AppTextStyles.body2(isDark)
-                .copyWith(fontWeight: FontWeight.w600),
+            style: AppTextStyles.body2(
+              isDark,
+            ).copyWith(fontWeight: FontWeight.w600),
           ),
         ],
       ),
@@ -382,17 +519,15 @@ class _SplitBreakdownWidgetState extends State<SplitBreakdownWidget> {
           children: [
             Text(
               rowLabel,
-              style: AppTextStyles.body2(isDark).copyWith(
-                color: rowColor,
-                fontWeight: FontWeight.w600,
-              ),
+              style: AppTextStyles.body2(
+                isDark,
+              ).copyWith(color: rowColor, fontWeight: FontWeight.w600),
             ),
             Text(
               rowValue,
-              style: AppTextStyles.body2(isDark).copyWith(
-                color: rowColor,
-                fontWeight: FontWeight.w700,
-              ),
+              style: AppTextStyles.body2(
+                isDark,
+              ).copyWith(color: rowColor, fontWeight: FontWeight.w700),
             ),
           ],
         ),
@@ -405,8 +540,11 @@ class _SplitBreakdownWidgetState extends State<SplitBreakdownWidget> {
           ),
           child: Row(
             children: [
-              Icon(Icons.lightbulb_outline_rounded,
-                  size: 14, color: AppColors.brand),
+              Icon(
+                Icons.lightbulb_outline_rounded,
+                size: 14,
+                color: AppColors.brand,
+              ),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
@@ -475,131 +613,114 @@ class _SplitBreakdownWidgetState extends State<SplitBreakdownWidget> {
               activeColor: AppColors.brand,
               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
-          const SizedBox(width: 8),
-          // Avatar
-          AvatarWidget(
-            name: member.name,
-            imageUrl: member.avatarUrl,
-            radius: 16,
-          ),
-          const SizedBox(width: 8),
-          // Name + (Unequally only) status caption
-          Expanded(
-            flex: 1,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.currentUserId != null &&
-                          member.id == widget.currentUserId
-                      ? '${member.name} (Me)'
-                      : member.name,
-                  style: AppTextStyles.body2(isDark).copyWith(
-                    color: isIncluded
-                        ? AppColors.textPrimary(isDark)
-                        : AppColors.textSecondary(isDark),
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (statusCaption != null) ...[
-                  const SizedBox(height: 2),
+            const SizedBox(width: 8),
+            // Avatar
+            AvatarWidget(
+              name: member.name,
+              imageUrl: member.avatarUrl,
+              radius: 16,
+            ),
+            const SizedBox(width: 8),
+            // Name + (Unequally only) status caption
+            Expanded(
+              flex: 1,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Text(
-                    statusCaption,
-                    style: AppTextStyles.caption(isDark).copyWith(
-                      color: value > 0
-                          ? AppColors.success
+                    widget.currentUserId != null &&
+                            member.id == widget.currentUserId
+                        ? '${member.name} (Me)'
+                        : member.name,
+                    style: AppTextStyles.body2(isDark).copyWith(
+                      color: isIncluded
+                          ? AppColors.textPrimary(isDark)
                           : AppColors.textSecondary(isDark),
-                      fontSize: 11,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
+                  if (statusCaption != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      statusCaption,
+                      style: AppTextStyles.caption(isDark).copyWith(
+                        color: value > 0
+                            ? AppColors.success
+                            : AppColors.textSecondary(isDark),
+                        fontSize: 11,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                  if (percentCaption != null) ...[
+                    const SizedBox(height: 1),
+                    Text(
+                      percentCaption,
+                      style: AppTextStyles.caption(isDark).copyWith(
+                        color: AppColors.textSecondary(isDark),
+                        fontSize: 10,
+                      ),
+                    ),
+                  ],
                 ],
-                if (percentCaption != null) ...[
-                  const SizedBox(height: 1),
-                  Text(
-                    percentCaption,
-                    style: AppTextStyles.caption(isDark).copyWith(
-                      color: AppColors.textSecondary(isDark),
-                      fontSize: 10,
+              ),
+            ),
+            const SizedBox(width: 8),
+            // Input field
+            Expanded(
+              flex: 1,
+              child: TextField(
+                controller: controller,
+                enabled: isIncluded,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                style: AppTextStyles.body2(isDark).copyWith(
+                  color: isIncluded
+                      ? AppColors.textPrimary(isDark)
+                      : AppColors.textSecondary(isDark),
+                ),
+                textAlign: TextAlign.center,
+                decoration: InputDecoration(
+                  prefixText: widget.splitType == SplitType.exact ? '₹' : null,
+                  suffixText: _getInputSuffix(widget.splitType),
+                  hintText: _getInputHint(widget.splitType),
+                  hintStyle: AppTextStyles.body2(
+                    isDark,
+                  ).copyWith(color: AppColors.textSecondary(isDark)),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 8,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(6),
+                    borderSide: BorderSide(
+                      color: AppColors.inputBorder(isDark),
                     ),
                   ),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          // Input field
-          Expanded(
-            flex: 1,
-            child: TextField(
-              controller: controller,
-              enabled: isIncluded,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              style: AppTextStyles.body2(isDark).copyWith(
-                color: isIncluded
-                    ? AppColors.textPrimary(isDark)
-                    : AppColors.textSecondary(isDark),
-              ),
-              textAlign: TextAlign.center,
-              decoration: InputDecoration(
-                prefixText: widget.splitType == SplitType.exact ? '₹' : null,
-                suffixText: _getInputSuffix(widget.splitType),
-                hintText: _getInputHint(widget.splitType),
-                hintStyle: AppTextStyles.body2(isDark).copyWith(
-                  color: AppColors.textSecondary(isDark),
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 8,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(6),
-                  borderSide: BorderSide(color: AppColors.inputBorder(isDark)),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(6),
-                  borderSide: BorderSide(color: AppColors.inputBorder(isDark)),
-                ),
-                disabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(6),
-                  borderSide: BorderSide(
-                    color: AppColors.divider(isDark),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(6),
+                    borderSide: BorderSide(
+                      color: AppColors.inputBorder(isDark),
+                    ),
+                  ),
+                  disabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(6),
+                    borderSide: BorderSide(color: AppColors.divider(isDark)),
                   ),
                 ),
-              ),
-              onChanged: (value) {
-                if (widget.splitType == SplitType.percentage &&
-                    _localIncludedMembers.length == 2) {
-                  final entered = double.tryParse(value) ?? 0;
-                  final clamped = entered.clamp(0, 100).toDouble();
-                  // The other-of-two should always exist when length==2, but
-                  // a stale set during a rebuild could leave us empty — guard
-                  // with firstWhereOrNull rather than crash.
-                  final otherId = _localIncludedMembers
-                      .firstWhereOrNull((id) => id != member.id);
-                  final otherController =
-                      otherId == null ? null : _controllers[otherId];
-                  if (otherController != null) {
-                    final remaining = (100 - clamped);
-                    final formatted = remaining == remaining.toInt()
-                        ? remaining.toInt().toString()
-                        : remaining.toStringAsFixed(1);
-                    otherController.value = TextEditingValue(
-                      text: formatted,
-                      selection:
-                          TextSelection.collapsed(offset: formatted.length),
-                    );
+                onChanged: (value) {
+                  if (widget.splitType == SplitType.percentage) {
+                    _autofillPercentage(editedMemberId: member.id);
                   }
-                }
-                _updateSplits();
-              },
+                  _updateSplits();
+                },
+              ),
             ),
-          ),
-        ],
-      ),
+          ],
+        ),
       ),
     );
   }
