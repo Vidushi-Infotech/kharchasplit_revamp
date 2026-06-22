@@ -6,12 +6,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../components/buttons/donate_heart_button.dart';
 import '../../../components/components.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/date_formatter.dart';
 import '../../../data/contacts/contact_name_resolver.dart';
 import '../../../data/expenses/expenses_repository.dart';
+import '../../../data/groups/groups_repository.dart';
 import '../../../models/models.dart';
 import '../../auth/state/auth_provider.dart';
 import '../../dashboard/state/dashboard_provider.dart';
@@ -76,16 +78,32 @@ class ExpenseDetailScreen extends ConsumerWidget {
             // and a blank name. Build a userId → member lookup from the
             // group so the rows can fall back to the member's real name
             // and avatar.
-            final members = expense.groupId != null
-                ? ref
-                          .watch(groupDetailProvider(expense.groupId!))
-                          .value
-                          ?.members ??
-                      const <UserModel>[]
-                : const <UserModel>[];
+            final groupDetail = expense.groupId != null
+                ? ref.watch(groupDetailProvider(expense.groupId!)).value
+                : null;
+            final members = groupDetail?.members ?? const <UserModel>[];
             final memberById = <String, UserModel>{
               for (final m in members) m.id: m,
             };
+
+            // Net pairwise balance with each person, so the Settle Up / Remind
+            // buttons reflect the OUTSTANDING net (not this one expense's
+            // share). Once settled, the button disappears.
+            final netByUserId = (myId != null && groupDetail != null)
+                ? computePairwiseDebts(
+                    myId: myId,
+                    expenses: groupDetail.expenses,
+                    settlements: groupDetail.settlements,
+                  )
+                : const <String, double>{};
+            // Already in-flight (pending) settlements I've sent — so Settle Up
+            // only asks for the remainder.
+            final pendingOutByUserId = (myId != null && groupDetail != null)
+                ? computePendingOutgoing(
+                    myId: myId,
+                    settlements: groupDetail.settlements,
+                  )
+                : const <String, double>{};
 
             // Names that arrive blank (or as a bare phone number) from the
             // backend — users who registered by phone and never set a display
@@ -163,6 +181,24 @@ class ExpenseDetailScreen extends ConsumerWidget {
                         currentUserId: myId,
                         memberById: memberById,
                         displayNames: splitDisplayNames,
+                        payerId: expense.paidBy.id,
+                        groupId: expense.groupId,
+                        netByUserId: netByUserId,
+                        pendingOutByUserId: pendingOutByUserId,
+                        onSettle: (amount) {
+                          final gid = expense.groupId;
+                          if (gid == null) return;
+                          context.push(
+                            '/settle/${expense.paidBy.id}?groupId=$gid'
+                            '&amount=${amount.toStringAsFixed(2)}',
+                          );
+                        },
+                        onRemind: (userId) => _sendReminder(
+                          context,
+                          ref,
+                          expense.groupId,
+                          userId,
+                        ),
                       ),
                       if (expense.receiptBase64 != null &&
                           expense.receiptBase64!.isNotEmpty) ...[
@@ -190,6 +226,29 @@ class ExpenseDetailScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _sendReminder(
+    BuildContext context,
+    WidgetRef ref,
+    String? groupId,
+    String userId,
+  ) async {
+    if (groupId == null) return;
+    try {
+      await ref
+          .read(groupsRepositoryProvider)
+          .sendReminder(groupId: groupId, userId: userId);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Reminder sent')));
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not send reminder: $e')));
+    }
   }
 
   Future<void> _confirmAndDelete(BuildContext context, WidgetRef ref) async {
@@ -290,71 +349,76 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              Semantics(
-                button: true,
-                label: 'More options',
-                child: PopupMenuButton<String>(
-                  onSelected: onMenuSelected,
-                  color: AppColors.cardBg(isDark),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    side: BorderSide(color: AppColors.divider(isDark)),
-                  ),
-                  icon: Container(
-                    width: 40,
-                    height: 40,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: AppColors.cardBg(isDark),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: AppColors.divider(isDark)),
+              const DonateHeartButton(),
+              const SizedBox(width: 8),
+              // Only the person who added the expense (the payer) sees the
+              // three-dots menu at all — other members get no menu button.
+              if (canDelete)
+                Semantics(
+                  button: true,
+                  label: 'More options',
+                  child: PopupMenuButton<String>(
+                    onSelected: onMenuSelected,
+                    color: AppColors.cardBg(isDark),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(color: AppColors.divider(isDark)),
                     ),
-                    child: Icon(
-                      Icons.more_vert_rounded,
-                      size: 18,
-                      color: AppColors.textPrimary(isDark),
+                    icon: Container(
+                      width: 40,
+                      height: 40,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: AppColors.cardBg(isDark),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppColors.divider(isDark)),
+                      ),
+                      child: Icon(
+                        Icons.more_vert_rounded,
+                        size: 18,
+                        color: AppColors.textPrimary(isDark),
+                      ),
                     ),
+                    itemBuilder: (_) => [
+                      // Edit gates on the same payer-only rule as Delete: the
+                      // backend rejects PUT /expenses/:id with 403 if the
+                      // caller isn't the original payer.
+                      if (canDelete)
+                        PopupMenuItem(
+                          value: 'edit',
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.edit_rounded,
+                                size: 18,
+                                color: AppColors.textPrimary(isDark),
+                              ),
+                              const SizedBox(width: 10),
+                              const Text('Edit'),
+                            ],
+                          ),
+                        ),
+                      if (canDelete)
+                        PopupMenuItem(
+                          value: 'delete',
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.delete_outline_rounded,
+                                size: 18,
+                                color: AppColors.warning,
+                              ),
+                              const SizedBox(width: 10),
+                              Text(
+                                'Delete',
+                                style: TextStyle(color: AppColors.warning),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
                   ),
-                  itemBuilder: (_) => [
-                    // Edit gates on the same payer-only rule as Delete: the
-                    // backend rejects PUT /expenses/:id with 403 if the
-                    // caller isn't the original payer.
-                    if (canDelete)
-                      PopupMenuItem(
-                        value: 'edit',
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.edit_rounded,
-                              size: 18,
-                              color: AppColors.textPrimary(isDark),
-                            ),
-                            const SizedBox(width: 10),
-                            const Text('Edit'),
-                          ],
-                        ),
-                      ),
-                    if (canDelete)
-                      PopupMenuItem(
-                        value: 'delete',
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.delete_outline_rounded,
-                              size: 18,
-                              color: AppColors.warning,
-                            ),
-                            const SizedBox(width: 10),
-                            Text(
-                              'Delete',
-                              style: TextStyle(color: AppColors.warning),
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
                 ),
-              ),
               const SizedBox(width: 12),
             ],
           ),
@@ -656,6 +720,12 @@ class _SplitsCard extends StatefulWidget {
     this.currentUserId,
     this.memberById = const {},
     this.displayNames = const {},
+    this.payerId,
+    this.groupId,
+    this.netByUserId = const {},
+    this.pendingOutByUserId = const {},
+    this.onSettle,
+    this.onRemind,
   });
 
   final List<SplitModel> splits;
@@ -664,6 +734,21 @@ class _SplitsCard extends StatefulWidget {
   final SplitType splitType;
   final String? currentUserId;
   final double totalAmount;
+
+  /// Who paid the expense, the group it belongs to, and the actions used to
+  /// render a per-row Settle Up / Remind button.
+  final String? payerId;
+  final String? groupId;
+
+  /// Net pairwise balance with each other person (>0 ⇒ I owe them, <0 ⇒ they
+  /// owe me). The buttons are gated on this, so they vanish once settled.
+  final Map<String, double> netByUserId;
+
+  /// Amount I already have pending (unconfirmed) to each person — Settle Up
+  /// only asks for the not-yet-in-flight remainder.
+  final Map<String, double> pendingOutByUserId;
+  final void Function(double amount)? onSettle;
+  final void Function(String userId)? onRemind;
 
   /// userId → group member, used to backfill an avatar when a split row's own
   /// avatar is empty.
@@ -700,19 +785,70 @@ class _SplitsCardState extends State<_SplitsCard> {
       child: Column(
         children: [
           for (int i = 0; i < widget.splits.length; i++) ...[
-            _SplitRow(
-              split: widget.splits[i],
-              currency: widget.currency,
-              isDark: isDark,
-              splitType: widget.splitType,
-              totalAmount: widget.totalAmount,
-              totalShares: totalShares,
-              showWorking: _expanded,
-              fallbackMember: widget.memberById[widget.splits[i].userId],
-              displayName: widget.displayNames[widget.splits[i].userId],
-              isSelf:
-                  widget.currentUserId != null &&
-                  widget.splits[i].userId == widget.currentUserId,
+            Builder(
+              builder: (_) {
+                final s = widget.splits[i];
+                final myId = widget.currentUserId;
+                final payerIsMe =
+                    widget.payerId != null && widget.payerId == myId;
+                final canAct = widget.groupId != null && myId != null;
+                final netWithPayer = widget.netByUserId[widget.payerId] ?? 0;
+                final netWithSplitUser = widget.netByUserId[s.userId] ?? 0;
+                // What's left to settle with the payer after subtracting my
+                // already-pending settlements to them. Guard the clamp: when
+                // netWithPayer <= 0 there's nothing to settle (and
+                // clamp(0, negative) would throw).
+                final toSettlePayer = netWithPayer > 0
+                    ? (netWithPayer -
+                              (widget.pendingOutByUserId[widget.payerId] ?? 0))
+                          .clamp(0, netWithPayer)
+                          .toDouble()
+                    : 0.0;
+
+                String? actionLabel;
+                IconData? actionIcon;
+                Color? actionColor;
+                VoidCallback? onAction;
+                if (canAct &&
+                    payerIsMe &&
+                    s.userId != myId &&
+                    widget.onRemind != null &&
+                    netWithSplitUser < -0.01) {
+                  // I paid AND this person still net-owes me → remind them.
+                  actionLabel = 'Remind';
+                  actionIcon = Icons.notifications_active_rounded;
+                  actionColor = AppColors.brand;
+                  onAction = () => widget.onRemind!(s.userId);
+                } else if (canAct &&
+                    !payerIsMe &&
+                    s.userId == myId &&
+                    widget.onSettle != null &&
+                    toSettlePayer > 0.01) {
+                  // Someone else paid and I still net-owe them (beyond what's
+                  // already pending) → settle the remaining amount.
+                  actionLabel = 'Settle Up';
+                  actionIcon = Icons.check_circle_outline_rounded;
+                  actionColor = AppColors.tealDark;
+                  onAction = () => widget.onSettle!(toSettlePayer);
+                }
+
+                return _SplitRow(
+                  split: s,
+                  currency: widget.currency,
+                  isDark: isDark,
+                  splitType: widget.splitType,
+                  totalAmount: widget.totalAmount,
+                  totalShares: totalShares,
+                  showWorking: _expanded,
+                  fallbackMember: widget.memberById[s.userId],
+                  displayName: widget.displayNames[s.userId],
+                  isSelf: myId != null && s.userId == myId,
+                  actionLabel: actionLabel,
+                  actionIcon: actionIcon,
+                  actionColor: actionColor,
+                  onAction: onAction,
+                );
+              },
             ),
             if (i < widget.splits.length - 1)
               Padding(
@@ -782,6 +918,10 @@ class _SplitRow extends StatelessWidget {
     this.fallbackMember,
     this.displayName,
     this.isSelf = false,
+    this.actionLabel,
+    this.actionIcon,
+    this.actionColor,
+    this.onAction,
   });
 
   final SplitModel split;
@@ -791,6 +931,12 @@ class _SplitRow extends StatelessWidget {
   final double totalAmount;
   final double totalShares;
   final bool showWorking;
+
+  /// Optional Settle Up / Remind action for this row (null = no button).
+  final String? actionLabel;
+  final IconData? actionIcon;
+  final Color? actionColor;
+  final VoidCallback? onAction;
 
   /// Group member resolved from the split's userId — used when the split's
   /// own avatar is blank so the row still shows the member's photo.
@@ -932,6 +1078,44 @@ class _SplitRow extends StatelessWidget {
                   style: AppTextStyles.caption(
                     isDark,
                   ).copyWith(color: AppColors.textSecondary(isDark)),
+                ),
+              ],
+              if (actionLabel != null && onAction != null) ...[
+                const SizedBox(height: 6),
+                Material(
+                  color: (actionColor ?? AppColors.brand).withValues(
+                    alpha: 0.12,
+                  ),
+                  borderRadius: BorderRadius.circular(8),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: onAction,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            actionIcon,
+                            size: 13,
+                            color: actionColor ?? AppColors.brand,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            actionLabel!,
+                            style: TextStyle(
+                              color: actionColor ?? AppColors.brand,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ],

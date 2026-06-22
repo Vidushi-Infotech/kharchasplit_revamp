@@ -42,8 +42,10 @@ class UpdateService {
       final repo = _ref.read(appVersionRepositoryProvider);
       final config = await repo.fetch();
       if (config == null) {
-        AppLogger.info('Update check: server config unavailable — skipping',
-            tag: 'UpdateService');
+        AppLogger.info(
+          'Update check: server config unavailable — skipping',
+          tag: 'UpdateService',
+        );
         return;
       }
 
@@ -54,11 +56,13 @@ class UpdateService {
         current: current,
         latest: config.latestVersion,
         minSupported: config.minSupportedVersion,
+        forceWhenBehindLatest: config.forceUpdate,
       );
 
       AppLogger.info(
         'Update check: current=$current latest=${config.latestVersion} '
-        'min=${config.minSupportedVersion} → action=$action',
+        'min=${config.minSupportedVersion} forceLatest=${config.forceUpdate} '
+        '→ action=$action',
         tag: 'UpdateService',
       );
 
@@ -75,24 +79,33 @@ class UpdateService {
           return;
       }
     } catch (e, st) {
-      AppLogger.error('Update check failed',
-          tag: 'UpdateService', error: e, stackTrace: st);
+      AppLogger.error(
+        'Update check failed',
+        tag: 'UpdateService',
+        error: e,
+        stackTrace: st,
+      );
     }
   }
 
   // ----------------- decision -----------------
 
   /// Compare semantic versions. Returns:
-  ///   force when `current < minSupported`
-  ///   soft  when `current < latest`
+  ///   force when `current < minSupported`, or when `current < latest` AND
+  ///         the server has [forceWhenBehindLatest] enabled (blocking gate —
+  ///         the user must update to the newest release to keep using the app)
+  ///   soft  when `current < latest` and force-to-latest is off
   ///   none  otherwise
   UpdateAction _decideAction({
     required String current,
     required String latest,
     required String minSupported,
+    required bool forceWhenBehindLatest,
   }) {
     if (_compare(current, minSupported) < 0) return UpdateAction.force;
-    if (_compare(current, latest) < 0) return UpdateAction.soft;
+    if (_compare(current, latest) < 0) {
+      return forceWhenBehindLatest ? UpdateAction.force : UpdateAction.soft;
+    }
     return UpdateAction.none;
   }
 
@@ -131,7 +144,9 @@ class UpdateService {
   Future<void> _markSoftShown() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(
-        _kLastSoftCheckMs, DateTime.now().millisecondsSinceEpoch);
+      _kLastSoftCheckMs,
+      DateTime.now().millisecondsSinceEpoch,
+    );
   }
 
   // ----------------- soft update -----------------
@@ -154,8 +169,10 @@ class UpdateService {
       } catch (e) {
         // Play Core may be unavailable on emulators / sideloaded builds.
         // Fall through to the custom dialog so we still nudge the user.
-        AppLogger.warn('Play in-app update unavailable: $e',
-            tag: 'UpdateService');
+        AppLogger.warn(
+          'Play in-app update unavailable: $e',
+          tag: 'UpdateService',
+        );
       }
     }
     // iOS path (and Android fallback) — show our own dismissible dialog.
@@ -175,12 +192,17 @@ class UpdateService {
         final info = await InAppUpdate.checkForUpdate();
         if (info.updateAvailability == UpdateAvailability.updateAvailable) {
           // Immediate flow — Play renders a full-screen blocking page.
-          await InAppUpdate.performImmediateUpdate();
-          return;
+          final result = await InAppUpdate.performImmediateUpdate();
+          // Only stop here if the update actually went through. If the user
+          // backed out of Play's flow (cancelled/failed), fall through to our
+          // own blocking dialog so they still can't use the app.
+          if (result == AppUpdateResult.success) return;
         }
       } catch (e) {
-        AppLogger.warn('Play immediate update unavailable: $e',
-            tag: 'UpdateService');
+        AppLogger.warn(
+          'Play immediate update unavailable: $e',
+          tag: 'UpdateService',
+        );
       }
     }
     final ctx = navigatorKey.currentContext;
@@ -195,11 +217,13 @@ class UpdateService {
     AppVersionConfig config, {
     required bool blocking,
   }) async {
-    final storeUrl =
-        Platform.isIOS ? config.iosStoreUrl : config.androidStoreUrl;
+    final storeUrl = Platform.isIOS
+        ? config.iosStoreUrl
+        : config.androidStoreUrl;
     final title = blocking ? 'Update required' : 'Update available';
-    final message =
-        blocking ? config.forceUpdateMessage : config.softUpdateMessage;
+    final message = blocking
+        ? config.forceUpdateMessage
+        : config.softUpdateMessage;
 
     await showDialog<void>(
       context: context,
@@ -238,7 +262,11 @@ class UpdateService {
     try {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } catch (e) {
-      AppLogger.error('Failed to open store URL', tag: 'UpdateService', error: e);
+      AppLogger.error(
+        'Failed to open store URL',
+        tag: 'UpdateService',
+        error: e,
+      );
     }
   }
 }

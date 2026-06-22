@@ -14,6 +14,7 @@ import '../../../models/user_model.dart';
 import '../../auth/state/auth_provider.dart';
 import '../../dashboard/state/dashboard_provider.dart';
 import '../../groups/state/group_detail_provider.dart';
+import '../state/pending_settlements_provider.dart';
 import '../../groups/state/groups_provider.dart';
 
 class SettleScreen extends ConsumerStatefulWidget {
@@ -77,7 +78,9 @@ class _SettleScreenState extends ConsumerState<SettleScreen> {
 
     setState(() => _submitting = true);
     try {
-      await ref.read(settlementsRepositoryProvider).create(
+      await ref
+          .read(settlementsRepositoryProvider)
+          .create(
             groupId: group.id,
             fromUserId: me.id,
             toUserId: widget.recipientUserId,
@@ -89,6 +92,11 @@ class _SettleScreenState extends ConsumerState<SettleScreen> {
           );
       ref.invalidate(dashboardProvider);
       ref.invalidate(groupDetailProvider(group.id));
+      // Also refresh the pending-settlement sections so the new "Awaiting
+      // confirmation" entry shows on the group's Balance tab immediately,
+      // without needing a manual reload.
+      ref.invalidate(pendingOutgoingSettlementsProvider(group.id));
+      ref.invalidate(pendingIncomingSettlementsProvider(group.id));
       if (!mounted) return;
       _toast('Settlement recorded.');
       context.pop();
@@ -108,15 +116,15 @@ class _SettleScreenState extends ConsumerState<SettleScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final groups = ref.watch(groupsProvider).value ?? const <GroupModel>[];
     final shared = groups
-        .where(
-            (g) => g.members.any((m) => m.id == widget.recipientUserId))
+        .where((g) => g.members.any((m) => m.id == widget.recipientUserId))
         .toList();
     final me = ref.watch(authProvider).user;
 
     // Apply initialGroupId once, after groups have loaded.
     if (!_initialGroupApplied && widget.initialGroupId != null) {
-      final preselect =
-          shared.firstWhereOrNull((g) => g.id == widget.initialGroupId);
+      final preselect = shared.firstWhereOrNull(
+        (g) => g.id == widget.initialGroupId,
+      );
       if (preselect != null) {
         _initialGroupApplied = true;
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -172,10 +180,10 @@ class _SettleScreenState extends ConsumerState<SettleScreen> {
                         border: OutlineInputBorder(),
                       ),
                       items: shared
-                          .map((g) => DropdownMenuItem(
-                                value: g,
-                                child: Text(g.name),
-                              ))
+                          .map(
+                            (g) =>
+                                DropdownMenuItem(value: g, child: Text(g.name)),
+                          )
                           .toList(),
                       onChanged: (g) => setState(() => _selectedGroup = g),
                       validator: (v) => v == null ? 'Pick a group' : null,
@@ -213,8 +221,9 @@ class _SettleScreenState extends ConsumerState<SettleScreen> {
                     width: double.infinity,
                     child: PrimaryButton(
                       label: 'Record Settlement',
-                      onPressed:
-                          (_submitting || shared.isEmpty) ? null : _handleSubmit,
+                      onPressed: (_submitting || shared.isEmpty)
+                          ? null
+                          : _handleSubmit,
                       isLoading: _submitting,
                     ),
                   ),

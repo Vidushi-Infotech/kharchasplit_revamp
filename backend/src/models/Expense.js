@@ -151,6 +151,14 @@ class Expense {
         );
       }
 
+      // Bump the group's updated_at so it sorts to the top of the groups list
+      // / dashboard "Your Groups" (ORDER BY g.updated_at DESC). This is what
+      // makes the group with the newest expense appear first.
+      await client.query(
+        `UPDATE groups SET updated_at = NOW() WHERE id = $1`,
+        [expenseData.groupId]
+      );
+
       return expense;
     });
   }
@@ -187,7 +195,14 @@ class Expense {
         id,
       ]
     );
-    return result.rows[0] || null;
+    const updated = result.rows[0] || null;
+    if (updated) {
+      // Keep the group at the top of the recency-sorted list after an edit.
+      await query(`UPDATE groups SET updated_at = NOW() WHERE id = $1`, [
+        updated.group_id,
+      ]);
+    }
+    return updated;
   }
 
   /**
@@ -256,6 +271,13 @@ class Expense {
           params
         );
       }
+
+      // Editing an expense is also "latest activity" — bump the group so it
+      // sorts to the top of the groups list / dashboard.
+      await client.query(
+        `UPDATE groups SET updated_at = NOW() WHERE id = $1`,
+        [expense.group_id]
+      );
 
       return expense;
     });

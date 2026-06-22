@@ -174,7 +174,11 @@ class AddExpenseState {
   }
 }
 
-final addExpenseProvider = StateProvider<AddExpenseState>((ref) {
+/// autoDispose so the form state is destroyed (and re-created fresh) whenever
+/// the Add Expense screen is closed. This is what prevents a draft — e.g. an
+/// amount entered for one group but not saved — from carrying over when the
+/// user opens Add Expense again for another group.
+final addExpenseProvider = StateProvider.autoDispose<AddExpenseState>((ref) {
   return AddExpenseState(date: DateTime.now());
 });
 
@@ -212,30 +216,32 @@ class EqualSplitDerived {
 /// writes on every frame. Pulling the math here means consumers can
 /// `ref.listen` it and apply the change exactly once per structural
 /// update.
-final equalSplitDerivedProvider = Provider.family<EqualSplitDerived?, String?>((
-  ref,
-  groupId,
-) {
-  if (groupId == null) return null;
-  final s = ref.watch(addExpenseProvider);
-  if (s.splitType != SplitType.equal) return null;
+// autoDispose + must not pin addExpenseProvider alive: if this stayed a
+// non-autoDispose provider it would keep watching (and thus keep alive) the
+// autoDispose addExpenseProvider forever, defeating its reset-on-close.
+final equalSplitDerivedProvider = Provider.autoDispose
+    .family<EqualSplitDerived?, String?>((ref, groupId) {
+      if (groupId == null) return null;
+      final s = ref.watch(addExpenseProvider);
+      if (s.splitType != SplitType.equal) return null;
 
-  final detail = ref.watch(groupDetailProvider(groupId)).value;
-  if (detail == null) return null;
-  final members = detail.members;
-  if (members.isEmpty) return null;
+      final detail = ref.watch(groupDetailProvider(groupId)).value;
+      if (detail == null) return null;
+      final members = detail.members;
+      if (members.isEmpty) return null;
 
-  final includedIds = s.includedMemberIds.isEmpty
-      ? Set<String>.from(members.map((m) => m.id))
-      : s.includedMemberIds;
+      final includedIds = s.includedMemberIds.isEmpty
+          ? Set<String>.from(members.map((m) => m.id))
+          : s.includedMemberIds;
 
-  final equalShare = (s.amount > 0 && includedIds.isNotEmpty)
-      ? s.amount / includedIds.length
-      : 0.0;
+      final equalShare = (s.amount > 0 && includedIds.isNotEmpty)
+          ? s.amount / includedIds.length
+          : 0.0;
 
-  final splits = <String, double>{
-    for (final m in members) m.id: includedIds.contains(m.id) ? equalShare : 0,
-  };
+      final splits = <String, double>{
+        for (final m in members)
+          m.id: includedIds.contains(m.id) ? equalShare : 0,
+      };
 
-  return EqualSplitDerived(splits: splits, includedMemberIds: includedIds);
-});
+      return EqualSplitDerived(splits: splits, includedMemberIds: includedIds);
+    });

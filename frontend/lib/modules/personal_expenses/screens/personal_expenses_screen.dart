@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../components/components.dart';
+import '../../../components/buttons/donate_heart_button.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/currency_formatter.dart';
@@ -63,7 +64,8 @@ class _PersonalExpensesScreenState
     final monthStart = DateTime(now.year, now.month, 1);
 
     return items.where((e) {
-      final matchesQuery = _query.isEmpty ||
+      final matchesQuery =
+          _query.isEmpty ||
           e.title.toLowerCase().contains(_query.toLowerCase()) ||
           e.category.name.toLowerCase().contains(_query.toLowerCase());
       final matchesDate = switch (_dateFilter) {
@@ -114,8 +116,7 @@ class _PersonalExpensesScreenState
                     query: _query,
                     onSearchChanged: (q) => setState(() => _query = q),
                     dateFilter: _dateFilter,
-                    onDateFilterChanged: (f) =>
-                        setState(() => _dateFilter = f),
+                    onDateFilterChanged: (f) => setState(() => _dateFilter = f),
                     isSearching: _isSearching,
                     onOpenSearch: _openSearch,
                     onCloseSearch: _closeSearch,
@@ -297,17 +298,18 @@ class _InlineSearchBar extends StatelessWidget {
         fillColor: AppColors.cardBg(isDark),
         isDense: true,
         hintText: 'Search expenses',
-        hintStyle: AppTextStyles.body2(isDark).copyWith(
-          color: AppColors.textSecondary(isDark),
-          fontSize: 14,
-        ),
+        hintStyle: AppTextStyles.body2(
+          isDark,
+        ).copyWith(color: AppColors.textSecondary(isDark), fontSize: 14),
         prefixIcon: Icon(
           Icons.search_rounded,
           size: 18,
           color: AppColors.textSecondary(isDark),
         ),
-        prefixIconConstraints:
-            const BoxConstraints(minWidth: 40, minHeight: 40),
+        prefixIconConstraints: const BoxConstraints(
+          minWidth: 40,
+          minHeight: 40,
+        ),
         suffixIcon: IconButton(
           icon: const Icon(Icons.close_rounded, size: 18),
           color: AppColors.textSecondary(isDark),
@@ -374,8 +376,7 @@ class _FilterStrip extends StatelessWidget {
                       color: selected
                           ? AppColors.textPrimary(isDark)
                           : AppColors.textSecondary(isDark),
-                      fontWeight:
-                          selected ? FontWeight.w700 : FontWeight.w500,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                       fontSize: 13,
                     ),
                   ),
@@ -421,17 +422,17 @@ class _NoResultsCard extends StatelessWidget {
             query.isEmpty
                 ? 'No expenses match this filter'
                 : 'No expenses match "$query"',
-            style: AppTextStyles.body1(isDark).copyWith(
-              fontWeight: FontWeight.w600,
-            ),
+            style: AppTextStyles.body1(
+              isDark,
+            ).copyWith(fontWeight: FontWeight.w600),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 4),
           Text(
             'Try a different filter or search term',
-            style: AppTextStyles.caption(isDark).copyWith(
-              color: AppColors.textSecondary(isDark),
-            ),
+            style: AppTextStyles.caption(
+              isDark,
+            ).copyWith(color: AppColors.textSecondary(isDark)),
             textAlign: TextAlign.center,
           ),
         ],
@@ -441,11 +442,7 @@ class _NoResultsCard extends StatelessWidget {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({
-    required this.isDark,
-    required this.onAdd,
-    this.onSearch,
-  });
+  const _Header({required this.isDark, required this.onAdd, this.onSearch});
 
   final bool isDark;
   final VoidCallback onAdd;
@@ -484,6 +481,8 @@ class _Header extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
+          const DonateHeartButton(size: 40, iconSize: 18),
+          const SizedBox(width: 8),
           if (onSearch != null) ...[
             _IconButton(
               isDark: isDark,
@@ -539,11 +538,7 @@ class _IconButton extends StatelessWidget {
               shape: BoxShape.circle,
               border: Border.all(color: AppColors.divider(isDark)),
             ),
-            child: Icon(
-              icon,
-              size: 20,
-              color: AppColors.textPrimary(isDark),
-            ),
+            child: Icon(icon, size: 20, color: AppColors.textPrimary(isDark)),
           ),
         ),
       ),
@@ -587,10 +582,9 @@ class _WalletCard extends StatelessWidget {
               ),
               boxShadow: [
                 BoxShadow(
-                  color: (inDeficit
-                          ? const Color(0xFFC62828)
-                          : AppColors.tealDark)
-                      .withValues(alpha: 0.28),
+                  color:
+                      (inDeficit ? const Color(0xFFC62828) : AppColors.tealDark)
+                          .withValues(alpha: 0.28),
                   blurRadius: 18,
                   offset: const Offset(0, 8),
                 ),
@@ -813,7 +807,9 @@ class _SetupCta extends StatelessWidget {
           decoration: BoxDecoration(
             color: AppColors.cardBg(isDark),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.tealDark.withValues(alpha: 0.4)),
+            border: Border.all(
+              color: AppColors.tealDark.withValues(alpha: 0.4),
+            ),
           ),
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -841,17 +837,16 @@ class _SetupCta extends StatelessWidget {
                     children: [
                       Text(
                         'Set up your wallet',
-                        style: AppTextStyles.body1(isDark).copyWith(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15,
-                        ),
+                        style: AppTextStyles.body1(
+                          isDark,
+                        ).copyWith(fontWeight: FontWeight.w700, fontSize: 15),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         'Add cash or a bank account to track your balance',
-                        style: AppTextStyles.caption(isDark).copyWith(
-                          color: AppColors.textSecondary(isDark),
-                        ),
+                        style: AppTextStyles.caption(
+                          isDark,
+                        ).copyWith(color: AppColors.textSecondary(isDark)),
                       ),
                     ],
                   ),
@@ -898,29 +893,25 @@ class _EmptyState extends StatelessWidget {
           const SizedBox(height: 14),
           Text(
             'No personal expenses yet',
-            style: AppTextStyles.headline3(isDark).copyWith(
-              fontWeight: FontWeight.w700,
-              fontSize: 17,
-            ),
+            style: AppTextStyles.headline3(
+              isDark,
+            ).copyWith(fontWeight: FontWeight.w700, fontSize: 17),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 6),
           Text(
             "Track expenses that aren't shared — rent, fuel, subscriptions.",
             textAlign: TextAlign.center,
-            style: AppTextStyles.body2(isDark).copyWith(
-              color: AppColors.textSecondary(isDark),
-            ),
+            style: AppTextStyles.body2(
+              isDark,
+            ).copyWith(color: AppColors.textSecondary(isDark)),
           ),
           const SizedBox(height: 18),
           FilledButton.icon(
             onPressed: onAdd,
             style: FilledButton.styleFrom(
               backgroundColor: AppColors.tealDark,
-              padding: const EdgeInsets.symmetric(
-                horizontal: 18,
-                vertical: 12,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
             ),
             icon: const Icon(Icons.add_rounded, size: 18),
             label: const Text('Add your first expense'),
@@ -946,9 +937,11 @@ List<_DayGroup> _groupByDay(List<PersonalExpenseModel> items) {
     byDay.putIfAbsent(key, () => []).add(e);
   }
   return byDay.entries
-      .map((e) => _DayGroup(
-            DateFormatter.groupHeader(DateTime.parse(e.key)),
-            e.value,
-          ))
+      .map(
+        (e) => _DayGroup(
+          DateFormatter.groupHeader(DateTime.parse(e.key)),
+          e.value,
+        ),
+      )
       .toList();
 }

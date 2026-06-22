@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../components/avatar/avatar_widget.dart';
+import '../../../components/buttons/donate_heart_button.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/currency_formatter.dart';
@@ -43,8 +44,9 @@ class SettlementHistoryScreen extends ConsumerWidget {
         bottom: false,
         child: Center(
           child: ConstrainedBox(
-            constraints:
-                BoxConstraints(maxWidth: screenWidth < 1100 ? 640 : 760),
+            constraints: BoxConstraints(
+              maxWidth: screenWidth < 1100 ? 640 : 760,
+            ),
             child: detailAsync.when(
               loading: () => const _LoadingState(),
               error: (e, _) => _ErrorState(
@@ -55,8 +57,9 @@ class SettlementHistoryScreen extends ConsumerWidget {
                 },
               ),
               data: (detail) {
-                final other = detail.members
-                    .firstWhereOrNull((m) => m.id == otherUserId);
+                final other = detail.members.firstWhereOrNull(
+                  (m) => m.id == otherUserId,
+                );
                 final pair = me == null
                     ? const <SettlementModel>[]
                     : (detail.settlements.where((s) {
@@ -64,8 +67,33 @@ class SettlementHistoryScreen extends ConsumerWidget {
                                 s.toUser.id == otherUserId) ||
                             (s.fromUser.id == otherUserId &&
                                 s.toUser.id == me.id);
-                      }).toList()
-                      ..sort((a, b) => b.date.compareTo(a.date)));
+                      }).toList()..sort((a, b) => b.date.compareTo(a.date)));
+
+                // Overall outstanding (expenses + CONFIRMED settlements) plus
+                // what's still in-flight, so the breakdown explains exactly
+                // what's happened and what's left.
+                final net = me == null
+                    ? 0.0
+                    : (computePairwiseDebts(
+                            myId: me.id,
+                            expenses: detail.expenses,
+                            settlements: detail.settlements,
+                          )[otherUserId] ??
+                          0); // >0 ⇒ I owe them
+                final pendingFromMe = pair
+                    .where(
+                      (s) =>
+                          s.status == SettlementStatus.pending &&
+                          s.fromUser.id == me?.id,
+                    )
+                    .fold<double>(0, (a, s) => a + s.amount);
+                final pendingFromThem = pair
+                    .where(
+                      (s) =>
+                          s.status == SettlementStatus.pending &&
+                          s.toUser.id == me?.id,
+                    )
+                    .fold<double>(0, (a, s) => a + s.amount);
 
                 return RefreshIndicator(
                   color: AppColors.tealDark,
@@ -84,6 +112,20 @@ class SettlementHistoryScreen extends ConsumerWidget {
                         groupName: detail.group.name,
                         settlements: pair,
                       ),
+                      if (me != null &&
+                          (net.abs() > 0.01 ||
+                              pendingFromMe > 0.01 ||
+                              pendingFromThem > 0.01)) ...[
+                        const SizedBox(height: 16),
+                        _BalanceBreakdown(
+                          isDark: isDark,
+                          net: net,
+                          pendingFromMe: pendingFromMe,
+                          pendingFromThem: pendingFromThem,
+                          currency: detail.group.currency,
+                          otherName: other?.name ?? 'them',
+                        ),
+                      ],
                       const SizedBox(height: 20),
                       if (pair.isEmpty)
                         _EmptyState(
@@ -142,8 +184,7 @@ class SettlementHistoryScreen extends ConsumerWidget {
                   Container(
                     margin: const EdgeInsets.symmetric(horizontal: 14),
                     height: 1,
-                    color:
-                        AppColors.divider(isDark).withValues(alpha: 0.6),
+                    color: AppColors.divider(isDark).withValues(alpha: 0.6),
                   ),
               ],
             ],
@@ -196,8 +237,7 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
                       decoration: BoxDecoration(
                         color: AppColors.cardBg(isDark),
                         shape: BoxShape.circle,
-                        border:
-                            Border.all(color: AppColors.divider(isDark)),
+                        border: Border.all(color: AppColors.divider(isDark)),
                       ),
                       child: Icon(
                         Icons.arrow_back_rounded,
@@ -220,6 +260,7 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
+              const DonateHeartButton(),
               const SizedBox(width: 16),
             ],
           ),
@@ -599,6 +640,171 @@ class _NetSummary extends StatelessWidget {
 }
 
 // --------------------------------------------------------------------------
+// Balance breakdown — explains the current state (outstanding / pending /
+// still to settle) so it's clear what happened and how.
+// --------------------------------------------------------------------------
+
+class _BalanceBreakdown extends StatelessWidget {
+  const _BalanceBreakdown({
+    required this.isDark,
+    required this.net,
+    required this.pendingFromMe,
+    required this.pendingFromThem,
+    required this.currency,
+    required this.otherName,
+  });
+
+  final bool isDark;
+  final double net; // >0 ⇒ I owe them, <0 ⇒ they owe me
+  final double pendingFromMe;
+  final double pendingFromThem;
+  final String currency;
+  final String otherName;
+
+  String _fmt(double v) => CurrencyFormatter.format(v, currency: currency);
+
+  @override
+  Widget build(BuildContext context) {
+    final iOwe = net > 0.01;
+    final theyOwe = net < -0.01;
+    final outstanding = net.abs();
+    final toSettle = iOwe
+        ? (net - pendingFromMe).clamp(0, net).toDouble()
+        : 0.0;
+
+    final rows = <Widget>[
+      _row(
+        icon: iOwe
+            ? Icons.trending_down_rounded
+            : (theyOwe
+                  ? Icons.trending_up_rounded
+                  : Icons.check_circle_rounded),
+        color: iOwe ? AppColors.warning : AppColors.success,
+        label: iOwe
+            ? 'You owe $otherName'
+            : theyOwe
+            ? '$otherName owes you'
+            : 'All settled',
+        value: (iOwe || theyOwe) ? _fmt(outstanding) : null,
+      ),
+      if (pendingFromMe > 0.01)
+        _row(
+          icon: Icons.schedule_rounded,
+          color: AppColors.warning,
+          label: "You've paid · awaiting $otherName's confirmation",
+          value: _fmt(pendingFromMe),
+        ),
+      if (pendingFromThem > 0.01)
+        _row(
+          icon: Icons.schedule_rounded,
+          color: AppColors.warning,
+          label: '$otherName paid · awaiting your confirmation',
+          value: _fmt(pendingFromThem),
+        ),
+      if (iOwe && toSettle > 0.01)
+        _row(
+          icon: Icons.account_balance_wallet_outlined,
+          color: AppColors.tealDark,
+          label: 'Still to settle',
+          value: _fmt(toSettle),
+          emphasize: true,
+        )
+      else if (iOwe && pendingFromMe > 0.01)
+        _row(
+          icon: Icons.check_circle_outline_rounded,
+          color: AppColors.success,
+          label: 'Fully covered by your pending payment',
+          value: null,
+        ),
+    ];
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: AppColors.cardBg(isDark),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.divider(isDark)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'BREAKDOWN',
+            style: AppTextStyles.caption(isDark).copyWith(
+              color: AppColors.textSecondary(isDark),
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.3,
+              fontSize: 11,
+            ),
+          ),
+          const SizedBox(height: 10),
+          for (int i = 0; i < rows.length; i++) ...[
+            if (i > 0)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Container(
+                  height: 1,
+                  color: AppColors.divider(isDark).withValues(alpha: 0.5),
+                ),
+              ),
+            rows[i],
+          ],
+          if (pendingFromMe > 0.01 || pendingFromThem > 0.01) ...[
+            const SizedBox(height: 10),
+            Text(
+              'Pending payments don\'t reduce the balance until confirmed.',
+              style: AppTextStyles.caption(isDark).copyWith(
+                color: AppColors.textSecondary(isDark),
+                fontSize: 11,
+                height: 1.3,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _row({
+    required IconData icon,
+    required Color color,
+    required String label,
+    String? value,
+    bool emphasize = false,
+  }) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: color),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            label,
+            style: AppTextStyles.body2(isDark).copyWith(
+              color: AppColors.textPrimary(isDark),
+              fontWeight: emphasize ? FontWeight.w700 : FontWeight.w500,
+              fontSize: 13,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        if (value != null) ...[
+          const SizedBox(width: 8),
+          Text(
+            value,
+            style: AppTextStyles.body2(isDark).copyWith(
+              color: color,
+              fontWeight: FontWeight.w800,
+              fontSize: 13.5,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+// --------------------------------------------------------------------------
 // Section label (uppercase overline)
 // --------------------------------------------------------------------------
 
@@ -642,14 +848,14 @@ class _SettlementRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final iPaid = settlement.fromUser.id == myId;
-    final counterpart =
-        iPaid ? settlement.toUser.name : settlement.fromUser.name;
+    final counterpart = iPaid
+        ? settlement.toUser.name
+        : settlement.fromUser.name;
     final accent = iPaid ? AppColors.warning : AppColors.success;
     final icon = iPaid
         ? Icons.arrow_upward_rounded
         : Icons.arrow_downward_rounded;
-    final headline =
-        iPaid ? 'You paid $counterpart' : '$counterpart paid you';
+    final headline = iPaid ? 'You paid $counterpart' : '$counterpart paid you';
     final note = settlement.note?.trim();
     final isMuted = settlement.status != SettlementStatus.completed;
 
@@ -717,18 +923,16 @@ class _SettlementRow extends StatelessWidget {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      DateFormat('MMM d, yyyy · h:mm a')
-                          .format(settlement.date),
+                      DateFormat(
+                        'MMM d, yyyy · h:mm a',
+                      ).format(settlement.date),
                       style: AppTextStyles.caption(isDark).copyWith(
                         color: AppColors.textSecondary(isDark),
                         fontSize: 11.5,
                       ),
                     ),
                     const SizedBox(width: 8),
-                    _StatusChip(
-                      status: settlement.status,
-                      isDark: isDark,
-                    ),
+                    _StatusChip(status: settlement.status, isDark: isDark),
                   ],
                 ),
                 if (note != null && note.isNotEmpty) ...[
@@ -741,9 +945,7 @@ class _SettlementRow extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: AppColors.surface(isDark),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: AppColors.divider(isDark),
-                      ),
+                      border: Border.all(color: AppColors.divider(isDark)),
                     ),
                     child: Row(
                       children: [
@@ -818,11 +1020,9 @@ class _StatusChip extends StatelessWidget {
           const SizedBox(width: 3),
           Text(
             label,
-            style: AppTextStyles.caption(isDark).copyWith(
-              color: color,
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-            ),
+            style: AppTextStyles.caption(
+              isDark,
+            ).copyWith(color: color, fontSize: 10, fontWeight: FontWeight.w700),
           ),
         ],
       ),
@@ -862,19 +1062,17 @@ class _EmptyState extends StatelessWidget {
           const SizedBox(height: 16),
           Text(
             'No settlements yet',
-            style: AppTextStyles.body1(isDark).copyWith(
-              fontWeight: FontWeight.w700,
-              fontSize: 16,
-            ),
+            style: AppTextStyles.body1(
+              isDark,
+            ).copyWith(fontWeight: FontWeight.w700, fontSize: 16),
           ),
           const SizedBox(height: 6),
           Text(
             'When you settle up with $otherName, the history will appear here.',
             textAlign: TextAlign.center,
-            style: AppTextStyles.body2(isDark).copyWith(
-              color: AppColors.textSecondary(isDark),
-              height: 1.4,
-            ),
+            style: AppTextStyles.body2(
+              isDark,
+            ).copyWith(color: AppColors.textSecondary(isDark), height: 1.4),
           ),
         ],
       ),
@@ -944,9 +1142,9 @@ class _ErrorState extends StatelessWidget {
             Text(
               "Couldn't load settlement history",
               textAlign: TextAlign.center,
-              style: AppTextStyles.body1(isDark).copyWith(
-                fontWeight: FontWeight.w600,
-              ),
+              style: AppTextStyles.body1(
+                isDark,
+              ).copyWith(fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 12),
             TextButton(

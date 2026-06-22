@@ -251,6 +251,33 @@ const createGroup = async (req, res, next) => {
     // Log activity
     await ActivityService.logGroupCreated(group.id, req.user.id, name);
 
+    // Push notify each added (registered) member that they were added to a new
+    // group. Mirrors addGroupMember — placeholder / phone-only members (no
+    // userId) and the creator are skipped. Non-fatal: a notification failure
+    // must not fail group creation.
+    if (Array.isArray(members) && members.length > 0) {
+      try {
+        const inviter = await User.findById(req.user.id);
+        const inviterName = inviter?.name || 'Someone';
+        await Promise.all(
+          members
+            .filter(m => m.userId && m.userId !== req.user.id)
+            .map(m =>
+              NotificationService.notifyGroupInvite(
+                m.userId,
+                group.id,
+                name,
+                inviterName,
+              ).catch(err =>
+                console.error('[GroupController] create-notify failed:', err)
+              )
+            )
+        );
+      } catch (notifError) {
+        console.error('[GroupController] create-notify failed:', notifError);
+      }
+    }
+
     res.status(201).json({
       success: true,
       message: 'Group created successfully',

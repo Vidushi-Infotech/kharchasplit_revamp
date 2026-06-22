@@ -7,6 +7,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../components/avatar/avatar_widget.dart';
 import '../../../core/services/haptic_service.dart';
+import '../../../components/buttons/donate_heart_button.dart';
+import '../../../components/dialogs/donate_sheet.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/theme/theme_provider.dart';
@@ -30,8 +32,9 @@ class ProfileScreen extends ConsumerWidget {
             ? _Body(user: user, isDark: isDark, maxWidth: double.infinity)
             : Center(
                 child: ConstrainedBox(
-                  constraints:
-                      BoxConstraints(maxWidth: screenWidth < 1100 ? 640 : 820),
+                  constraints: BoxConstraints(
+                    maxWidth: screenWidth < 1100 ? 640 : 820,
+                  ),
                   child: _Body(
                     user: user,
                     isDark: isDark,
@@ -60,113 +63,118 @@ class _Body extends ConsumerWidget {
     return RefreshIndicator(
       onRefresh: () => ref.read(authProvider.notifier).refreshProfile(),
       child: ListView(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
-      physics: const AlwaysScrollableScrollPhysics(),
-      children: [
-        _Header(isDark: isDark),
-        const SizedBox(height: 20),
-        _ProfileCard(user: user, isDark: isDark),
-        const SizedBox(height: 24),
-        _SectionLabel(label: 'ACCOUNT', isDark: isDark),
-        const SizedBox(height: 8),
-        _MenuGroup(
-          isDark: isDark,
-          items: [
-            _MenuItemData(
-              icon: Icons.person_outline_rounded,
-              label: 'Edit profile',
-              onTap: () => context.pushNamed('edit-profile'),
-            ),
-            _MenuItemData(
-              icon: Icons.timeline_rounded,
-              label: 'Activity',
-              onTap: () => context.pushNamed('activity'),
-            ),
-            _MenuItemData(
-              icon: Icons.notifications_none_rounded,
-              label: 'Notifications',
-              onTap: () => context.pushNamed('notification-settings'),
-            ),
-            _MenuItemData(
-              icon: Icons.lock_outline_rounded,
-              label: 'Security',
-              onTap: () => context.pushNamed('security'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 20),
-        _SectionLabel(label: 'APPEARANCE', isDark: isDark),
-        const SizedBox(height: 8),
-        _ThemePicker(isDark: isDark),
-        const SizedBox(height: 20),
-        _SectionLabel(label: 'PREFERENCES', isDark: isDark),
-        const SizedBox(height: 8),
-        _MenuGroup(
-          isDark: isDark,
-          items: [
-            _MenuItemData(
-              icon: Icons.currency_exchange_rounded,
-              label: 'Default currency',
-              trailing: _CurrencyPicker.labelFor(
-                user?.preferredCurrency ?? 'INR',
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          _Header(isDark: isDark),
+          const SizedBox(height: 20),
+          _ProfileCard(user: user, isDark: isDark),
+          const SizedBox(height: 24),
+          _SectionLabel(label: 'ACCOUNT', isDark: isDark),
+          const SizedBox(height: 8),
+          _MenuGroup(
+            isDark: isDark,
+            items: [
+              _MenuItemData(
+                icon: Icons.person_outline_rounded,
+                label: 'Edit profile',
+                onTap: () => context.pushNamed('edit-profile'),
               ),
-              onTap: () => _CurrencyPicker.show(
-                context,
-                current: user?.preferredCurrency ?? 'INR',
-                onSelected: (code) async {
-                  final messenger = ScaffoldMessenger.of(context);
-                  final ok = await ref
-                      .read(authProvider.notifier)
-                      .updateProfile(preferredCurrency: code);
-                  if (!context.mounted) return;
-                  messenger.showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        ok
-                            ? 'Default currency updated to ${_CurrencyPicker.labelFor(code)}'
-                            : 'Could not update currency',
+              _MenuItemData(
+                icon: Icons.timeline_rounded,
+                label: 'Activity',
+                onTap: () => context.pushNamed('activity'),
+              ),
+              _MenuItemData(
+                icon: Icons.notifications_none_rounded,
+                label: 'Notifications',
+                onTap: () => context.pushNamed('notification-settings'),
+              ),
+              _MenuItemData(
+                icon: Icons.lock_outline_rounded,
+                label: 'Security',
+                onTap: () => context.pushNamed('security'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          _SectionLabel(label: 'APPEARANCE', isDark: isDark),
+          const SizedBox(height: 8),
+          _ThemePicker(isDark: isDark),
+          const SizedBox(height: 20),
+          _SectionLabel(label: 'PREFERENCES', isDark: isDark),
+          const SizedBox(height: 8),
+          _MenuGroup(
+            isDark: isDark,
+            items: [
+              _MenuItemData(
+                icon: Icons.currency_exchange_rounded,
+                label: 'Default currency',
+                trailing: _CurrencyPicker.labelFor(
+                  user?.preferredCurrency ?? 'INR',
+                ),
+                onTap: () => _CurrencyPicker.show(
+                  context,
+                  current: user?.preferredCurrency ?? 'INR',
+                  onSelected: (code) async {
+                    final messenger = ScaffoldMessenger.of(context);
+                    final ok = await ref
+                        .read(authProvider.notifier)
+                        .updateProfile(preferredCurrency: code);
+                    if (!context.mounted) return;
+                    messenger.showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          ok
+                              ? 'Default currency updated to ${_CurrencyPicker.labelFor(code)}'
+                              : 'Could not update currency',
+                        ),
+                        backgroundColor: ok ? null : AppColors.warning,
+                        behavior: SnackBarBehavior.floating,
                       ),
-                      backgroundColor: ok ? null : AppColors.warning,
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 20),
-        _SectionLabel(label: 'SUPPORT', isDark: isDark),
-        const SizedBox(height: 8),
-        _MenuGroup(
-          isDark: isDark,
-          items: [
-            _MenuItemData(
-              icon: Icons.help_outline_rounded,
-              label: 'Help & Support',
-              onTap: () => _HelpSupportSheet.show(context),
-            ),
-            _MenuItemData(
-              icon: Icons.privacy_tip_outlined,
-              label: 'Privacy policy',
-              onTap: () => context.pushNamed('privacy-policy'),
-            ),
-            _MenuItemData(
-              icon: Icons.description_outlined,
-              label: 'Terms of service',
-              onTap: () => context.pushNamed('terms'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 28),
-        _LogoutButton(
-          isDark: isDark,
-          onTap: () => _confirmLogout(context, ref),
-        ),
-        const SizedBox(height: 16),
-        Center(child: _VersionFooter(isDark: isDark)),
-      ],
-    ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          _SectionLabel(label: 'SUPPORT', isDark: isDark),
+          const SizedBox(height: 8),
+          _MenuGroup(
+            isDark: isDark,
+            items: [
+              _MenuItemData(
+                icon: Icons.favorite_rounded,
+                label: 'Support us / Donate',
+                onTap: () => showDonateSheet(context),
+              ),
+              _MenuItemData(
+                icon: Icons.help_outline_rounded,
+                label: 'Help & Support',
+                onTap: () => _HelpSupportSheet.show(context),
+              ),
+              _MenuItemData(
+                icon: Icons.privacy_tip_outlined,
+                label: 'Privacy policy',
+                onTap: () => context.pushNamed('privacy-policy'),
+              ),
+              _MenuItemData(
+                icon: Icons.description_outlined,
+                label: 'Terms of service',
+                onTap: () => context.pushNamed('terms'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 28),
+          _LogoutButton(
+            isDark: isDark,
+            onTap: () => _confirmLogout(context, ref),
+          ),
+          const SizedBox(height: 16),
+          Center(child: _VersionFooter(isDark: isDark)),
+        ],
+      ),
     );
   }
 
@@ -231,8 +239,7 @@ class _LogoutSheet extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           color: AppColors.background(isDark),
-          borderRadius:
-              const BorderRadius.vertical(top: Radius.circular(24)),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           border: Border.all(color: AppColors.divider(isDark)),
         ),
         padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
@@ -271,19 +278,17 @@ class _LogoutSheet extends StatelessWidget {
             Text(
               'Log out?',
               textAlign: TextAlign.center,
-              style: AppTextStyles.headline3(isDark).copyWith(
-                fontWeight: FontWeight.w700,
-                fontSize: 18,
-              ),
+              style: AppTextStyles.headline3(
+                isDark,
+              ).copyWith(fontWeight: FontWeight.w700, fontSize: 18),
             ),
             const SizedBox(height: 6),
             Text(
               "You'll need to sign in again on this device to use the app.",
               textAlign: TextAlign.center,
-              style: AppTextStyles.body2(isDark).copyWith(
-                color: AppColors.textSecondary(isDark),
-                height: 1.45,
-              ),
+              style: AppTextStyles.body2(
+                isDark,
+              ).copyWith(color: AppColors.textSecondary(isDark), height: 1.45),
             ),
             const SizedBox(height: 18),
             Row(
@@ -332,27 +337,35 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'PROFILE',
-          style: AppTextStyles.caption(isDark).copyWith(
-            color: AppColors.textSecondary(isDark),
-            fontWeight: FontWeight.w600,
-            letterSpacing: 1.5,
-            fontSize: 11,
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'PROFILE',
+                style: AppTextStyles.caption(isDark).copyWith(
+                  color: AppColors.textSecondary(isDark),
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 1.5,
+                  fontSize: 11,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Your account',
+                style: AppTextStyles.headline1(isDark).copyWith(
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.5,
+                  height: 1.1,
+                ),
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: 4),
-        Text(
-          'Your account',
-          style: AppTextStyles.headline1(isDark).copyWith(
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.5,
-            height: 1.1,
-          ),
-        ),
+        const DonateHeartButton(size: 44, iconSize: 20, cornerRadius: 14),
       ],
     );
   }
@@ -386,11 +399,7 @@ class _ProfileCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          AvatarWidget(
-            imageUrl: user?.avatarUrl,
-            name: name,
-            radius: 30,
-          ),
+          AvatarWidget(imageUrl: user?.avatarUrl, name: name, radius: 30),
           const SizedBox(width: 16),
           Expanded(
             child: Column(
@@ -399,10 +408,9 @@ class _ProfileCard extends StatelessWidget {
               children: [
                 Text(
                   name,
-                  style: AppTextStyles.headline3(isDark).copyWith(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 18,
-                  ),
+                  style: AppTextStyles.headline3(
+                    isDark,
+                  ).copyWith(fontWeight: FontWeight.w700, fontSize: 18),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -410,9 +418,9 @@ class _ProfileCard extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     phone,
-                    style: AppTextStyles.body2(isDark).copyWith(
-                      color: AppColors.textSecondary(isDark),
-                    ),
+                    style: AppTextStyles.body2(
+                      isDark,
+                    ).copyWith(color: AppColors.textSecondary(isDark)),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -421,9 +429,9 @@ class _ProfileCard extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     email,
-                    style: AppTextStyles.caption(isDark).copyWith(
-                      color: AppColors.textSecondary(isDark),
-                    ),
+                    style: AppTextStyles.caption(
+                      isDark,
+                    ).copyWith(color: AppColors.textSecondary(isDark)),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -544,10 +552,9 @@ class _MenuRow extends StatelessWidget {
               Expanded(
                 child: Text(
                   item.label,
-                  style: AppTextStyles.body1(isDark).copyWith(
-                    fontWeight: FontWeight.w500,
-                    fontSize: 14,
-                  ),
+                  style: AppTextStyles.body1(
+                    isDark,
+                  ).copyWith(fontWeight: FontWeight.w500, fontSize: 14),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -654,8 +661,7 @@ class _ThemeOption extends StatelessWidget {
             borderRadius: BorderRadius.circular(10),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 160),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
               decoration: BoxDecoration(
                 color: selected ? AppColors.brand : Colors.transparent,
                 borderRadius: BorderRadius.circular(10),
@@ -670,8 +676,7 @@ class _ThemeOption extends StatelessWidget {
                     style: AppTextStyles.body2(isDark).copyWith(
                       color: fg,
                       fontSize: 13,
-                      fontWeight:
-                          selected ? FontWeight.w700 : FontWeight.w500,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                     ),
                   ),
                 ],
@@ -700,8 +705,7 @@ class _LogoutButton extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(14),
           child: Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
               color: AppColors.warning.withValues(alpha: 0.10),
               borderRadius: BorderRadius.circular(14),
@@ -712,11 +716,7 @@ class _LogoutButton extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(
-                  Icons.logout_rounded,
-                  size: 18,
-                  color: AppColors.warning,
-                ),
+                Icon(Icons.logout_rounded, size: 18, color: AppColors.warning),
                 const SizedBox(width: 8),
                 Text(
                   'Log out',
@@ -788,10 +788,7 @@ class _CurrencyPicker {
 }
 
 class _CurrencyPickerSheet extends StatelessWidget {
-  const _CurrencyPickerSheet({
-    required this.current,
-    required this.onSelected,
-  });
+  const _CurrencyPickerSheet({required this.current, required this.onSelected});
 
   final String current;
   final ValueChanged<String> onSelected;
@@ -808,9 +805,7 @@ class _CurrencyPickerSheet extends StatelessWidget {
         return Container(
           decoration: BoxDecoration(
             color: AppColors.background(isDark),
-            borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(24),
-            ),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
             border: Border.all(color: AppColors.divider(isDark)),
           ),
           child: Column(
@@ -873,9 +868,9 @@ class _CurrencyPickerSheet extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
                 child: Text(
                   'Used as the default for new groups and personal expenses.',
-                  style: AppTextStyles.caption(isDark).copyWith(
-                    color: AppColors.textSecondary(isDark),
-                  ),
+                  style: AppTextStyles.caption(
+                    isDark,
+                  ).copyWith(color: AppColors.textSecondary(isDark)),
                 ),
               ),
               Expanded(
@@ -973,10 +968,9 @@ class _CurrencyRow extends StatelessWidget {
                   children: [
                     Text(
                       option.code,
-                      style: AppTextStyles.body1(isDark).copyWith(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14,
-                      ),
+                      style: AppTextStyles.body1(
+                        isDark,
+                      ).copyWith(fontWeight: FontWeight.w700, fontSize: 14),
                     ),
                     const SizedBox(height: 2),
                     Text(
@@ -1024,8 +1018,7 @@ class _HelpSupportSheet extends StatelessWidget {
       path: supportEmail,
       queryParameters: {'subject': 'KharchaSplit support'},
     );
-    final opened =
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!context.mounted) return;
     if (!opened) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1057,8 +1050,7 @@ class _HelpSupportSheet extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           color: AppColors.background(isDark),
-          borderRadius:
-              const BorderRadius.vertical(top: Radius.circular(24)),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           border: Border.all(color: AppColors.divider(isDark)),
         ),
         padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
@@ -1097,24 +1089,21 @@ class _HelpSupportSheet extends StatelessWidget {
             Text(
               'Need help?',
               textAlign: TextAlign.center,
-              style: AppTextStyles.headline3(isDark).copyWith(
-                fontWeight: FontWeight.w700,
-                fontSize: 18,
-              ),
+              style: AppTextStyles.headline3(
+                isDark,
+              ).copyWith(fontWeight: FontWeight.w700, fontSize: 18),
             ),
             const SizedBox(height: 6),
             Text(
               "Reach out and we'll get back as soon as we can.",
               textAlign: TextAlign.center,
-              style: AppTextStyles.body2(isDark).copyWith(
-                color: AppColors.textSecondary(isDark),
-                height: 1.4,
-              ),
+              style: AppTextStyles.body2(
+                isDark,
+              ).copyWith(color: AppColors.textSecondary(isDark), height: 1.4),
             ),
             const SizedBox(height: 18),
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
               decoration: BoxDecoration(
                 color: AppColors.cardBg(isDark),
                 borderRadius: BorderRadius.circular(14),
@@ -1130,8 +1119,7 @@ class _HelpSupportSheet extends StatelessWidget {
                       color: AppColors.surface(isDark),
                       borderRadius: BorderRadius.circular(11),
                       border: Border.all(
-                        color:
-                            AppColors.divider(isDark).withValues(alpha: 0.6),
+                        color: AppColors.divider(isDark).withValues(alpha: 0.6),
                       ),
                     ),
                     child: Icon(
@@ -1282,9 +1270,9 @@ class _VersionFooter extends StatelessWidget {
             : 'KharchaSplit';
         return Text(
           label,
-          style: AppTextStyles.caption(isDark).copyWith(
-            color: AppColors.textSecondary(isDark),
-          ),
+          style: AppTextStyles.caption(
+            isDark,
+          ).copyWith(color: AppColors.textSecondary(isDark)),
         );
       },
     );
