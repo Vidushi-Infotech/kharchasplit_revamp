@@ -10,6 +10,7 @@ import '../widgets/aurora_background.dart';
 import '../widgets/dashboard_header.dart';
 import '../widgets/group_mini_card.dart';
 import '../widgets/recent_expenses_section.dart';
+import '../../../components/dialogs/donate_sheet.dart';
 
 /// Main dashboard screen showing balance, groups, and recent expenses
 class DashboardScreen extends ConsumerWidget {
@@ -62,6 +63,8 @@ class DashboardScreen extends ConsumerWidget {
           _buildHeader(context),
           const SizedBox(height: 24),
           _buildBalanceCard(context, isDark, data),
+          const SizedBox(height: 16),
+          _DonateBanner(isDark: isDark),
           const SizedBox(height: 32),
           _buildRecentGroupsSection(context, isDark, data),
           const SizedBox(height: 32),
@@ -87,6 +90,8 @@ class DashboardScreen extends ConsumerWidget {
               _buildHeader(context),
               const SizedBox(height: 32),
               _buildBalanceCard(context, isDark, data),
+              const SizedBox(height: 16),
+              _DonateBanner(isDark: isDark),
               const SizedBox(height: 40),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -121,7 +126,9 @@ class DashboardScreen extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildHeader(context),
-              const SizedBox(height: 40),
+              const SizedBox(height: 24),
+              _DonateBanner(isDark: isDark),
+              const SizedBox(height: 24),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -567,6 +574,92 @@ class _AllExpensesSheet extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// "Support KharchaSplit" banner on the dashboard — opens the donate sheet
+/// (UPI QR + UPI ID) on tap.
+class _DonateBanner extends StatelessWidget {
+  const _DonateBanner({required this.isDark});
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: 'Support KharchaSplit — donate',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => showDonateSheet(context),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  AppColors.brand.withValues(alpha: isDark ? 0.22 : 0.12),
+                  AppColors.tealDark.withValues(alpha: isDark ? 0.18 : 0.10),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: AppColors.brand.withValues(alpha: 0.30),
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE53935).withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.favorite_rounded,
+                    color: Color(0xFFE53935),
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Tip Jar',
+                        style: AppTextStyles.body1(
+                          isDark,
+                        ).copyWith(fontWeight: FontWeight.w700, fontSize: 15),
+                      ),
+                      const SizedBox(height: 1),
+                      Text(
+                        'Keep KharchaSplit free — tip whatever your heart says',
+                        style: AppTextStyles.caption(isDark).copyWith(
+                          color: AppColors.textSecondary(isDark),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  color: AppColors.textSecondary(isDark),
+                  size: 20,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
