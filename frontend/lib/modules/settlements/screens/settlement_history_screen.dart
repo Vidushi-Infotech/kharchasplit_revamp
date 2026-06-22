@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../components/avatar/avatar_widget.dart';
+import '../../../components/buttons/donate_heart_button.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/currency_formatter.dart';
@@ -259,6 +260,7 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
+              const DonateHeartButton(),
               const SizedBox(width: 16),
             ],
           ),

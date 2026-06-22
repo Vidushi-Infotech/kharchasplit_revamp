@@ -13,6 +13,7 @@ import '../widgets/group_cover_thumb.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/currency_formatter.dart';
+import '../../../components/buttons/donate_heart_button.dart';
 import '../../../components/components.dart';
 import '../../../data/groups/groups_repository.dart';
 import '../../../data/settlements/settlements_repository.dart';
@@ -2293,6 +2294,7 @@ class _DetailTopBar extends StatelessWidget implements PreferredSizeWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
+              const DonateHeartButton(),
               const SizedBox(width: 8),
               Semantics(
                 button: true,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../components/buttons/donate_heart_button.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/date_formatter.dart';
@@ -220,6 +221,7 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
                     ),
                   ),
                 ),
+              const DonateHeartButton(),
               const SizedBox(width: 8),
             ],
           ),

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../components/components.dart';
+import '../../../components/buttons/donate_heart_button.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../models/group_model.dart';
@@ -66,8 +67,8 @@ class _GroupsScreenState extends ConsumerState<GroupsScreen> {
 
   List<GroupModel> _applyFilters(List<GroupModel> groups) {
     return groups.where((g) {
-      final matchesQuery = _query.isEmpty ||
-          g.name.toLowerCase().contains(_query.toLowerCase());
+      final matchesQuery =
+          _query.isEmpty || g.name.toLowerCase().contains(_query.toLowerCase());
       final matchesFilter = switch (_filter) {
         _BalanceFilter.all => true,
         _BalanceFilter.owed => g.myBalance > 0,
@@ -123,16 +124,12 @@ class _GroupsScreenState extends ConsumerState<GroupsScreen> {
                     SliverFillRemaining(
                       hasScrollBody: false,
                       child: EmptyStateWidget.noGroups(
-                        onCreateGroup: () =>
-                            context.push('/home/create-group'),
+                        onCreateGroup: () => context.push('/home/create-group'),
                       ),
                     )
                   else if (visible.isEmpty)
                     SliverToBoxAdapter(
-                      child: _EmptyResultsCard(
-                        isDark: isDark,
-                        query: _query,
-                      ),
+                      child: _EmptyResultsCard(isDark: isDark, query: _query),
                     )
                   else
                     SliverPadding(
@@ -140,11 +137,11 @@ class _GroupsScreenState extends ConsumerState<GroupsScreen> {
                       sliver: SliverGrid.builder(
                         gridDelegate:
                             const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          mainAxisSpacing: 12,
-                          crossAxisSpacing: 12,
-                          childAspectRatio: 0.95,
-                        ),
+                              crossAxisCount: 2,
+                              mainAxisSpacing: 12,
+                              crossAxisSpacing: 12,
+                              childAspectRatio: 0.95,
+                            ),
                         itemCount: visible.length,
                         itemBuilder: (context, index) {
                           final group = visible[index];
@@ -284,8 +281,7 @@ class _TitleRow extends StatelessWidget {
     // available height (animated by SliverPersistentHeader) so we just toggle
     // opacity to morph the visible content.
     final expandedOpacity = (1 - collapseProgress * 1.6).clamp(0.0, 1.0);
-    final collapsedOpacity =
-        ((collapseProgress - 0.4) / 0.6).clamp(0.0, 1.0);
+    final collapsedOpacity = ((collapseProgress - 0.4) / 0.6).clamp(0.0, 1.0);
 
     return ClipRect(
       child: Padding(
@@ -366,6 +362,8 @@ class _ExpandedTitle extends StatelessWidget {
                 ),
               ),
             ),
+            const DonateHeartButton(size: 38, iconSize: 18),
+            const SizedBox(width: 4),
             _IconAction(
               icon: Icons.search_rounded,
               isDark: isDark,
@@ -679,17 +677,17 @@ class _EmptyResultsCard extends StatelessWidget {
             query.isEmpty
                 ? 'No groups match this filter'
                 : 'No groups match "$query"',
-            style: AppTextStyles.body1(isDark).copyWith(
-              fontWeight: FontWeight.w600,
-            ),
+            style: AppTextStyles.body1(
+              isDark,
+            ).copyWith(fontWeight: FontWeight.w600),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 4),
           Text(
             'Try a different filter or search term',
-            style: AppTextStyles.caption(isDark).copyWith(
-              color: AppColors.textSecondary(isDark),
-            ),
+            style: AppTextStyles.caption(
+              isDark,
+            ).copyWith(color: AppColors.textSecondary(isDark)),
             textAlign: TextAlign.center,
           ),
         ],

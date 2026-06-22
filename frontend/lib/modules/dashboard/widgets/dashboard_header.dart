@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../components/buttons/donate_heart_button.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../auth/state/auth_provider.dart';
@@ -43,10 +44,10 @@ class DashboardHeader extends ConsumerWidget {
     // though pair-level debts existed.
     const epsilon = 0.005;
     final allGroups = ref.watch(groupsProvider).value ?? const [];
-    final owedCount =
-        allGroups.where((g) => g.youAreOwedInGroup > epsilon).length;
-    final oweCount =
-        allGroups.where((g) => g.youOweInGroup > epsilon).length;
+    final owedCount = allGroups
+        .where((g) => g.youAreOwedInGroup > epsilon)
+        .length;
+    final oweCount = allGroups.where((g) => g.youOweInGroup > epsilon).length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -62,6 +63,8 @@ class DashboardHeader extends ConsumerWidget {
               ),
             ),
             const SizedBox(width: 12),
+            const DonateHeartButton(size: 44, iconSize: 20, cornerRadius: 14),
+            const SizedBox(width: 10),
             _NotificationButton(
               isDark: isDark,
               onTap: onNotificationsTap,
@@ -150,9 +153,9 @@ class _Greeting extends StatelessWidget {
             Flexible(
               child: Text(
                 firstName,
-                style: AppTextStyles.headline2(isDark).copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+                style: AppTextStyles.headline2(
+                  isDark,
+                ).copyWith(fontWeight: FontWeight.w700),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -161,9 +164,9 @@ class _Greeting extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           'Your money at a glance',
-          style: AppTextStyles.body2(isDark).copyWith(
-            color: AppColors.textSecondary(isDark),
-          ),
+          style: AppTextStyles.body2(
+            isDark,
+          ).copyWith(color: AppColors.textSecondary(isDark)),
         ),
       ],
     );
@@ -349,9 +352,9 @@ class _BalancePill extends StatelessWidget {
               Flexible(
                 child: Text(
                   '$groupCount $groupLabel',
-                  style: AppTextStyles.caption(isDark).copyWith(
-                    color: AppColors.textSecondary(isDark),
-                  ),
+                  style: AppTextStyles.caption(
+                    isDark,
+                  ).copyWith(color: AppColors.textSecondary(isDark)),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
