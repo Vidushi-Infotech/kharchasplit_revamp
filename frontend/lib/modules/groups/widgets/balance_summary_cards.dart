@@ -76,10 +76,18 @@ class BalanceSummaryCards extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     if (entries.isEmpty) return const SizedBox.shrink();
+    // The tallest card (amount + "₹X pending" sub-line + an action button)
+    // must fit without clipping. iOS font metrics — and Dynamic Type — render
+    // text taller than Android's, which overflowed a fixed height and painted
+    // the overflow stripe (the "red line") behind the first card. Scale the
+    // height with the user's text size, plus a little base headroom, so it
+    // never clips.
+    final textScale = MediaQuery.textScalerOf(
+      context,
+    ).scale(1.0).clamp(1.0, 1.6);
+    final height = 232.0 * textScale;
     return SizedBox(
-      // Tall enough for the worst case: avatar + name + label + amount + the
-      // optional "₹X pending" sub-line + an action button, without clipping.
-      height: 224,
+      height: height,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
