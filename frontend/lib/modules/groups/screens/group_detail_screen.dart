@@ -1809,11 +1809,18 @@ class GroupDetailScreen extends ConsumerWidget {
 
     // CustomScrollView so the (potentially long) per-split log builds lazily
     // via a SliverList.builder instead of all at once.
-    return CustomScrollView(
+    // A single ListView.builder — the same reliable NestedScrollView body the
+    // Expenses tab uses. Index 0 is the settlements + balance cards + the
+    // "Expense log" header; indices 1.. are the lazily-built per-split log
+    // rows. (A CustomScrollView here failed to scroll / show the log in
+    // release builds.)
+    return ListView.builder(
       physics: const AlwaysScrollableScrollPhysics(),
-      slivers: [
-        SliverToBoxAdapter(
-          child: Column(
+      padding: const EdgeInsets.only(bottom: 12),
+      itemCount: logEntries.length + 1,
+      itemBuilder: (context, index) {
+        if (index == 0) {
+          return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _PendingIncomingSettlementsSection(groupId: groupId),
@@ -1851,62 +1858,50 @@ class GroupDetailScreen extends ConsumerWidget {
                 const SizedBox(height: 8),
               ],
             ],
+          );
+        }
+
+        final entry = logEntries[index - 1];
+        // Gate the action by the NET balance with this person, not the single
+        // expense's share. Once the net is settled, neither button shows.
+        final net = pair[entry.personId] ?? 0;
+        final iOweNet = net > 0.01; // I still owe them overall
+        final theyOweMeNet = net < -0.01; // they still owe me overall
+        // Guard the clamp: clamp(0, negative) throws when net <= 0.
+        final pendOut = pendingOut[entry.personId] ?? 0;
+        final toSettle = net > 0
+            ? (net - pendOut).clamp(0, net).toDouble()
+            : 0.0;
+        return Padding(
+          padding: EdgeInsets.fromLTRB(pad, 0, pad, 10),
+          child: SplitLogRow(
+            entry: entry,
+            onTap: () => context.push('/expense/${entry.expense.id}'),
+            onRemind: (entry.theyOweMe && theyOweMeNet)
+                ? () => _sendReminder(
+                    context,
+                    ref,
+                    detail.members.firstWhere(
+                      (m) => m.id == entry.personId,
+                      orElse: () => UserModel(
+                        id: entry.personId,
+                        name: entry.personName,
+                        email: '',
+                        phone: '',
+                        createdAt: DateTime.now(),
+                      ),
+                    ),
+                  )
+                : null,
+            onSettle: (!entry.theyOweMe && iOweNet && toSettle > 0.01)
+                ? () => context.push(
+                    '/settle/${entry.personId}?groupId=$groupId'
+                    '&amount=${toSettle.toStringAsFixed(2)}',
+                  )
+                : null,
           ),
-        ),
-        // Lazily-built per-split log rows.
-        SliverList.builder(
-          itemCount: logEntries.length,
-          itemBuilder: (_, i) {
-            final entry = logEntries[i];
-            // Gate the action by the NET balance with this person, not the
-            // single expense's share. Once the net is settled, neither button
-            // shows (and Remind won't hit a backend "no balance" error).
-            final net = pair[entry.personId] ?? 0;
-            final iOweNet = net > 0.01; // I still owe them overall
-            final theyOweMeNet = net < -0.01; // they still owe me overall
-            // Settle only what isn't already in a pending settlement. Guard
-            // the clamp: when net <= 0 (they owe me) there's nothing to settle,
-            // and clamp(0, negative) would throw.
-            final pendOut = pendingOut[entry.personId] ?? 0;
-            final toSettle = net > 0
-                ? (net - pendOut).clamp(0, net).toDouble()
-                : 0.0;
-            return Padding(
-              padding: EdgeInsets.fromLTRB(pad, 0, pad, 10),
-              child: SplitLogRow(
-                entry: entry,
-                onTap: () => context.push('/expense/${entry.expense.id}'),
-                // Remind only when they net-owe me; Settle Up only when I
-                // net-owe them. Settle the OUTSTANDING net amount, not this
-                // row's per-expense share.
-                onRemind: (entry.theyOweMe && theyOweMeNet)
-                    ? () => _sendReminder(
-                        context,
-                        ref,
-                        detail.members.firstWhere(
-                          (m) => m.id == entry.personId,
-                          orElse: () => UserModel(
-                            id: entry.personId,
-                            name: entry.personName,
-                            email: '',
-                            phone: '',
-                            createdAt: DateTime.now(),
-                          ),
-                        ),
-                      )
-                    : null,
-                onSettle: (!entry.theyOweMe && iOweNet && toSettle > 0.01)
-                    ? () => context.push(
-                        '/settle/${entry.personId}?groupId=$groupId'
-                        '&amount=${toSettle.toStringAsFixed(2)}',
-                      )
-                    : null,
-              ),
-            );
-          },
-        ),
-        const SliverToBoxAdapter(child: SizedBox(height: 12)),
-      ],
+        );
+      },
     );
   }
 
