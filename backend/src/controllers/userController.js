@@ -3,6 +3,8 @@ import User from '../models/User.js';
 import Group from '../models/Group.js';
 import { NotificationService } from '../services/notificationService.js';
 import { cache } from '../services/cacheService.js';
+import EmailService from '../services/emailService.js';
+import { generateOTP, getOTPExpiry } from '../utils/otp.js';
 
 /**
  * Get user by ID
@@ -30,6 +32,7 @@ const getUser = async (req, res, next) => {
         email: user.email,
         profileImageBase64: user.profile_image_base64,
         preferredCurrency: user.preferred_currency,
+        emailVerifiedAt: user.email_verified_at || null,
         createdAt: user.created_at,
         updatedAt: user.updated_at,
       },
@@ -116,6 +119,7 @@ const updateUser = async (req, res, next) => {
         email: user.email,
         profileImageBase64: user.profile_image_base64,
         preferredCurrency: user.preferred_currency,
+        emailVerifiedAt: user.email_verified_at || null,
         updatedAt: user.updated_at,
       },
     });
@@ -184,6 +188,7 @@ const getUserByPhone = async (req, res, next) => {
         email: user.email,
         profileImageBase64: user.profile_image_base64,
         preferredCurrency: user.preferred_currency,
+        emailVerifiedAt: user.email_verified_at || null,
         createdAt: user.created_at,
         updatedAt: user.updated_at,
       },
@@ -1026,8 +1031,138 @@ const getReports = async (req, res, next) => {
   }
 };
 
+const EMAIL_VERIFY_TTL_MIN = 10;
+const EMAIL_VERIFY_RESEND_COOLDOWN_SEC = 60;
+
+/**
+ * Send a verification code to the user's own email address.
+ * POST /api/v1/users/:id/email/verify/request
+ *
+ * Verification is optional — the app only *highlights* an unverified
+ * address — so this is user-initiated and idempotent-ish: a fresh code is
+ * issued each call, subject to a short resend cooldown.
+ */
+const requestEmailVerification = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    if (req.user.id !== id) {
+      return res.status(403).json({ success: false, error: 'You can only verify your own email' });
+    }
+    const user = await User.findById(id);
+    if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+    if (!user.email) {
+      return res.status(400).json({ success: false, error: 'Add an email to your profile first' });
+    }
+    if (user.email_verified_at) {
+      return res.json({ success: true, message: 'Email is already verified', data: { alreadyVerified: true } });
+    }
+
+    const recent = await query(
+      `SELECT created_at FROM otps
+        WHERE LOWER(email) = LOWER($1) AND purpose = 'email_verify' AND verified = FALSE
+        ORDER BY created_at DESC LIMIT 1`,
+      [user.email],
+    );
+    if (recent.rows[0]) {
+      const ageSec = (Date.now() - new Date(recent.rows[0].created_at).getTime()) / 1000;
+      if (ageSec < EMAIL_VERIFY_RESEND_COOLDOWN_SEC) {
+        const wait = Math.ceil(EMAIL_VERIFY_RESEND_COOLDOWN_SEC - ageSec);
+        return res.status(429).json({
+          success: false,
+          error: `Please wait ${wait}s before requesting another code`,
+          retryAfterSeconds: wait,
+        });
+      }
+    }
+
+    const otp = generateOTP();
+    const expiresAt = getOTPExpiry(EMAIL_VERIFY_TTL_MIN);
+    await query(
+      `INSERT INTO otps (email, phone_number, otp, expires_at, purpose, verified)
+       VALUES ($1, NULL, $2, $3, 'email_verify', FALSE)`,
+      [user.email.toLowerCase(), otp, expiresAt],
+    );
+
+    const sent = await EmailService.sendEmailVerificationEmail({
+      toEmail: user.email,
+      recipientName: user.name,
+      otp,
+      expiresInMinutes: EMAIL_VERIFY_TTL_MIN,
+    });
+    if (!sent.success) {
+      console.error('[Users] email verification send failed:', sent.error);
+      return res.status(502).json({
+        success: false,
+        error: 'Could not send the verification email right now. Please try again later.',
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Verification code sent',
+      data: { expiresInMinutes: EMAIL_VERIFY_TTL_MIN, resendAfterSeconds: EMAIL_VERIFY_RESEND_COOLDOWN_SEC },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Confirm the code and stamp email_verified_at.
+ * POST /api/v1/users/:id/email/verify/confirm   Body: { otp }
+ */
+const confirmEmailVerification = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { otp } = req.body;
+    if (req.user.id !== id) {
+      return res.status(403).json({ success: false, error: 'You can only verify your own email' });
+    }
+    const user = await User.findById(id);
+    if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+    if (!user.email) {
+      return res.status(400).json({ success: false, error: 'Add an email to your profile first' });
+    }
+
+    const otpRow = await query(
+      `SELECT id, expires_at, verified FROM otps
+        WHERE LOWER(email) = LOWER($1) AND otp = $2 AND purpose = 'email_verify'
+        ORDER BY created_at DESC LIMIT 1`,
+      [user.email, String(otp || '').trim()],
+    );
+    const row = otpRow.rows[0];
+    if (!row) return res.status(401).json({ success: false, error: 'Invalid verification code' });
+    if (row.verified) return res.status(401).json({ success: false, error: 'This code has already been used' });
+    if (new Date(row.expires_at) < new Date()) {
+      return res.status(401).json({ success: false, error: 'Code has expired. Please request a new one.' });
+    }
+
+    await query('UPDATE otps SET verified = TRUE WHERE id = $1', [row.id]);
+    const updated = await User.markEmailVerified(id);
+
+    res.json({
+      success: true,
+      message: 'Email verified',
+      data: {
+        id: updated.id,
+        phoneNumber: updated.phone_number,
+        name: updated.name,
+        email: updated.email,
+        profileImageBase64: updated.profile_image_base64,
+        preferredCurrency: updated.preferred_currency,
+        emailVerifiedAt: updated.email_verified_at,
+        updatedAt: updated.updated_at,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export default {
   getUser,
+  requestEmailVerification,
+  confirmEmailVerification,
   getUserByPhone,
   lookupByPhone,
   updateUser,

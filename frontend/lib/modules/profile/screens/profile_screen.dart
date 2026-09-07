@@ -14,6 +14,7 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/theme/theme_provider.dart';
 import '../../../models/user_model.dart';
 import '../../auth/state/auth_provider.dart';
+import '../widgets/email_verify_sheet.dart';
 
 /// Default-currency preference row on the profile screen. See the
 /// comment at the use site for why it is off.
@@ -64,6 +65,9 @@ class _Body extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // `user` is a field, so it can't be promoted inside the closure below;
+    // capture the address as a plain local instead.
+    final verifyEmail = user?.email.trim() ?? '';
     return RefreshIndicator(
       onRefresh: () => ref.read(authProvider.notifier).refreshProfile(),
       child: ListView(
@@ -72,7 +76,13 @@ class _Body extends ConsumerWidget {
         children: [
           _Header(isDark: isDark),
           const SizedBox(height: 20),
-          _ProfileCard(user: user, isDark: isDark),
+          _ProfileCard(
+            user: user,
+            isDark: isDark,
+            onVerifyEmail: verifyEmail.isEmpty
+                ? null
+                : () => EmailVerifySheet.show(context, email: verifyEmail),
+          ),
           const SizedBox(height: 24),
           _SectionLabel(label: 'ACCOUNT', isDark: isDark),
           const SizedBox(height: 8),
@@ -381,11 +391,77 @@ class _Header extends StatelessWidget {
   }
 }
 
+/// "Verified" (green tick) or a tappable amber "Not verified · Verify" chip
+/// under the email on the profile card.
+class _EmailVerifiedBadge extends StatelessWidget {
+  const _EmailVerifiedBadge({
+    required this.verified,
+    required this.isDark,
+    this.onVerify,
+  });
+
+  final bool verified;
+  final bool isDark;
+  final VoidCallback? onVerify;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = verified ? AppColors.success : AppColors.warning;
+    final chip = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: isDark ? 0.18 : 0.12),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            verified ? Icons.verified_rounded : Icons.error_outline_rounded,
+            size: 13,
+            color: color,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            verified ? 'Verified' : 'Not verified · Verify',
+            style: AppTextStyles.caption(isDark).copyWith(
+              color: color,
+              fontWeight: FontWeight.w700,
+              fontSize: 11,
+            ),
+          ),
+        ],
+      ),
+    );
+    if (verified || onVerify == null) return chip;
+    return Semantics(
+      button: true,
+      label: 'Verify email',
+      child: InkWell(
+        onTap: () {
+          HapticService.instance.selection();
+          onVerify!();
+        },
+        borderRadius: BorderRadius.circular(8),
+        child: chip,
+      ),
+    );
+  }
+}
+
 class _ProfileCard extends StatelessWidget {
-  const _ProfileCard({required this.user, required this.isDark});
+  const _ProfileCard({
+    required this.user,
+    required this.isDark,
+    this.onVerifyEmail,
+  });
 
   final UserModel? user;
   final bool isDark;
+
+  /// Opens the verification sheet. Only wired when the user has an email.
+  final VoidCallback? onVerifyEmail;
 
   @override
   Widget build(BuildContext context) {
@@ -444,6 +520,13 @@ class _ProfileCard extends StatelessWidget {
                     ).copyWith(color: AppColors.textSecondary(isDark)),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 6),
+                  // Verification is optional; we only highlight the gap.
+                  _EmailVerifiedBadge(
+                    verified: user?.isEmailVerified ?? false,
+                    isDark: isDark,
+                    onVerify: onVerifyEmail,
                   ),
                 ],
               ],

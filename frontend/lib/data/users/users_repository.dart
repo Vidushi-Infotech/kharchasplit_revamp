@@ -114,6 +114,42 @@ class UsersRepository {
   }
 }
 
+/// Optional email verification (Profile → "Not verified · Verify").
+extension EmailVerificationApi on UsersRepository {
+  /// Asks the backend to email a code to the user's own address. Throws
+  /// [UsersApiException] with `statusCode == 429` on the resend cooldown.
+  Future<void> requestEmailVerification(String userId) async {
+    final res =
+        await _client.dio.post('/users/$userId/email/verify/request');
+    _ensureEnvelope(res);
+  }
+
+  /// Confirms the code. Returns the updated user payload (carries
+  /// `emailVerifiedAt`) so the caller can refresh auth state.
+  Future<Map<String, dynamic>> confirmEmailVerification(
+    String userId,
+    String otp,
+  ) async {
+    final res = await _client.dio.post(
+      '/users/$userId/email/verify/confirm',
+      data: {'otp': otp},
+    );
+    final body = _ensureEnvelope(res);
+    final data = body['data'];
+    return data is Map<String, dynamic> ? data : const {};
+  }
+
+  Map<String, dynamic> _ensureEnvelope(Response res) {
+    final body = res.data;
+    if (body is! Map || body['success'] != true) {
+      final msg = (body is Map ? body['error'] : null)?.toString() ??
+          'Request failed (status ${res.statusCode})';
+      throw UsersApiException(msg, statusCode: res.statusCode);
+    }
+    return body.cast<String, dynamic>();
+  }
+}
+
 final usersRepositoryProvider = Provider<UsersRepository>((ref) {
   return UsersRepository(ref.watch(apiClientProvider));
 });

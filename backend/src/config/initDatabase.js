@@ -268,6 +268,8 @@ const columnAdditions = [
   { table: 'users', column: 'fcm_token_updated_at', type: 'TIMESTAMP' },
   { table: 'users', column: 'is_placeholder', type: 'BOOLEAN DEFAULT FALSE' },
   { table: 'users', column: 'preferred_currency', type: "VARCHAR(10) DEFAULT 'INR'" },
+  // NULL = not verified. Reset to NULL whenever the email changes.
+  { table: 'users', column: 'email_verified_at', type: 'TIMESTAMP' },
   { table: 'users', column: 'profile_image_base64', type: 'TEXT' },
 
   // Groups table columns

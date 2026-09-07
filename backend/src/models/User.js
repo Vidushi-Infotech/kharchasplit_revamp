@@ -11,7 +11,7 @@ class User {
   static async findById(id) {
     return cache.getOrSet(`user:${id}:profile`, TTL.USER_PROFILE, async () => {
       const result = await query(
-        'SELECT id, phone_number, name, email, profile_image_base64, preferred_currency, created_at, updated_at FROM users WHERE id = $1 AND deleted_at IS NULL',
+        'SELECT id, phone_number, name, email, profile_image_base64, preferred_currency, email_verified_at, created_at, updated_at FROM users WHERE id = $1 AND deleted_at IS NULL',
         [id]
       );
       return result.rows[0] || null;
@@ -28,7 +28,7 @@ class User {
     const unique = [...new Set(ids)];
     const placeholders = unique.map((_, i) => `$${i + 1}`).join(', ');
     const result = await query(
-      `SELECT id, phone_number, name, email, profile_image_base64, preferred_currency, created_at, updated_at
+      `SELECT id, phone_number, name, email, profile_image_base64, preferred_currency, email_verified_at, created_at, updated_at
        FROM users WHERE id IN (${placeholders}) AND deleted_at IS NULL`,
       unique
     );
@@ -46,7 +46,7 @@ class User {
     const normalizedPhone = this.normalizePhoneForSearch(phoneNumber);
 
     const result = await query(
-      `SELECT id, phone_number, name, email, profile_image_base64, preferred_currency, is_placeholder, created_at, updated_at
+      `SELECT id, phone_number, name, email, profile_image_base64, preferred_currency, email_verified_at, is_placeholder, created_at, updated_at
        FROM users
        WHERE RIGHT(REGEXP_REPLACE(phone_number, '[^0-9]', '', 'g'), 10) = $1
        AND deleted_at IS NULL`,
@@ -90,7 +90,7 @@ class User {
     // This handles cases where DB has +91XXXXXXXXXX and query has just XXXXXXXXXX or vice versa
     // Exclude placeholder users - they are not actually registered
     const result = await query(
-      `SELECT id, phone_number, name, email, profile_image_base64, preferred_currency, created_at, updated_at
+      `SELECT id, phone_number, name, email, profile_image_base64, preferred_currency, email_verified_at, created_at, updated_at
        FROM users
        WHERE RIGHT(REGEXP_REPLACE(phone_number, '[^0-9]', '', 'g'), 10) IN (${placeholders})
        AND (is_placeholder = FALSE OR is_placeholder IS NULL)
@@ -109,7 +109,7 @@ class User {
     const result = await query(
       `INSERT INTO users (phone_number, name, email, profile_image_base64, preferred_currency, password_hash)
        VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id, phone_number, name, email, profile_image_base64, preferred_currency, created_at`,
+       RETURNING id, phone_number, name, email, profile_image_base64, preferred_currency, email_verified_at, created_at`,
       [phoneNumber, name, email || null, profileImageBase64 || null, preferredCurrency || 'INR', passwordHash || null]
     );
     return result.rows[0];
@@ -121,7 +121,7 @@ class User {
   static async findByEmail(email) {
     if (!email) return null;
     const result = await query(
-      `SELECT id, phone_number, name, email, profile_image_base64, preferred_currency, password_hash, created_at, updated_at
+      `SELECT id, phone_number, name, email, profile_image_base64, preferred_currency, email_verified_at, password_hash, created_at, updated_at
          FROM users
         WHERE LOWER(email) = LOWER($1)
           AND deleted_at IS NULL
@@ -140,7 +140,7 @@ class User {
   static async findByPhoneForAuth(phoneNumber) {
     const normalizedPhone = this.normalizePhoneForSearch(phoneNumber);
     const result = await query(
-      `SELECT id, phone_number, name, email, profile_image_base64, preferred_currency, password_hash, created_at, updated_at
+      `SELECT id, phone_number, name, email, profile_image_base64, preferred_currency, email_verified_at, password_hash, created_at, updated_at
          FROM users
         WHERE RIGHT(REGEXP_REPLACE(phone_number, '[^0-9]', '', 'g'), 10) = $1
           AND deleted_at IS NULL
@@ -199,12 +199,32 @@ class User {
       `UPDATE users
        SET name = COALESCE($1, name),
            email = COALESCE($2, email),
+           -- A changed address is unverified again; an unchanged one keeps
+           -- its verification (Postgres evaluates SET against old values).
+           email_verified_at = CASE
+             WHEN $2 IS NOT NULL AND LOWER($2) IS DISTINCT FROM LOWER(email) THEN NULL
+             ELSE email_verified_at
+           END,
            profile_image_base64 = COALESCE($3, profile_image_base64),
            preferred_currency = COALESCE($4, preferred_currency),
            updated_at = NOW()
        WHERE id = $5 AND deleted_at IS NULL
-       RETURNING id, phone_number, name, email, profile_image_base64, preferred_currency, updated_at`,
+       RETURNING id, phone_number, name, email, profile_image_base64, preferred_currency, email_verified_at, updated_at`,
       [name, email, profileImageBase64, preferredCurrency, id]
+    );
+    if (result.rows[0]) this.invalidateUser(id);
+    return result.rows[0] || null;
+  }
+
+  /**
+   * Stamp the current email as verified. Returns the updated row.
+   */
+  static async markEmailVerified(id) {
+    const result = await query(
+      `UPDATE users SET email_verified_at = NOW(), updated_at = NOW()
+        WHERE id = $1 AND deleted_at IS NULL
+        RETURNING id, phone_number, name, email, profile_image_base64, preferred_currency, email_verified_at, updated_at`,
+      [id]
     );
     if (result.rows[0]) this.invalidateUser(id);
     return result.rows[0] || null;
@@ -331,7 +351,7 @@ class User {
        WHERE RIGHT(REGEXP_REPLACE(phone_number, '[^0-9]', '', 'g'), 10) = $1
        AND is_placeholder = TRUE
        AND deleted_at IS NULL
-       RETURNING id, phone_number, name, email, profile_image_base64, preferred_currency, is_placeholder, created_at, updated_at`,
+       RETURNING id, phone_number, name, email, profile_image_base64, preferred_currency, email_verified_at, is_placeholder, created_at, updated_at`,
       [normalizedPhone, name, email, passwordHash || null]
     );
     return result.rows[0] || null;

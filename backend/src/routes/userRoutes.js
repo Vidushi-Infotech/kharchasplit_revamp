@@ -57,6 +57,20 @@ router.put(
 
 router.delete('/:id', authenticate, userController.deleteUser);
 
+// Optional email verification (Profile → "Not verified · Verify").
+router.post(
+  '/:id/email/verify/request',
+  authenticate,
+  userController.requestEmailVerification
+);
+router.post(
+  '/:id/email/verify/confirm',
+  authenticate,
+  [body('otp').trim().isLength({ min: 4, max: 10 }).isNumeric()],
+  validate,
+  userController.confirmEmailVerification
+);
+
 router.delete('/:id/deactivate', authenticate, userController.deactivateUser);
 
 // FCM Token endpoints for push notifications

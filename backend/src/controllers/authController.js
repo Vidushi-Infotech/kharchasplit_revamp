@@ -70,6 +70,7 @@ function userPayload(row) {
     email: row.email,
     profileImageBase64: row.profile_image_base64 || null,
     preferredCurrency: row.preferred_currency || 'INR',
+    emailVerifiedAt: row.email_verified_at || null,
   };
 }
 

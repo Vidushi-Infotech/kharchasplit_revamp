@@ -13,6 +13,12 @@ class UserModel extends Equatable {
   final DateTime createdAt;
   final bool isPlaceholder;
 
+  /// When the user confirmed their email via the OTP flow; `null` = not
+  /// verified. Verification is optional — the profile just highlights it.
+  final DateTime? emailVerifiedAt;
+
+  bool get isEmailVerified => emailVerifiedAt != null;
+
   const UserModel({
     required this.id,
     required this.name,
@@ -24,11 +30,15 @@ class UserModel extends Equatable {
     this.totalOwing = 0,
     required this.createdAt,
     this.isPlaceholder = false,
+    this.emailVerifiedAt,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
     final created = json['created_at'] ?? json['createdAt'] ?? json['joinedAt'];
+    final verified = json['emailVerifiedAt'] ?? json['email_verified_at'];
     return UserModel(
+      emailVerifiedAt:
+          verified is String ? DateTime.tryParse(verified) : null,
       id: (json['id'] ?? json['userId'] ?? '') as String,
       name: (json['name'] as String?) ?? '',
       email: (json['email'] as String?) ?? '',
@@ -59,6 +69,8 @@ class UserModel extends Equatable {
         'totalOwing': totalOwing,
         'createdAt': createdAt.toIso8601String(),
         'isPlaceholder': isPlaceholder,
+        if (emailVerifiedAt != null)
+          'emailVerifiedAt': emailVerifiedAt!.toIso8601String(),
       };
 
   UserModel copyWith({
@@ -72,8 +84,10 @@ class UserModel extends Equatable {
     double? totalOwing,
     DateTime? createdAt,
     bool? isPlaceholder,
+    DateTime? emailVerifiedAt,
   }) {
     return UserModel(
+      emailVerifiedAt: emailVerifiedAt ?? this.emailVerifiedAt,
       id: id ?? this.id,
       name: name ?? this.name,
       email: email ?? this.email,
@@ -98,6 +112,7 @@ class UserModel extends Equatable {
         totalOwed,
         totalOwing,
         createdAt,
+        emailVerifiedAt,
         isPlaceholder,
       ];
 }

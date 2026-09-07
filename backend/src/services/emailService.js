@@ -301,6 +301,85 @@ class EmailService {
 }
 
 /** Minimal HTML escape — sufficient for names + group titles (no markup expected). */
+/**
+ * Email-address verification code. Same shape as the password-reset mail so
+ * the app's OTP screen can reuse the same copy conventions.
+ */
+EmailService.sendEmailVerificationEmail = async function ({ toEmail, recipientName, otp, expiresInMinutes = 10 }) {
+  if (!toEmail || !toEmail.includes('@')) {
+    return { success: false, error: 'A valid recipient email is required' };
+  }
+  if (!otp) return { success: false, error: 'OTP is required' };
+  const transporter = getTransporter();
+  if (!transporter) {
+    return {
+      success: false,
+      error: 'SMTP not configured — set SMTP_HOST / SMTP_USER / SMTP_PASSWORD in .env',
+    };
+  }
+
+  const fromAddr = process.env.SMTP_FROM || 'noreply@kharchasplit.com';
+  const safeRecipient = (recipientName || 'there').trim();
+  const safeOtp = String(otp).trim();
+  const subject = `Your KharchaSplit email verification code: ${safeOtp}`;
+
+  const text = [
+    `Hi ${safeRecipient},`,
+    ``,
+    `Your KharchaSplit email verification code is: ${safeOtp}`,
+    ``,
+    `This code expires in ${expiresInMinutes} minutes. Enter it in the app under Profile to confirm this address.`,
+    ``,
+    `If you didn't request this, you can safely ignore this email.`,
+    ``,
+    `— The KharchaSplit Team`,
+  ].join('\n');
+
+  const html = `
+<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#f5f7fa;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1a1f2e;">
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="padding:32px 16px;">
+      <tr><td align="center">
+        <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e6e9ef;">
+          <tr><td style="padding:28px 32px;background:#0d9d6f;color:#ffffff;">
+            <div style="font-size:14px;letter-spacing:1.5px;opacity:0.85;">KHARCHASPLIT</div>
+            <div style="font-size:22px;font-weight:700;margin-top:6px;">Verify your email</div>
+          </td></tr>
+          <tr><td style="padding:28px 32px;">
+            <p style="margin:0 0 12px;font-size:16px;">Hi ${escapeHtml(safeRecipient)},</p>
+            <p style="margin:0 0 20px;font-size:15px;line-height:1.55;color:#5a6478;">
+              Enter the code below in the app to confirm this email address. It expires in
+              <strong>${expiresInMinutes} minutes</strong>.
+            </p>
+            <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 24px;">
+              <tr><td align="center" style="padding:18px 32px;background:#f1f8f5;border:1px solid #cfe8db;border-radius:10px;">
+                <div style="font-size:32px;font-weight:700;letter-spacing:8px;color:#0d9d6f;font-family:'SF Mono','Menlo','Consolas',monospace;">${escapeHtml(safeOtp)}</div>
+              </td></tr>
+            </table>
+            <p style="margin:0;font-size:13px;line-height:1.55;color:#7a8499;">
+              Didn't request this? You can safely ignore this email.
+            </p>
+          </td></tr>
+          <tr><td style="padding:18px 32px;background:#f5f7fa;color:#7a8499;font-size:12px;line-height:1.5;text-align:center;">
+            Never share this code with anyone — not even someone claiming to be from KharchaSplit.
+          </td></tr>
+        </table>
+      </td></tr>
+    </table>
+  </body>
+</html>`.trim();
+
+  try {
+    const info = await transporter.sendMail({ from: fromAddr, to: toEmail, subject, text, html });
+    logger.info({ messageId: info.messageId, to: toEmail }, '[EmailService] email verification OTP sent');
+    return { success: true, messageId: info.messageId };
+  } catch (e) {
+    logger.warn({ err: e, to: toEmail }, '[EmailService] email verification send failed');
+    return { success: false, error: e.message || 'SMTP send failed' };
+  }
+};
+
 function escapeHtml(s) {
   return String(s)
     .replace(/&/g, '&amp;')
