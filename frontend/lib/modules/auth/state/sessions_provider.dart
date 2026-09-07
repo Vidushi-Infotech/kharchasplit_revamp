@@ -74,9 +74,20 @@ class SessionsNotifier extends AsyncNotifier<List<SessionModel>> {
         .toList(growable: false);
   }
 
+  /// Re-fetches while keeping the current data on screen. `invalidateSelf`
+  /// re-runs [build] with refresh semantics (previous value retained,
+  /// `isRefreshing == true`), so `.when()` keeps rendering the data branch
+  /// instead of dropping to a skeleton. It also disposes and re-registers the
+  /// listeners set up in [build], which calling `build()` by hand never did.
+  /// A failed fetch lands in [state] rather than being thrown, matching the
+  /// old `AsyncValue.guard` behaviour.
   Future<void> refresh() async {
-    state = const AsyncLoading();
-    state = await AsyncValue.guard(_fetch);
+    ref.invalidateSelf();
+    try {
+      await future;
+    } catch (_) {
+      // Already reflected in state.
+    }
   }
 
   Future<void> revoke(String id) async {

@@ -1,6 +1,7 @@
 import 'package:collection/collection.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/state/keep_alive_for.dart';
 import '../../../data/expenses/expenses_repository.dart';
 import '../../../models/expense_model.dart';
 import '../../../models/user_model.dart';
@@ -22,8 +23,9 @@ class FriendDetail {
   final List<ExpenseModel> sharedExpenses;
 }
 
-final friendDetailProvider =
-    FutureProvider.family<FriendDetail, String>((ref, friendId) async {
+final friendDetailProvider = FutureProvider.autoDispose
+    .family<FriendDetail, String>((ref, friendId) async {
+  keepAliveFor(ref, const Duration(minutes: 5));
   final me = ref.watch(authProvider).user;
   final groups = ref.watch(groupsProvider).value ?? const [];
 

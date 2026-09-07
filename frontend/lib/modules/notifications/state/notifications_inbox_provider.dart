@@ -135,11 +135,22 @@ class NotificationsInboxNotifier
   }
 
   /// Refetch from the server (pull-to-refresh, post-push-arrival, etc.).
+  ///
+  /// Re-fetches while keeping the current data on screen. `invalidateSelf`
+  /// re-runs [build] with refresh semantics (previous value retained,
+  /// `isRefreshing == true`), so `.when()` keeps rendering the data branch
+  /// instead of dropping to a skeleton. It also disposes and re-registers the
+  /// listeners set up in [build], which calling `build()` by hand never did.
+  /// A failed fetch lands in [state] rather than being thrown, matching the
+  /// old `AsyncValue.guard` behaviour.
   Future<void> refresh() async {
-    final user = ref.read(authProvider).user;
-    if (user == null) return;
-    state = const AsyncValue.loading();
-    state = await AsyncValue.guard(() => _fetchAll(user.id));
+    if (ref.read(authProvider).user == null) return;
+    ref.invalidateSelf();
+    try {
+      await future;
+    } catch (_) {
+      // Already reflected in state.
+    }
   }
 
   /// Optimistically mark one notification as read. Rolls back on failure.

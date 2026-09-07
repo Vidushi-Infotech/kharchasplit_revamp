@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_client.dart';
+import '../../../core/state/keep_alive_for.dart';
 
 /// A single section of a policy document — heading + paragraphs.
 class PolicySection {
@@ -53,7 +54,8 @@ class PolicyDocument {
 
 /// `kind` is the path segment after `/policies/` — e.g. `privacy` or `terms`.
 final policyProvider =
-    FutureProvider.family<PolicyDocument, String>((ref, kind) async {
+    FutureProvider.autoDispose.family<PolicyDocument, String>((ref, kind) async {
+  keepAliveFor(ref, const Duration(minutes: 30));
   final client = ref.read(apiClientProvider);
   final res = await client.dio.get('/policies/$kind');
   final body = res.data;

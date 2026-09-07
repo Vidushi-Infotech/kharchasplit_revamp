@@ -29,6 +29,14 @@ class DashboardData {
     recentGroups: <GroupModel>[],
     recentExpenses: <ExpenseModel>[],
   );
+
+  DashboardData copyWith({List<GroupModel>? recentGroups}) => DashboardData(
+        totalBalance: totalBalance,
+        youAreOwed: youAreOwed,
+        youOwe: youOwe,
+        recentGroups: recentGroups ?? this.recentGroups,
+        recentExpenses: recentExpenses,
+      );
 }
 
 final dashboardProvider =
@@ -46,16 +54,32 @@ class DashboardNotifier extends AsyncNotifier<DashboardData> {
     ref.listen(onReconnectStreamProvider, (_, __) {
       refresh();
     });
-    if (user == null) return DashboardData.empty;
 
+    // Keep the recent-groups carousel in sync with the groups list WITHOUT
+    // rebuilding the whole dashboard. `ref.watch(groupsProvider)` here would
+    // re-run build (and drop the screen to a skeleton) every time the groups
+    // list refreshed; instead patch just the carousel slice in place.
+    ref.listen(groupsProvider.select((s) => s.value), (_, groups) {
+      final current = state.value;
+      if (groups == null || current == null) return;
+      state = AsyncData(current.copyWith(
+        recentGroups: groups.take(_recentGroupsCount).toList(),
+      ));
+    });
+
+    if (user == null) return DashboardData.empty;
+    return _load(user.id);
+  }
+
+  Future<DashboardData> _load(String userId) async {
     // Surface the current groups list immediately, then layer the API
     // summary on top — keeps the recent-groups carousel snappy.
-    final groups = ref.watch(groupsProvider).value ?? const <GroupModel>[];
+    final groups = ref.read(groupsProvider).value ?? const <GroupModel>[];
     final recentGroups = groups.take(_recentGroupsCount).toList();
 
     final summary = await ref
         .read(dashboardRepositoryProvider)
-        .getForUser(user.id, recentLimit: _recentExpensesCount);
+        .getForUser(userId, recentLimit: _recentExpensesCount);
 
     return DashboardData(
       totalBalance: summary.totalBalance,
@@ -66,11 +90,23 @@ class DashboardNotifier extends AsyncNotifier<DashboardData> {
     );
   }
 
+  /// Re-fetches while keeping the current data on screen. `invalidateSelf`
+  /// re-runs [build] with refresh semantics (previous value retained,
+  /// `isRefreshing == true`), so `.when()` keeps rendering the data branch
+  /// instead of dropping to a skeleton. It also disposes and re-registers the
+  /// listeners set up in [build], which calling `build()` by hand never did.
+  /// A failed fetch lands in [state] rather than being thrown, matching the
+  /// old `AsyncValue.guard` behaviour.
+  ///
+  /// The groups list is refreshed first so the carousel and the summary
+  /// come from the same server snapshot.
   Future<void> refresh() async {
-    state = const AsyncLoading();
-    // Refresh the underlying groups list too — otherwise build() reuses
-    // the cached value and the carousel stays stale.
     await ref.read(groupsProvider.notifier).refresh();
-    state = await AsyncValue.guard(build);
+    ref.invalidateSelf();
+    try {
+      await future;
+    } catch (_) {
+      // Already reflected in state.
+    }
   }
 }

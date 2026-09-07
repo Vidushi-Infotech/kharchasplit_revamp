@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/lifecycle/app_lifecycle_refresher.dart';
 import 'floating_bottom_bar.dart';
 import 'pick_group_for_expense_sheet.dart';
 import 'shell_state.dart';
@@ -48,52 +49,56 @@ class MobileShell extends ConsumerWidget {
       });
     }
 
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, _) {
-        if (didPop) return;
-        final router = GoRouter.of(context);
-        if (router.canPop()) {
-          router.pop();
-        } else if (selectedIndex != 0) {
-          ref.read(selectedNavIndexProvider.notifier).state = 0;
-          context.go('/home/dashboard');
-        } else {
-          SystemNavigator.pop();
-        }
-      },
-      child: Scaffold(
-        extendBody: true,
-        body: child,
-        bottomNavigationBar: FloatingBottomBar(
-          selectedIndex: selectedIndex,
-          fabIndex: 2,
-          onItemSelected: (index) {
-            ref.read(selectedNavIndexProvider.notifier).state = index;
-            _navigateToTab(context, index);
-          },
-          items: [
-            const FloatingNavItem(
-              icon: Icons.home_rounded,
-              label: 'Home',
-            ),
-            const FloatingNavItem(
-              icon: Icons.group_rounded,
-              label: 'Groups',
-            ),
-            const FloatingNavItem(
-              icon: Icons.add_rounded,
-              label: 'Create',
-            ),
-            const FloatingNavItem(
-              icon: Icons.account_balance_wallet_rounded,
-              label: 'Personal',
-            ),
-            const FloatingNavItem(
-              icon: Icons.person_outline_rounded,
-              label: 'Profile',
-            ),
-          ],
+    // Resume-after-long-background refresh lives here (not in main.dart)
+    // because only a signed-in user inside the shell has data to refresh.
+    return AppLifecycleRefresher(
+      child: PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) {
+          if (didPop) return;
+          final router = GoRouter.of(context);
+          if (router.canPop()) {
+            router.pop();
+          } else if (selectedIndex != 0) {
+            ref.read(selectedNavIndexProvider.notifier).state = 0;
+            context.go('/home/dashboard');
+          } else {
+            SystemNavigator.pop();
+          }
+        },
+        child: Scaffold(
+          extendBody: true,
+          body: child,
+          bottomNavigationBar: FloatingBottomBar(
+            selectedIndex: selectedIndex,
+            fabIndex: 2,
+            onItemSelected: (index) {
+              ref.read(selectedNavIndexProvider.notifier).state = index;
+              _navigateToTab(context, index);
+            },
+            items: [
+              const FloatingNavItem(
+                icon: Icons.home_rounded,
+                label: 'Home',
+              ),
+              const FloatingNavItem(
+                icon: Icons.group_rounded,
+                label: 'Groups',
+              ),
+              const FloatingNavItem(
+                icon: Icons.add_rounded,
+                label: 'Create',
+              ),
+              const FloatingNavItem(
+                icon: Icons.account_balance_wallet_rounded,
+                label: 'Personal',
+              ),
+              const FloatingNavItem(
+                icon: Icons.person_outline_rounded,
+                label: 'Profile',
+              ),
+            ],
+          ),
         ),
       ),
     );

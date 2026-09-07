@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 
+import '../../../core/state/keep_alive_for.dart';
 import '../../../data/expenses/expenses_repository.dart';
 import '../../../data/groups/groups_repository.dart';
 import '../../../data/settlements/settlements_repository.dart';
@@ -27,10 +28,15 @@ class GroupDetail {
   final double totalExpense;
 }
 
-final groupDetailProvider = FutureProvider.family<GroupDetail, String>((
+/// Cached for a few minutes after the screen is closed, then released.
+/// A process-lifetime cache here retained every visited group's full
+/// expense list (receipts included) until the app died.
+final groupDetailProvider =
+    FutureProvider.autoDispose.family<GroupDetail, String>((
   ref,
   groupId,
 ) async {
+  keepAliveFor(ref, const Duration(minutes: 5));
   final groupsRepo = ref.read(groupsRepositoryProvider);
   final expensesRepo = ref.read(expensesRepositoryProvider);
   final settlementsRepo = ref.read(settlementsRepositoryProvider);
