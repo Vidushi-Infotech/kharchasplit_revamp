@@ -72,14 +72,27 @@ class DashboardNotifier extends AsyncNotifier<DashboardData> {
   }
 
   Future<DashboardData> _load(String userId) async {
-    // Surface the current groups list immediately, then layer the API
-    // summary on top — keeps the recent-groups carousel snappy.
-    final groups = ref.read(groupsProvider).value ?? const <GroupModel>[];
-    final recentGroups = groups.take(_recentGroupsCount).toList();
-
-    final summary = await ref
+    // Kick off the summary fetch, then wait for the groups list alongside
+    // it. Right after login both are in flight; reading `.value` here would
+    // see an empty list and paint an empty "Your Groups" carousel until the
+    // next manual refresh (the listener above can't patch a still-loading
+    // dashboard). Awaiting the future costs nothing when groups are already
+    // cached and keeps the two fetches parallel otherwise.
+    final summaryFuture = ref
         .read(dashboardRepositoryProvider)
         .getForUser(userId, recentLimit: _recentExpensesCount);
+
+    List<GroupModel> groups;
+    try {
+      groups = await ref.read(groupsProvider.future);
+    } catch (_) {
+      // Groups failed to load — show whatever we last had rather than
+      // failing the whole dashboard; the groups tab surfaces its own error.
+      groups = ref.read(groupsProvider).value ?? const <GroupModel>[];
+    }
+    final recentGroups = groups.take(_recentGroupsCount).toList();
+
+    final summary = await summaryFuture;
 
     return DashboardData(
       totalBalance: summary.totalBalance,
