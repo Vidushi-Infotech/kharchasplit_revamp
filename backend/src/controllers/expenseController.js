@@ -277,7 +277,10 @@ const deleteExpense = async (req, res, next) => {
     }
 
     // Only the person who added (paid for) the expense can delete it.
-    if (expense.paid_by_id !== req.user.id) {
+    // NB: Expense.findById returns the column as `paid_by` (see the
+    // SELECT in models/Expense.js) — `paid_by_id` was undefined here, so
+    // this check rejected *every* delete with a 403, including the payer's.
+    if (expense.paid_by !== req.user.id) {
       return res.status(403).json({
         success: false,
         error: 'Only the person who added this expense can delete it.',
