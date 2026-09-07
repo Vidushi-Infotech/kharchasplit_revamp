@@ -150,6 +150,13 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
+    // Keep addExpenseProvider (autoDispose) alive from the very first frame.
+    // In edit mode the fetched expense is written into it while the loading
+    // branch below is on screen; with no listener yet Riverpod dropped that
+    // state before the form ever read it, so the user saw amount 0, no
+    // category/date and "Pick a group before saving the expense".
+    ref.watch(addExpenseProvider);
+
     if (widget.isEditing && (_hydrating || _hydrateError != null)) {
       return Scaffold(
         backgroundColor: AppColors.background(isDark),
