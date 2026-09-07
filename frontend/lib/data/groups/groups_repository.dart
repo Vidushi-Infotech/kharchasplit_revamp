@@ -239,8 +239,23 @@ class GroupsRepository {
             ? {'acknowledgeUnsettledDebt': true}
             : null,
       );
+      // The client's validateStatus treats every 4xx as a *response*, not a
+      // DioException — so the 409 lands here, not in the catch below. Read
+      // `code` / `data` off the envelope or the write-off dialog never
+      // gets its breakdown.
+      final body = res.data;
+      if (body is Map && body['success'] != true) {
+        final data = body['data'];
+        throw GroupsApiException(
+          (body['error'] ?? body['message'] ?? 'Request failed').toString(),
+          statusCode: res.statusCode,
+          code: body['code']?.toString(),
+          data: data is Map ? Map<String, dynamic>.from(data) : null,
+        );
+      }
       _ensureSuccess(res);
     } on DioException catch (e) {
+      // Only 5xx / transport failures reach here (see above).
       final res = e.response;
       final body = res?.data;
       if (body is Map) {

@@ -4,7 +4,6 @@ import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
-import 'dart:convert';
 import 'dart:io';
 import '../../../core/services/haptic_service.dart';
 import '../../../core/theme/app_colors.dart';
@@ -13,6 +12,7 @@ import '../../../components/components.dart';
 import '../../../models/models.dart';
 import '../../../core/services/app_logger.dart';
 import '../../../core/services/image_processor_service.dart';
+import '../../../core/utils/base64_async.dart';
 import '../../../data/contacts/device_contacts_provider.dart';
 import '../../../data/groups/groups_repository.dart';
 import '../../auth/state/auth_provider.dart';
@@ -164,13 +164,18 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
     setState(() => _isCreating = true);
 
     final name = _groupNameController.text.trim();
+    // Encode the cover off the main isolate — a large cover would otherwise
+    // freeze the screen for the duration of the encode.
+    final coverBytes = _coverBytes;
+    final coverBase64 =
+        coverBytes != null ? await base64EncodeAsync(coverBytes) : null;
+    if (!mounted) return;
     // 1. Create the group (creator is added as the only member by the backend).
     GroupModel newGroup;
     try {
       newGroup = await ref.read(groupsProvider.notifier).addGroup(
             name: name,
-            coverImageBase64:
-                _coverBytes != null ? base64Encode(_coverBytes!) : null,
+            coverImageBase64: coverBase64,
           );
     } catch (e) {
       if (!mounted) return;

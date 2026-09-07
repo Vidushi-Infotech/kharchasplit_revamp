@@ -13,9 +13,11 @@ plugins {
 }
 
 // Load release signing config from android/key.properties (gitignored).
-// If the file is absent, fall back to debug signing AND disable minification
-// so a fresh checkout can still run `flutter run --release` locally without
-// a keystore. CI / store builds MUST provide key.properties.
+// If the file is absent, fall back to debug signing so a fresh checkout can
+// still run `flutter run --release` locally without a keystore. Minification
+// is NOT tied to the keystore (see buildTypes) — a release build is always
+// shrunk and obfuscated. CI / store builds MUST provide key.properties; use
+// scripts/build_release.sh, which refuses to build without it.
 val keystoreProperties = Properties().apply {
     val keystorePropertiesFile = rootProject.file("key.properties")
     if (keystorePropertiesFile.exists()) {
@@ -69,10 +71,13 @@ android {
                 signingConfigs.getByName("debug")
             }
 
-            // R8 + resource shrinking. Only enabled when a real keystore is
-            // present so the local debug-fallback build stays simple.
-            isMinifyEnabled = hasReleaseKeystore
-            isShrinkResources = hasReleaseKeystore
+            // R8 + resource shrinking, unconditionally for release. This used
+            // to be gated on the keystore being present, which meant a CI
+            // runner or fresh clone without key.properties silently shipped
+            // an unminified, unshrunk build with the same "release" label.
+            // Keystore presence only decides *signing*, never shrinking.
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

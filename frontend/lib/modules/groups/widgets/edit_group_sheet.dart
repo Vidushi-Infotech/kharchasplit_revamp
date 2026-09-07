@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -6,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/services/image_processor_service.dart';
+import '../../../core/utils/base64_async.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../models/group_model.dart';
@@ -143,7 +143,7 @@ class _EditGroupSheetState extends ConsumerState<EditGroupSheet> {
     final newName = _nameController.text.trim();
     String? coverPayload;
     if (_newCoverBytes != null) {
-      coverPayload = base64Encode(_newCoverBytes!);
+      coverPayload = await base64EncodeAsync(_newCoverBytes!);
     } else if (_coverRemoved) {
       // Empty string clears the cover; backend stores null when COALESCE
       // sees a falsy value (the controller treats empty string the same

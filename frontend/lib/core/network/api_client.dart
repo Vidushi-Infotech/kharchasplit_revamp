@@ -11,6 +11,7 @@ import '../services/connectivity_service.dart';
 import '../services/token_storage.dart';
 import '../state/connectivity_provider.dart';
 import 'offline_interceptor.dart';
+import 'retry_interceptor.dart';
 
 final tokenStorageProvider = Provider<TokenStorage>((ref) => TokenStorage());
 
@@ -25,20 +26,31 @@ final apiClientProvider = Provider<ApiClient>((ref) {
 
 class ApiClient {
   ApiClient(this.tokens, this._connectivity) {
-    dio = Dio(BaseOptions(
-      baseUrl: ApiConfig.baseUrl,
-      connectTimeout: ApiConfig.connectTimeout,
-      receiveTimeout: ApiConfig.receiveTimeout,
-      contentType: 'application/json',
-      responseType: ResponseType.json,
-      validateStatus: (s) => s != null && s < 500,
-    ));
+    dio = Dio(_baseOptions());
     _installCertificatePinning();
     // Offline interceptor runs FIRST so requests fail fast and don't
     // bother going through the auth interceptor while we're offline.
     dio.interceptors.add(OfflineInterceptor(_connectivity));
+    // Transient-failure retry for GETs. Sits before auth so a retried
+    // request goes back through the auth interceptor and picks up a
+    // refreshed token if one landed in between.
+    dio.interceptors.add(RetryInterceptor(dio));
     dio.interceptors.add(_AuthInterceptor(this));
   }
+
+  /// Shared by the main client and the token-refresh client so both get
+  /// the same timeouts. `validateStatus < 500` means 4xx arrive as normal
+  /// responses (handled per-repository via the `{success, error}` envelope)
+  /// and only 5xx / transport failures become [DioException]s.
+  static BaseOptions _baseOptions() => BaseOptions(
+        baseUrl: ApiConfig.baseUrl,
+        connectTimeout: ApiConfig.connectTimeout,
+        receiveTimeout: ApiConfig.receiveTimeout,
+        sendTimeout: ApiConfig.sendTimeout,
+        contentType: 'application/json',
+        responseType: ResponseType.json,
+        validateStatus: (s) => s != null && s < 500,
+      );
 
   final ConnectivityService _connectivity;
 
@@ -94,11 +106,18 @@ class ApiClient {
     return completer.future;
   }
 
+  /// Must never throw: [refreshAccessToken] completes its shared completer
+  /// from this future's value, so an uncaught error (e.g. secure storage
+  /// failing) would leave every request that is waiting on the refresh
+  /// hanging forever.
   Future<bool> _doRefresh() async {
-    final refreshToken = await tokens.readRefreshToken();
-    if (refreshToken == null) return false;
     try {
-      final res = await Dio(BaseOptions(baseUrl: ApiConfig.baseUrl)).post(
+      final refreshToken = await tokens.readRefreshToken();
+      if (refreshToken == null) return false;
+      // Bare client on purpose (no auth / retry interceptors — a refresh
+      // must not recurse into itself), but with the same timeouts as the
+      // main client so it can't hang either.
+      final res = await Dio(_baseOptions()).post(
         '/auth/refresh',
         data: {'refreshToken': refreshToken},
       );
@@ -110,7 +129,7 @@ class ApiClient {
         refreshToken: refreshToken,
       );
       return true;
-    } on DioException {
+    } catch (_) {
       return false;
     }
   }

@@ -13,6 +13,15 @@ import 'app_logger.dart';
 /// `YOUR_VIRUSTOTAL_API_KEY` placeholder and no real key. That dead code
 /// was removed; if image scanning is reintroduced it should live behind a
 /// server-side proxy so the API key never lands on a user's device.
+/// Isolate entry point for [ImageProcessorService.validateImage]. Returns a
+/// small record rather than the decoded [img.Image] so only two ints cross
+/// the isolate boundary.
+({int width, int height})? _readDimensions(Uint8List bytes) {
+  final image = img.decodeImage(bytes);
+  if (image == null) return null;
+  return (width: image.width, height: image.height);
+}
+
 class ImageProcessorService {
 
   /// Compress image to WebP format with quality optimization
@@ -101,15 +110,18 @@ class ImageProcessorService {
         );
       }
 
-      // Try to decode image to get dimensions
+      // Try to decode image to get dimensions. Pure-Dart decode of a
+      // camera capture (up to the 50 MB cap) takes hundreds of ms — run it
+      // in an isolate and bring back only the dimensions.
       try {
-        final image = img.decodeImage(bytes);
-        if (image != null) {
+        final dims = await compute(_readDimensions, bytes,
+            debugLabel: 'imageDimensions');
+        if (dims != null) {
           return ValidationResult(
             isValid: true,
             fileSize: bytes.length,
-            width: image.width,
-            height: image.height,
+            width: dims.width,
+            height: dims.height,
           );
         }
       } catch (e, st) {

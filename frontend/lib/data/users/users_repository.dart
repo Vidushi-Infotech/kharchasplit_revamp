@@ -83,6 +83,10 @@ class UsersRepository {
         '/users/lookup-by-phone',
         queryParameters: {'phone': phone},
       );
+      // 4xx arrive as responses (client validateStatus < 500), so the
+      // "no such user" 404 must be handled here — the DioException branch
+      // below only ever sees 5xx / transport errors.
+      if (res.statusCode == 404) return null;
       final body = res.data;
       if (body is! Map || body['success'] != true) {
         final msg = (body is Map ? body['error'] : null)?.toString() ??

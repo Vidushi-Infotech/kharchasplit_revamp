@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:collection/collection.dart';
@@ -12,6 +11,7 @@ import '../../../components/avatar/avatar_widget.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/utils/base64_async.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../data/expenses/expenses_repository.dart';
 import '../../../models/models.dart';
@@ -949,7 +949,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                   onImageSelected: (imagePath, file) async {
                     try {
                       final bytes = await File(imagePath).readAsBytes();
-                      final encoded = base64Encode(bytes);
+                      // Off the main isolate — a full-size receipt is a
+                      // multi-MB encode that would freeze the sheet.
+                      final encoded = await base64EncodeAsync(bytes);
                       ref.read(addExpenseProvider.notifier).state = ref
                           .read(addExpenseProvider)
                           .copyWith(

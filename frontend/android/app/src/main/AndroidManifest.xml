@@ -2,12 +2,16 @@
     <!-- Permissions actually used:
          READ_CONTACTS    : flutter_contacts (Add member from device contacts)
          CAMERA           : image_picker (capture a receipt photo)
-         INTERNET         : Dio HTTP calls (auto-added by Flutter Gradle)
+         INTERNET         : Dio HTTP calls. Declared explicitly — it is NOT
+                            auto-added for release (only the debug/profile
+                            manifests carry it); release builds previously
+                            got it only via Firebase's merged manifest.
          POST_NOTIFICATIONS: Android 13+ notification permission for FCM
          VIBRATE          : HapticFeedback API used by HapticService for tap /
                             selection / success / error cues. Without this,
                             Flutter's HapticFeedback.*() calls silently no-op
                             on Android and the user feels nothing. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.READ_CONTACTS"/>
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>

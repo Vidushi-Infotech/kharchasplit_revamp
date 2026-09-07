@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -7,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../components/buttons/donate_heart_button.dart';
+import '../../../core/utils/base64_async.dart';
 import '../../../components/components.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -1139,22 +1139,25 @@ class _ReceiptCard extends StatefulWidget {
 class _ReceiptCardState extends State<_ReceiptCard> {
   /// Cached decoded bytes — base64-decoding a multi-MB receipt every build
   /// (which happened on every theme tick / parent rebuild) burns CPU and
-  /// drops frames. Done once here, refreshed only if the source string
-  /// changes (rare — receipts are immutable per expense).
+  /// drops frames. Done once here, off the main isolate, refreshed only if
+  /// the source string changes (rare — receipts are immutable per expense).
   Uint8List? _bytes;
   String? _decodedFor;
+  bool _decoding = true;
 
-  void _decode() {
-    if (_decodedFor == widget.base64Data) return;
-    _decodedFor = widget.base64Data;
-    try {
-      final cleaned = widget.base64Data.contains(',')
-          ? widget.base64Data.split(',').last
-          : widget.base64Data;
-      _bytes = base64Decode(cleaned);
-    } catch (_) {
-      _bytes = null;
-    }
+  Future<void> _decode() async {
+    final source = widget.base64Data;
+    if (_decodedFor == source) return;
+    _decodedFor = source;
+    _decoding = true;
+    final bytes = await base64DecodeAsync(source);
+    // Widget may have gone away, or the source may have changed again
+    // while we were decoding — drop a stale result.
+    if (!mounted || _decodedFor != source) return;
+    setState(() {
+      _bytes = bytes;
+      _decoding = false;
+    });
   }
 
   @override
@@ -1211,7 +1214,11 @@ class _ReceiptCardState extends State<_ReceiptCard> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      canShow ? 'View receipt' : 'Receipt unavailable',
+                      canShow
+                          ? 'View receipt'
+                          : (_decoding
+                              ? 'Loading receipt…'
+                              : 'Receipt unavailable'),
                       style: AppTextStyles.body1(
                         isDark,
                       ).copyWith(fontWeight: FontWeight.w600, fontSize: 14),

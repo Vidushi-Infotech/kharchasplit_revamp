@@ -31,6 +31,11 @@ class ApiConfig {
   static const Duration connectTimeout = Duration(seconds: 10);
   static const Duration receiveTimeout = Duration(seconds: 20);
 
+  /// Upload-side deadline. Receipts and covers go up as base64 JSON bodies,
+  /// so without this a stalled upload on a bad connection hung forever —
+  /// connect/receive timeouts don't cover the time spent *sending*.
+  static const Duration sendTimeout = Duration(seconds: 30);
+
   static const String accessTokenKey = 'access_token';
   static const String refreshTokenKey = 'refresh_token';
   static const String currentUserKey = 'current_user';

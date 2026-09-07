@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:crop_your_image/crop_your_image.dart';
@@ -6,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../theme/app_colors.dart';
+import 'base64_async.dart';
 import '../theme/app_text_styles.dart';
 
 class AvatarPickResult {
@@ -51,7 +51,10 @@ Future<AvatarPickResult?> pickAndCropAvatar(
   );
   if (cropped == null) return null;
 
-  return AvatarPickResult(bytes: cropped, base64: base64Encode(cropped));
+  return AvatarPickResult(
+    bytes: cropped,
+    base64: await base64EncodeAsync(cropped),
+  );
 }
 
 Future<ImageSource?> _showSourceSheet(BuildContext context) async {
