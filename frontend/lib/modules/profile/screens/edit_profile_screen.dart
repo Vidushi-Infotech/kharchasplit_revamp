@@ -7,6 +7,7 @@ import '../../../components/avatar/avatar_widget.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/avatar_picker.dart';
+import '../../../models/user_model.dart';
 import '../../auth/state/auth_provider.dart';
 import '../widgets/email_verify_sheet.dart';
 
@@ -42,6 +43,33 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
   void _onEmailChanged() {
     if (mounted) setState(() {});
+  }
+
+  Widget? _emailSuffix(UserModel? user, bool isDark) {
+    if (user == null || user.email.trim().isEmpty) return null;
+    final dirty = _emailController.text.trim() != user.email.trim();
+    if (dirty) return null;
+    if (user.isEmailVerified) {
+      return Tooltip(
+        message: 'Email verified',
+        child: Icon(Icons.verified_rounded, size: 18, color: AppColors.success),
+      );
+    }
+    return TextButton(
+      onPressed: () => EmailVerifySheet.confirmAndShow(
+        context,
+        email: user.email,
+      ),
+      style: TextButton.styleFrom(
+        foregroundColor: AppColors.brand,
+        visualDensity: VisualDensity.compact,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        minimumSize: const Size(0, 32),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+      ),
+      child: const Text('Verify'),
+    );
   }
 
   @override
@@ -242,6 +270,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                     hint: 'your@email.com',
                     icon: Icons.mail_outline_rounded,
                     keyboardType: TextInputType.emailAddress,
+                    // Verification status lives inside the field: a green
+                    // tick once verified, an inline "Verify" action until
+                    // then. Hidden while the address is being edited — the
+                    // code would go to the *saved* address, not this one.
+                    suffix: _emailSuffix(user, isDark),
                     validator: (v) {
                       final s = (v ?? '').trim();
                       if (s.isEmpty) return null; // optional
@@ -250,20 +283,6 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                       return null;
                     },
                   ),
-                  if (user != null && user.email.trim().isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    _EmailVerifyRow(
-                      isDark: isDark,
-                      verified: user.isEmailVerified,
-                      // A changed address must be saved first — verifying
-                      // would otherwise send the code to the old one.
-                      dirty: _emailController.text.trim() != user.email.trim(),
-                      onVerify: () => EmailVerifySheet.confirmAndShow(
-                        context,
-                        email: user.email,
-                      ),
-                    ),
-                  ],
                   const SizedBox(height: 18),
                   _SectionLabel(label: 'PHONE', isDark: isDark),
                   const SizedBox(height: 8),
@@ -366,65 +385,6 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
   }
 }
 
-/// Status line under the email field: Verified / Not verified + Verify
-/// button / "save first" hint when the address has been edited.
-class _EmailVerifyRow extends StatelessWidget {
-  const _EmailVerifyRow({
-    required this.isDark,
-    required this.verified,
-    required this.dirty,
-    required this.onVerify,
-  });
-
-  final bool isDark;
-  final bool verified;
-  final bool dirty;
-  final VoidCallback onVerify;
-
-  @override
-  Widget build(BuildContext context) {
-    if (dirty) {
-      return Text(
-        'Save changes to verify the new address',
-        style: AppTextStyles.caption(isDark)
-            .copyWith(color: AppColors.textSecondary(isDark)),
-      );
-    }
-    final color = verified ? AppColors.success : AppColors.warning;
-    return Row(
-      children: [
-        Icon(
-          verified ? Icons.verified_rounded : Icons.error_outline_rounded,
-          size: 16,
-          color: color,
-        ),
-        const SizedBox(width: 6),
-        Expanded(
-          child: Text(
-            verified ? 'Email verified' : 'Email not verified',
-            style: AppTextStyles.caption(isDark)
-                .copyWith(color: color, fontWeight: FontWeight.w700),
-          ),
-        ),
-        if (!verified)
-          OutlinedButton(
-            onPressed: onVerify,
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.brand,
-              side: const BorderSide(color: AppColors.brand),
-              visualDensity: VisualDensity.compact,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            child: const Text('Verify'),
-          ),
-      ],
-    );
-  }
-}
-
 class _SectionLabel extends StatelessWidget {
   const _SectionLabel({required this.label, required this.isDark});
   final String label;
@@ -455,6 +415,7 @@ class _Field extends StatelessWidget {
     required this.icon,
     this.keyboardType,
     this.validator,
+    this.suffix,
   });
 
   final TextEditingController controller;
@@ -463,6 +424,9 @@ class _Field extends StatelessWidget {
   final IconData icon;
   final TextInputType? keyboardType;
   final String? Function(String?)? validator;
+
+  /// Trailing widget inside the field (status icon / inline action).
+  final Widget? suffix;
 
   @override
   Widget build(BuildContext context) {
@@ -486,6 +450,14 @@ class _Field extends StatelessWidget {
           color: AppColors.textSecondary(isDark),
         ),
         prefixIconConstraints:
+            const BoxConstraints(minWidth: 44, minHeight: 44),
+        suffixIcon: suffix == null
+            ? null
+            : Padding(
+                padding: const EdgeInsets.only(right: 10),
+                child: Center(widthFactor: 1, child: suffix),
+              ),
+        suffixIconConstraints:
             const BoxConstraints(minWidth: 44, minHeight: 44),
         contentPadding: const EdgeInsets.symmetric(vertical: 14),
         border: OutlineInputBorder(

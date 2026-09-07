@@ -8,6 +8,7 @@ import '../../../models/models.dart';
 import '../state/dashboard_provider.dart';
 import '../widgets/aurora_background.dart';
 import '../widgets/dashboard_header.dart';
+import '../../profile/widgets/email_verify_strip.dart';
 import '../widgets/group_mini_card.dart';
 import '../widgets/recent_expenses_section.dart';
 import '../../../components/dialogs/donate_sheet.dart';
@@ -62,6 +63,7 @@ class DashboardScreen extends ConsumerWidget {
         children: [
           _buildHeader(context),
           const SizedBox(height: 24),
+          const EmailVerifyStrip(),
           _buildBalanceCard(context, isDark, data),
           const SizedBox(height: 16),
           _DonateBanner(isDark: isDark),
@@ -89,6 +91,7 @@ class DashboardScreen extends ConsumerWidget {
             children: [
               _buildHeader(context),
               const SizedBox(height: 32),
+              const EmailVerifyStrip(),
               _buildBalanceCard(context, isDark, data),
               const SizedBox(height: 16),
               _DonateBanner(isDark: isDark),
@@ -127,6 +130,7 @@ class DashboardScreen extends ConsumerWidget {
             children: [
               _buildHeader(context),
               const SizedBox(height: 24),
+              const EmailVerifyStrip(),
               _DonateBanner(isDark: isDark),
               const SizedBox(height: 24),
               Row(

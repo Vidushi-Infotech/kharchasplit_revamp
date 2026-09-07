@@ -270,6 +270,9 @@ const columnAdditions = [
   { table: 'users', column: 'preferred_currency', type: "VARCHAR(10) DEFAULT 'INR'" },
   // NULL = not verified. Reset to NULL whenever the email changes.
   { table: 'users', column: 'email_verified_at', type: 'TIMESTAMP' },
+  // Reminder bookkeeping for jobs/emailVerifyReminderJob.js.
+  { table: 'users', column: 'email_verify_reminder_at', type: 'TIMESTAMP' },
+  { table: 'users', column: 'email_verify_reminder_count', type: 'INTEGER DEFAULT 0' },
   { table: 'users', column: 'profile_image_base64', type: 'TEXT' },
 
   // Groups table columns

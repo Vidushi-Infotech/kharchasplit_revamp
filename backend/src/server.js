@@ -13,6 +13,7 @@ import { initFirebase, isFirebaseReady } from './config/firebaseAdmin.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
 import { cache } from './services/cacheService.js';
 import { logger } from './utils/logger.js';
+import { startEmailVerifyReminderScheduler } from './jobs/emailVerifyReminderJob.js';
 
 // Import routes
 import authRoutes from './routes/authRoutes.js';
@@ -220,6 +221,9 @@ const startServer = async () => {
       }, 30_000);
       poolHandle.unref();
     }
+
+    // Daily "verify your email" nudge for active, unverified users.
+    startEmailVerifyReminderScheduler();
 
     server = app.listen(PORT, () => {
       console.log('');

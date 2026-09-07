@@ -380,6 +380,83 @@ EmailService.sendEmailVerificationEmail = async function ({ toEmail, recipientNa
   }
 };
 
+/**
+ * Nudge for active users who never verified their address. No code inside:
+ * the OTP flow is started from the app (Profile → Verify) so the code is
+ * always fresh when it's needed.
+ */
+EmailService.sendEmailVerifyReminderEmail = async function ({ toEmail, recipientName, activityCount = 0, windowDays = 7 }) {
+  if (!toEmail || !toEmail.includes('@')) {
+    return { success: false, error: 'A valid recipient email is required' };
+  }
+  const transporter = getTransporter();
+  if (!transporter) {
+    return { success: false, error: 'SMTP not configured — set SMTP_HOST / SMTP_USER / SMTP_PASSWORD in .env' };
+  }
+  const fromAddr = process.env.SMTP_FROM || 'noreply@kharchasplit.com';
+  const safeRecipient = (recipientName || 'there').trim();
+  const subject = 'Verify your email on KharchaSplit';
+  const usage = activityCount > 0
+    ? `You've been busy on KharchaSplit this week (${activityCount} update${activityCount === 1 ? '' : 's'} in the last ${windowDays} days) — nice.`
+    : `You've been using KharchaSplit recently — nice.`;
+
+  const text = [
+    `Hi ${safeRecipient},`,
+    ``,
+    usage,
+    ``,
+    `One small thing is still pending: this email address isn't verified yet. Verifying takes a minute and makes sure you can always recover your account and receive settlement reminders.`,
+    ``,
+    `How: open the app → Profile → tap "Not verified · Verify" → enter the 6-digit code we send you.`,
+    ``,
+    `If you don't want to verify, you can ignore this — we'll only remind you a couple more times.`,
+    ``,
+    `— The KharchaSplit Team`,
+  ].join('\n');
+
+  const html = `
+<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#f5f7fa;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1a1f2e;">
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="padding:32px 16px;">
+      <tr><td align="center">
+        <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e6e9ef;">
+          <tr><td style="padding:28px 32px;background:#0d9d6f;color:#ffffff;">
+            <div style="font-size:14px;letter-spacing:1.5px;opacity:0.85;">KHARCHASPLIT</div>
+            <div style="font-size:22px;font-weight:700;margin-top:6px;">One small thing left</div>
+          </td></tr>
+          <tr><td style="padding:28px 32px;">
+            <p style="margin:0 0 12px;font-size:16px;">Hi ${escapeHtml(safeRecipient)},</p>
+            <p style="margin:0 0 16px;font-size:15px;line-height:1.55;color:#5a6478;">${escapeHtml(usage)}</p>
+            <p style="margin:0 0 20px;font-size:15px;line-height:1.55;color:#5a6478;">
+              Your email address <strong>${escapeHtml(toEmail)}</strong> isn't verified yet. It takes a minute and
+              makes sure you can always recover your account and receive settlement reminders.
+            </p>
+            <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
+              <tr><td style="padding:14px 18px;background:#f1f8f5;border:1px solid #cfe8db;border-radius:10px;font-size:14px;line-height:1.6;color:#1a1f2e;">
+                Open the app → <strong>Profile</strong> → tap <strong>Not verified · Verify</strong> → enter the 6-digit code.
+              </td></tr>
+            </table>
+            <p style="margin:0;font-size:13px;line-height:1.55;color:#7a8499;">
+              Don't want to verify? Ignore this email — we'll only remind you a couple more times.
+            </p>
+          </td></tr>
+        </table>
+      </td></tr>
+    </table>
+  </body>
+</html>`.trim();
+
+  try {
+    const info = await transporter.sendMail({ from: fromAddr, to: toEmail, subject, text, html });
+    logger.info({ messageId: info.messageId, to: toEmail }, '[EmailService] email verify reminder sent');
+    return { success: true, messageId: info.messageId };
+  } catch (e) {
+    logger.warn({ err: e, to: toEmail }, '[EmailService] email verify reminder send failed');
+    return { success: false, error: e.message || 'SMTP send failed' };
+  }
+};
+
 function escapeHtml(s) {
   return String(s)
     .replace(/&/g, '&amp;')
