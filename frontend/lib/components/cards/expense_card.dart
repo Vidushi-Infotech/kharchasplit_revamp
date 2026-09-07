@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../web/hoverable.dart';
 import '../../core/services/haptic_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
@@ -240,7 +241,15 @@ class ExpenseCard extends ConsumerWidget {
           )
         : card;
 
-    return GestureDetector(onTap: onTap, child: wrapped);
+    // Hoverable is a plain tap target below the web shell breakpoint, so the
+    // touch behaviour here is unchanged; on web it adds the hover tint, the
+    // click cursor and a keyboard focus ring this card never had.
+    return Hoverable(
+      onTap: onTap,
+      borderRadius: 14,
+      hoverElevation: false,
+      child: wrapped,
+    );
   }
 
   /// Parse hex color string to Color

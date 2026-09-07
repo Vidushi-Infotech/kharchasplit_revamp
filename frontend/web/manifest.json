@@ -1,12 +1,12 @@
 {
-    "name": "kharchasplit",
-    "short_name": "kharchasplit",
+    "name": "Kharcha Split",
+    "short_name": "Kharcha Split",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
-    "orientation": "portrait-primary",
+    "background_color": "#EBF2F1",
+    "theme_color": "#1A7A6E",
+    "description": "Split group expenses, settle up, and keep track of who owes what.",
+    "orientation": "any",
     "prefer_related_applications": false,
     "icons": [
         {

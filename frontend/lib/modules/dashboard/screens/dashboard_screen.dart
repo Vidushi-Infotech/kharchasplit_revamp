@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/responsive/content_width.dart';
+import '../../../components/web/responsive_grid.dart';
+import '../../../components/web/web_page.dart';
+import '../../../core/responsive/breakpoints.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../components/components.dart';
@@ -115,38 +119,47 @@ class DashboardScreen extends ConsumerWidget {
     bool isDark,
     DashboardData data,
   ) {
+    // Two columns, not three. Three equal columns squeezed the groups strip
+    // narrower than one card, so it clipped mid-card, while the balance card
+    // left most of its own column empty. Balance and groups now share the
+    // wider column and the expense feed gets its own.
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(32, 32, 32, 110),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1200),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildHeader(context),
-              const SizedBox(height: 24),
-              const EmailVerifyStrip(),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    flex: 1,
-                    child: _buildBalanceCard(context, isDark, data),
+      padding: EdgeInsets.fromLTRB(
+        0,
+        32,
+        0,
+        bottomNavReserve(context.widthTier),
+      ),
+      child: WebContentColumn(
+        width: ContentWidth.wide,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildHeader(context),
+            const SizedBox(height: 24),
+            const EmailVerifyStrip(),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _buildBalanceCard(context, isDark, data),
+                      const SizedBox(height: 28),
+                      _buildRecentGroupsSection(context, isDark, data),
+                    ],
                   ),
-                  const SizedBox(width: 32),
-                  Expanded(
-                    flex: 1,
-                    child: _buildRecentGroupsSection(context, isDark, data),
-                  ),
-                  const SizedBox(width: 32),
-                  Expanded(
-                    flex: 1,
-                    child: _buildRecentExpensesSection(context, isDark, data),
-                  ),
-                ],
-              ),
-            ],
-          ),
+                ),
+                const SizedBox(width: 32),
+                Expanded(
+                  flex: 2,
+                  child: _buildRecentExpensesSection(context, isDark, data),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
@@ -191,6 +204,27 @@ class DashboardScreen extends ConsumerWidget {
           _EmptyGroupsCard(
             isDark: isDark,
             onTap: () => context.pushNamed('create-group'),
+          )
+        // A horizontal scroller inside a vertical page is a touch idiom — on
+        // a pointer device the hidden cards are easy to miss and awkward to
+        // reach. The web tier wraps them into a grid instead.
+        else if (context.widthTier.isWebTier)
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            padding: EdgeInsets.zero,
+            gridDelegate: ResponsiveGrid.delegate(
+              maxItemExtent: 210,
+              itemHeight: 168,
+            ),
+            itemCount: data.recentGroups.length,
+            itemBuilder: (context, index) {
+              final group = data.recentGroups[index];
+              return GroupMiniCard(
+                group: group,
+                onTap: () => context.push('/home/groups/${group.id}'),
+              );
+            },
           )
         else
           SizedBox(

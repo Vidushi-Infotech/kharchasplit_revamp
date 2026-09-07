@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../web/hoverable.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../models/models.dart';
@@ -21,8 +22,10 @@ class GroupCard extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final isPositiveBalance = group.myBalance >= 0;
 
-    return GestureDetector(
+    return Hoverable(
       onTap: onTap,
+      borderRadius: 12,
+      hoverElevation: false,
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -170,8 +173,10 @@ class GroupCardHorizontal extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final isPositiveBalance = group.myBalance >= 0;
 
-    return GestureDetector(
+    return Hoverable(
       onTap: onTap,
+      borderRadius: 12,
+      hoverElevation: false,
       child: Container(
         width: 200,
         padding: const EdgeInsets.all(12),
@@ -251,8 +256,10 @@ class AddGroupCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return GestureDetector(
+    return Hoverable(
       onTap: onTap,
+      borderRadius: 12,
+      hoverElevation: false,
       child: Container(
         width: 200,
         padding: const EdgeInsets.all(12),

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/services/haptic_service.dart';
+import '../../../core/responsive/breakpoints.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../data/contacts/device_contacts_provider.dart';
@@ -38,6 +39,12 @@ Future<List<Contact>> showContactsPicker(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
+    // This sheet is built on DraggableScrollableSheet, which needs a bottom
+    // sheet host — it cannot become a dialog. Capping the width keeps it from
+    // spanning a 1920px window, which is what made it read as a phone sheet.
+    constraints: context.widthTier.isWebTier
+        ? const BoxConstraints(maxWidth: 720)
+        : null,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),

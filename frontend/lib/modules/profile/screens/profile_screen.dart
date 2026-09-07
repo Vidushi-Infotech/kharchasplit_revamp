@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/responsive/content_width.dart';
+import '../../../core/responsive/breakpoints.dart';
 import '../../../components/avatar/avatar_widget.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../components/buttons/donate_heart_button.dart';
@@ -71,7 +73,12 @@ class _Body extends ConsumerWidget {
     return RefreshIndicator(
       onRefresh: () => ref.read(authProvider.notifier).refreshProfile(),
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
+        padding: EdgeInsets.fromLTRB(
+          20,
+          20,
+          20,
+          bottomNavReserve(context.widthTier, compact: 120),
+        ),
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
           _Header(isDark: isDark),

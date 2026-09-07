@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/routing/web_deep_link.dart';
 import 'splash_provider.dart';
 
 class SplashScreen extends ConsumerWidget {
@@ -32,11 +33,20 @@ class SplashScreen extends ConsumerWidget {
             // user who legitimately reached the dashboard could be bounced
             // back to setup on every relaunch.
             final needsSetup = name.isEmpty;
-            context.go(needsSetup ? '/profile-setup' : '/home/dashboard');
+            if (needsSetup) {
+              WebDeepLink.discard();
+              context.go('/profile-setup');
+              return;
+            }
+            // On the web the user may have opened a URL directly; the router
+            // parked it here so auth could resolve first. Hand them back to
+            // it. Always null on mobile.
+            context.go(WebDeepLink.take() ?? '/home/dashboard');
           });
           break;
         case SplashState.unauthenticated:
         case SplashState.ready:
+          WebDeepLink.discard();
           context.go('/onboarding');
           break;
         case SplashState.initializing:

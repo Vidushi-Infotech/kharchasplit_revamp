@@ -76,16 +76,32 @@ class BalanceSummaryCards extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     if (entries.isEmpty) return const SizedBox.shrink();
-    // The tallest card (amount + "₹X pending" sub-line + an action button)
-    // must fit without clipping. iOS font metrics — and Dynamic Type — render
-    // text taller than Android's, which overflowed a fixed height and painted
-    // the overflow stripe (the "red line") behind the first card. Scale the
-    // height with the user's text size, plus a little base headroom, so it
-    // never clips.
-    final textScale = MediaQuery.textScalerOf(
-      context,
-    ).scale(1.0).clamp(1.0, 1.6);
-    final height = 232.0 * textScale;
+
+    // Compact carousel — 3 full cards visible + a peek of the 4th on every
+    // phone we support (~360 px small Androids up to ~430 px iPhone 17
+    // Pro Max). Card width is derived from the available width so the peek
+    // ratio stays consistent across devices and OS versions.
+    //
+    // Math: usable = screen − (horizontalPadding * 2) − (separator * 2.5)
+    //       cardWidth = usable / 3.5   (3 visible + 0.5 peek)
+    // The .clamp keeps a sane floor/ceiling so very narrow / very wide
+    // viewports (foldables, tablets) still look reasonable.
+    const separator = 10.0;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final cardWidth =
+        ((screenWidth - horizontalPadding * 2 - separator * 2.5) / 3.5)
+            .clamp(96.0, 132.0);
+
+    // Height scales with the user's accessibility text size. Clamp tighter
+    // than before so the compact card doesn't grow back to its old size on
+    // a huge font scale. iOS still renders ~5 % taller than Android for
+    // the same scale, but the spec headroom (action button + tight gaps)
+    // absorbs that without clipping. Pending sub-line was removed — it
+    // surfaces inside the settlement detail instead.
+    final textScale =
+        MediaQuery.textScalerOf(context).scale(1.0).clamp(1.0, 1.4);
+    final height = 152.0 * textScale;
+
     return SizedBox(
       height: height,
       child: ListView.separated(
@@ -93,13 +109,16 @@ class BalanceSummaryCards extends StatelessWidget {
         physics: const BouncingScrollPhysics(),
         padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
         itemCount: entries.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 12),
-        itemBuilder: (_, i) => _BalancePersonCard(
-          data: entries[i],
-          isDark: isDark,
-          onTap: () => onTap(entries[i]),
-          onSettle: () => onSettle(entries[i]),
-          onRemind: () => onRemind(entries[i]),
+        separatorBuilder: (_, __) => const SizedBox(width: separator),
+        itemBuilder: (_, i) => SizedBox(
+          width: cardWidth,
+          child: _BalancePersonCard(
+            data: entries[i],
+            isDark: isDark,
+            onTap: () => onTap(entries[i]),
+            onSettle: () => onSettle(entries[i]),
+            onRemind: () => onRemind(entries[i]),
+          ),
         ),
       ),
     );
@@ -169,17 +188,21 @@ class _BalancePersonCard extends StatelessWidget {
       }
     }
 
+    // No hardcoded width here — the parent ListView sizes us via a SizedBox
+    // (3.5 cards visible). Tight 10 px padding + smaller avatar + smaller
+    // type collapses card height ~232 → ~152 without losing the action
+    // affordance. Pending sub-line removed for breathing room — that detail
+    // lives inside the settlement detail screen.
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(14),
         onTap: onTap,
         child: Container(
-          width: 162,
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
             color: AppColors.cardBg(isDark),
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(color: AppColors.divider(isDark)),
           ),
           child: Column(
@@ -191,47 +214,39 @@ class _BalancePersonCard extends StatelessWidget {
                   AvatarWidget(
                     name: data.member.name,
                     imageUrl: data.member.avatarUrl,
-                    radius: 16,
+                    radius: 13,
                   ),
                   const Spacer(),
-                  Container(
-                    width: 24,
-                    height: 24,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: accent.withValues(alpha: 0.14),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      data.settled
-                          ? Icons.check_rounded
-                          : (data.iOweThem
-                                ? Icons.arrow_upward_rounded
-                                : Icons.arrow_downward_rounded),
-                      size: 14,
-                      color: accent,
-                    ),
+                  Icon(
+                    data.settled
+                        ? Icons.check_rounded
+                        : (data.iOweThem
+                              ? Icons.arrow_upward_rounded
+                              : Icons.arrow_downward_rounded),
+                    size: 14,
+                    color: accent,
                   ),
                 ],
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 6),
               Text(
                 firstName,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: AppTextStyles.body1(
                   isDark,
-                ).copyWith(fontWeight: FontWeight.w700, fontSize: 15),
+                ).copyWith(fontWeight: FontWeight.w700, fontSize: 12.5),
               ),
-              const SizedBox(height: 2),
               Text(
                 label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: AppTextStyles.caption(isDark).copyWith(
                   color: AppColors.textSecondary(isDark),
-                  fontSize: 11,
+                  fontSize: 9.5,
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 4),
               Text(
                 data.settled
                     ? 'Settled'
@@ -241,24 +256,11 @@ class _BalancePersonCard extends StatelessWidget {
                 style: AppTextStyles.body1(isDark).copyWith(
                   color: accent,
                   fontWeight: FontWeight.w800,
-                  fontSize: 18,
+                  fontSize: 14,
                 ),
               ),
-              if (showAction && data.pendingAmount > 0.01) ...[
-                const SizedBox(height: 2),
-                Text(
-                  '${CurrencyFormatter.format(data.pendingAmount)} pending',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.caption(isDark).copyWith(
-                    color: AppColors.warning,
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
               if (actionWidget != null) ...[
-                const SizedBox(height: 8),
+                const Spacer(),
                 actionWidget,
               ],
             ],
@@ -285,25 +287,29 @@ class _CardStatus extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 34,
+      height: 26,
       width: double.infinity,
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: color.withValues(alpha: 0.30)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, size: 13, color: color),
-          const SizedBox(width: 5),
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontWeight: FontWeight.w700,
-              fontSize: 12,
+          Icon(icon, size: 11, color: color),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.w700,
+                fontSize: 10.5,
+              ),
             ),
           ),
         ],
@@ -330,24 +336,28 @@ class _CardAction extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: color.withValues(alpha: 0.12),
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(8),
       child: InkWell(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(8),
         onTap: onTap,
         child: SizedBox(
-          height: 34,
+          height: 26,
           width: double.infinity,
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 14, color: color),
-              const SizedBox(width: 5),
-              Text(
-                label,
-                style: TextStyle(
-                  color: color,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 12.5,
+              Icon(icon, size: 12, color: color),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: color,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 11,
+                  ),
                 ),
               ),
             ],

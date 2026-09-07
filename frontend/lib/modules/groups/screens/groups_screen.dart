@@ -4,8 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/responsive/content_width.dart';
 import '../../../components/components.dart';
 import '../../../components/buttons/donate_heart_button.dart';
+import '../../../components/web/responsive_grid.dart';
+import '../../../components/web/web_page.dart';
+import '../../../core/responsive/breakpoints.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../models/group_model.dart';
@@ -101,59 +105,56 @@ class _GroupsScreenState extends ConsumerState<GroupsScreen> {
             final visible = _applyFilters(allGroups);
             return RefreshIndicator(
               onRefresh: () => ref.read(groupsProvider.notifier).refresh(),
-              child: CustomScrollView(
-                slivers: [
-                  SliverPersistentHeader(
-                    pinned: true,
-                    delegate: _CollapsibleHeader(
-                      isDark: isDark,
-                      totalCount: allGroups.length,
-                      filter: _filter,
-                      onFilter: (f) => setState(() => _filter = f),
-                      onCreate: () => context.push('/home/create-group'),
-                      isSearching: _isSearching,
-                      query: _query,
-                      searchController: _searchController,
-                      searchFocus: _searchFocus,
-                      onSearchTap: _openSearch,
-                      onSearchClose: _closeSearch,
-                      onSearchChanged: _onSearchChanged,
-                    ),
-                  ),
-                  if (allGroups.isEmpty)
-                    SliverFillRemaining(
-                      hasScrollBody: false,
-                      child: EmptyStateWidget.noGroups(
-                        onCreateGroup: () => context.push('/home/create-group'),
-                      ),
-                    )
-                  else if (visible.isEmpty)
-                    SliverToBoxAdapter(
-                      child: _EmptyResultsCard(isDark: isDark, query: _query),
-                    )
-                  else
-                    SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 110),
-                      sliver: SliverGrid.builder(
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 2,
-                              mainAxisSpacing: 12,
-                              crossAxisSpacing: 12,
-                              childAspectRatio: 0.95,
-                            ),
-                        itemCount: visible.length,
-                        itemBuilder: (context, index) {
-                          final group = visible[index];
-                          return GroupGridCard(
-                            group: group,
-                            onTap: () =>
-                                context.push('/home/groups/${group.id}'),
-                          );
-                        },
+              child: WebContentColumn(
+                child: CustomScrollView(
+                  slivers: [
+                    SliverPersistentHeader(
+                      pinned: true,
+                      delegate: _CollapsibleHeader(
+                        isDark: isDark,
+                        totalCount: allGroups.length,
+                        filter: _filter,
+                        onFilter: (f) => setState(() => _filter = f),
+                        onCreate: () => context.push('/home/create-group'),
+                        isSearching: _isSearching,
+                        query: _query,
+                        searchController: _searchController,
+                        searchFocus: _searchFocus,
+                        onSearchTap: _openSearch,
+                        onSearchClose: _closeSearch,
+                        onSearchChanged: _onSearchChanged,
                       ),
                     ),
-                ],
+                    if (allGroups.isEmpty)
+                      SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: EmptyStateWidget.noGroups(
+                          onCreateGroup: () =>
+                              context.push('/home/create-group'),
+                        ),
+                      )
+                    else if (visible.isEmpty)
+                      SliverToBoxAdapter(
+                        child: _EmptyResultsCard(isDark: isDark, query: _query),
+                      )
+                    else
+                      SliverPadding(
+                        padding: _gridPadding(context),
+                        sliver: SliverGrid.builder(
+                          gridDelegate: _gridDelegate(context),
+                          itemCount: visible.length,
+                          itemBuilder: (context, index) {
+                            final group = visible[index];
+                            return GroupGridCard(
+                              group: group,
+                              onTap: () =>
+                                  context.push('/home/groups/${group.id}'),
+                            );
+                          },
+                        ),
+                      ),
+                  ],
+                ),
               ),
             );
           },
@@ -161,6 +162,34 @@ class _GroupsScreenState extends ConsumerState<GroupsScreen> {
       ),
     );
   }
+
+  /// Below the web shell breakpoint this is the original two-column grid,
+  /// unchanged. Inside the web shell the column count follows the available
+  /// width instead, so a desktop display shows a row of readable cards rather
+  /// than two stretched to ~800px each.
+  SliverGridDelegate _gridDelegate(BuildContext context) {
+    if (!context.widthTier.isWebTier) {
+      return const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        mainAxisSpacing: 12,
+        crossAxisSpacing: 12,
+        childAspectRatio: 0.95,
+      );
+    }
+    // A fixed height rather than an aspect ratio: cards should not grow taller
+    // every time the window gets wider.
+    return ResponsiveGrid.delegate(
+      maxItemExtent: 280,
+      itemHeight: 176,
+      spacing: 14,
+    );
+  }
+
+  /// The 110px bottom reserve exists for the mobile floating navigation bar.
+  /// The web shell has no such bar, so on desktop it is just dead space.
+  EdgeInsets _gridPadding(BuildContext context) => context.widthTier.isWebTier
+      ? const EdgeInsets.fromLTRB(0, 4, 0, 40)
+      : const EdgeInsets.fromLTRB(20, 12, 20, 110);
 }
 
 class _CollapsibleHeader extends SliverPersistentHeaderDelegate {
@@ -691,7 +720,12 @@ class _EmptyResultsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 32, 20, 110),
+      padding: EdgeInsets.fromLTRB(
+        20,
+        32,
+        20,
+        bottomNavReserve(context.widthTier),
+      ),
       child: Column(
         children: [
           Icon(

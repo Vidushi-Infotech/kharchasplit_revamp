@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../../core/services/image_processor_service.dart';
 import '../../../core/utils/base64_async.dart';
+import '../../../components/web/adaptive_sheet.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../models/group_model.dart';
@@ -27,8 +28,12 @@ class EditGroupSheet extends ConsumerStatefulWidget {
     BuildContext context, {
     required GroupModel group,
   }) {
-    return showModalBottomSheet<GroupModel>(
+    // Bottom sheet on touch, centred dialog on the web shell. The body sizes
+    // itself to its content (no DraggableScrollableSheet), so it transplants
+    // into a dialog cleanly.
+    return showAdaptiveSheet<GroupModel>(
       context: context,
+      size: AdaptiveSheetSize.medium,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       useRootNavigator: true,

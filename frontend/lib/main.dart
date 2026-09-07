@@ -4,6 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -145,9 +146,26 @@ class _KharchaSplitAppState extends ConsumerState<KharchaSplitApp> {
       },
       routerConfig: appRouter,
       debugShowCheckedModeBanner: false,
+      scrollBehavior: const _AppScrollBehavior(),
       // The banner overlays every route by wrapping the router's content.
       builder: (context, child) =>
           OfflineBanner(child: child ?? const SizedBox.shrink()),
     );
   }
+}
+
+/// Lets a mouse drag scroll the page, which Flutter disables by default
+/// outside of touch. Without it, click-and-drag on a desktop browser does
+/// nothing — trackpad and wheel scrolling work either way.
+class _AppScrollBehavior extends MaterialScrollBehavior {
+  const _AppScrollBehavior();
+
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+        PointerDeviceKind.touch,
+        PointerDeviceKind.mouse,
+        PointerDeviceKind.trackpad,
+        PointerDeviceKind.stylus,
+        PointerDeviceKind.invertedStylus,
+      };
 }

@@ -9,6 +9,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../../components/avatar/avatar_widget.dart';
 import '../../../core/services/haptic_service.dart';
+import '../../../components/web/responsive_grid.dart';
+import '../../../components/web/web_form_row.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/base64_async.dart';
@@ -260,11 +262,13 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     );
 
     final screenWidth = MediaQuery.sizeOf(context).width;
+    // Wider on the web tier because the two option cards sit side by side
+    // there rather than stacked — see _buildFormBody.
     final double maxFormWidth = screenWidth < 600
         ? double.infinity
         : screenWidth < 1100
         ? 600
-        : 700;
+        : 920;
     final double horizontalPad = screenWidth < 600
         ? 16
         : screenWidth < 1100
@@ -340,9 +344,17 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       children: [
         _buildHero(isDark, state),
         const SizedBox(height: 28),
-        _buildQuickRows(isDark, state, groupMembers),
-        const SizedBox(height: 20),
-        _buildMoreOptions(isDark, state),
+        // Stacked on touch, side by side on the web tier. Six full-width rows
+        // in a column push the submit button below the fold on a laptop for
+        // no reason — the two cards are independent, so they can share a row.
+        WebFormRow(
+          spacing: 20,
+          flex: const [3, 2],
+          children: [
+            _buildQuickRows(isDark, state, groupMembers),
+            _buildMoreOptions(isDark, state),
+          ],
+        ),
         const SizedBox(height: 24),
       ],
     );
@@ -864,11 +876,13 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   itemCount: categories.length,
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 4,
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 10,
-                    childAspectRatio: 0.95,
+                  // Fixed at 4 columns the tiles stretch to ~170px each once
+                  // the sheet becomes a desktop dialog. Sizing by extent keeps
+                  // them the size they were designed at, at any width.
+                  gridDelegate: ResponsiveGrid.delegate(
+                    maxItemExtent: 96,
+                    aspectRatio: 0.95,
+                    spacing: 10,
                   ),
                   itemBuilder: (_, i) {
                     final c = categories[i];

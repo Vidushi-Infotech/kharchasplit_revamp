@@ -6,8 +6,8 @@
 
 const PRIVACY_POLICY = {
   title: 'Privacy Policy',
-  version: '1.0.0',
-  lastUpdatedAt: '2026-05-14',
+  version: '3.3.3',
+  lastUpdatedAt: '2026-06-24',
   intro:
     'KharchaSplit ("the app") helps you split and track expenses with friends and groups. '
     + 'This policy explains what we collect, why, and how you stay in control.',
@@ -67,8 +67,8 @@ const PRIVACY_POLICY = {
 
 const TERMS = {
   title: 'Terms of Service',
-  version: '1.0.0',
-  lastUpdatedAt: '2026-05-14',
+  version: '3.3.3',
+  lastUpdatedAt: '2026-06-24',
   intro:
     'By using KharchaSplit, you agree to these terms. They are short, written in plain language, and apply to everyone.',
   sections: [

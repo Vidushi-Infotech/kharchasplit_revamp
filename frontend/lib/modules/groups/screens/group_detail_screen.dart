@@ -15,6 +15,9 @@ import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/whatsapp_launcher.dart';
 import '../../../components/buttons/donate_heart_button.dart';
 import '../../../components/components.dart';
+import '../../../components/web/web_page.dart';
+import '../../../core/responsive/breakpoints.dart';
+import '../../../core/responsive/content_width.dart';
 import '../../../data/groups/groups_repository.dart';
 import '../../../data/settlements/settlements_repository.dart';
 import '../../../models/group_model.dart';
@@ -155,24 +158,24 @@ class GroupDetailScreen extends ConsumerWidget {
                     isAdmin,
                   )
                 : screenWidth < 1100
-                    ? _buildStandardLayout(
-                        context,
-                        isDark,
-                        detail,
-                        tab,
-                        ref,
-                        myId,
-                        isAdmin,
-                      )
-                    : _buildLargeLayout(
-                        context,
-                        isDark,
-                        detail,
-                        tab,
-                        ref,
-                        myId,
-                        isAdmin,
-                      );
+                ? _buildStandardLayout(
+                    context,
+                    isDark,
+                    detail,
+                    tab,
+                    ref,
+                    myId,
+                    isAdmin,
+                  )
+                : _buildLargeLayout(
+                    context,
+                    isDark,
+                    detail,
+                    tab,
+                    ref,
+                    myId,
+                    isAdmin,
+                  );
             // Outer RefreshIndicator catches pulls from the very TOP of the
             // header (above the sticky tab bar). Each tab body below also
             // has its own RefreshIndicator so the swipe works from inside
@@ -191,6 +194,9 @@ class GroupDetailScreen extends ConsumerWidget {
         builder: (context, ref, _) {
           final tab = ref.watch(groupTabProvider);
           if (tab != GroupTab.expenses) return const SizedBox.shrink();
+          // On web the create action sits in the content pane header instead;
+          // a floating circle over a desktop layout reads as a phone app.
+          if (context.widthTier.isWebTier) return const SizedBox.shrink();
           return Semantics(
             button: true,
             label: 'Add expense button',
@@ -1052,12 +1058,16 @@ class GroupDetailScreen extends ConsumerWidget {
           child: _buildExpensesList(context, isDark, detail),
         );
       case GroupTab.balances:
+        // _buildBalancesTab returns a ListView.builder (its own scrollable).
+        // Do NOT wrap it in a SingleChildScrollView — that gives the ListView
+        // an unbounded viewport, so the builder never knows how many items to
+        // render and BalanceSummaryCards / SplitLogRow rows silently vanish.
+        // Two nested scrollables also fight over the gesture, killing the
+        // scroll feel. RefreshIndicator attaches directly to the ListView's
+        // scroll position the same way it does for the Expenses tab.
         return RefreshIndicator(
           onRefresh: () => _refreshAllTabs(ref),
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            child: _buildBalancesTab(context, ref, isDark, detail, myId),
-          ),
+          child: _buildBalancesTab(context, ref, isDark, detail, myId),
         );
       case GroupTab.activity:
         // GroupActivityTab has its own RefreshIndicator wired to the same
@@ -1114,60 +1124,93 @@ class GroupDetailScreen extends ConsumerWidget {
     String? myId,
     bool isAdmin,
   ) {
-    // Large: >1100px - generous spacing (32-48px), sidebar + content layout
-    return Row(
-      children: [
-        // Left sidebar - Group info and members (32% width)
-        Expanded(
-          flex: 2,
-          child: SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.all(40),
+    // Large: >1100px — info pane + content pane.
+    //
+    // Capped and centred: without a cap the two panes just keep stretching, so
+    // on a 1920px display the member list and the expense rows end up hundreds
+    // of pixels apart with nothing in between.
+    return WebContentColumn(
+      width: ContentWidth.wide,
+      gutter: false,
+      child: Row(
+        children: [
+          // Left sidebar - Group info and members (32% width)
+          Expanded(
+            flex: 2,
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildLargeHeader(context, isDark, detail),
+                    const SizedBox(height: 32),
+                    _buildMembersSection(
+                      context,
+                      isDark,
+                      detail,
+                      ref,
+                      myId,
+                      isAdmin,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          // Right content area - Tabs + Expenses/Balances (68% width)
+          Expanded(
+            flex: 3,
+            child: Container(
+              decoration: BoxDecoration(
+                color: AppColors.surface(isDark),
+                border: Border(
+                  left: BorderSide(color: AppColors.divider(isDark), width: 1),
+                ),
+              ),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildLargeHeader(context, isDark, detail),
-                  const SizedBox(height: 32),
-                  _buildMembersSection(
-                    context,
-                    isDark,
-                    detail,
-                    ref,
-                    myId,
-                    isAdmin,
+                  Row(
+                    children: [
+                      Expanded(child: _buildTabs(context, isDark, tab, ref)),
+                      // The mobile FAB has no desktop equivalent, so the create
+                      // action lives on the pane it belongs to.
+                      if (tab == GroupTab.expenses)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 16),
+                          child: FilledButton.icon(
+                            onPressed: () => _navigateToAddExpense(context),
+                            icon: const Icon(Icons.add_rounded, size: 18),
+                            label: const Text('Add expense'),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: AppColors.brand,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  // Hairline divider between tabs and content panel — matches
+                  // the compact/standard layouts' sticky bar separator.
+                  Container(
+                    height: 1,
+                    color: AppColors.divider(isDark).withValues(alpha: 0.5),
+                  ),
+                  Expanded(
+                    child: _buildTabBody(
+                      context,
+                      ref,
+                      isDark,
+                      tab,
+                      detail,
+                      myId,
+                    ),
                   ),
                 ],
               ),
             ),
           ),
-        ),
-        // Right content area - Tabs + Expenses/Balances (68% width)
-        Expanded(
-          flex: 3,
-          child: Container(
-            decoration: BoxDecoration(
-              color: AppColors.surface(isDark),
-              border: Border(
-                left: BorderSide(color: AppColors.divider(isDark), width: 1),
-              ),
-            ),
-            child: Column(
-              children: [
-                _buildTabs(context, isDark, tab, ref),
-                // Hairline divider between tabs and content panel — matches
-                // the compact/standard layouts' sticky bar separator.
-                Container(
-                  height: 1,
-                  color: AppColors.divider(isDark).withValues(alpha: 0.5),
-                ),
-                Expanded(
-                  child: _buildTabBody(context, ref, isDark, tab, detail, myId),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 

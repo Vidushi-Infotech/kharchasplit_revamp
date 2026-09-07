@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/responsive/breakpoints.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/currency_formatter.dart';
@@ -15,11 +16,16 @@ class WalletSetupSheet extends ConsumerStatefulWidget {
   const WalletSetupSheet({super.key});
 
   static Future<void> show(BuildContext context) {
+    // DraggableScrollableSheet inside — must stay a bottom sheet. Capped so
+    // it does not stretch across a desktop window.
     return showModalBottomSheet(
       context: context,
       useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
+      constraints: context.widthTier.isWebTier
+          ? const BoxConstraints(maxWidth: 720)
+          : null,
       builder: (_) => const WalletSetupSheet(),
     );
   }

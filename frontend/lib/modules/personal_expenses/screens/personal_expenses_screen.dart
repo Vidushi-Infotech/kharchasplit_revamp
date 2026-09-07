@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/responsive/content_width.dart';
+import '../../../core/responsive/breakpoints.dart';
 import '../../../components/components.dart';
 import '../../../components/buttons/donate_heart_button.dart';
 import '../../../core/theme/app_colors.dart';
@@ -246,7 +248,12 @@ class _Body extends ConsumerWidget {
             )
           else
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 120),
+              padding: EdgeInsets.fromLTRB(
+                20,
+                0,
+                20,
+                bottomNavReserve(context.widthTier, compact: 120),
+              ),
               sliver: SliverList.builder(
                 itemCount: grouped.length,
                 itemBuilder: (context, index) {
@@ -409,7 +416,12 @@ class _NoResultsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
+      padding: EdgeInsets.fromLTRB(
+        20,
+        12,
+        20,
+        bottomNavReserve(context.widthTier, compact: 120),
+      ),
       child: Column(
         children: [
           Icon(
@@ -872,7 +884,12 @@ class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 40, 24, 120),
+      padding: EdgeInsets.fromLTRB(
+        24,
+        40,
+        24,
+        bottomNavReserve(context.widthTier, compact: 120),
+      ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [

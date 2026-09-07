@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
+import '../../../components/web/web_page.dart';
+import '../../../components/web/web_page_header.dart';
+import '../../../core/responsive/breakpoints.dart';
+import '../../../core/responsive/content_width.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/currency_formatter.dart';
@@ -17,13 +21,19 @@ class ReportsScreen extends ConsumerWidget {
     final reportAsync = ref.watch(reportsProvider);
     final period = ref.watch(reportsPeriodProvider);
 
+    final isWeb = context.widthTier.isWebTier;
+
     return Scaffold(
       backgroundColor: AppColors.background(isDark),
-      appBar: AppBar(
-        title: const Text('Reports'),
-        elevation: 0,
-        backgroundColor: AppColors.surface(isDark),
-      ),
+      // The web shell supplies navigation and the page header, so the mobile
+      // title bar would just be a second, emptier one.
+      appBar: isWeb
+          ? null
+          : AppBar(
+              title: const Text('Reports'),
+              elevation: 0,
+              backgroundColor: AppColors.surface(isDark),
+            ),
       body: reportAsync.when(
         loading: () => const ShimmerList(type: ShimmerListType.expense),
         error: (err, stack) => ErrorStateWidget(
@@ -35,8 +45,8 @@ class ReportsScreen extends ConsumerWidget {
           final body = screenWidth < 600
               ? _buildCompactLayout(context, isDark, report, period, ref)
               : screenWidth < 1100
-                  ? _buildStandardLayout(context, isDark, report, period, ref)
-                  : _buildLargeLayout(context, isDark, report, period, ref);
+              ? _buildStandardLayout(context, isDark, report, period, ref)
+              : _buildLargeLayout(context, isDark, report, period, ref);
           return RefreshIndicator(
             onRefresh: () async {
               ref.invalidate(reportsProvider);
@@ -98,6 +108,12 @@ class ReportsScreen extends ConsumerWidget {
     );
   }
 
+  /// Desktop layout.
+  ///
+  /// The previous version used three side-by-side scroll views, each centring
+  /// its own content vertically — which left the cards floating in the middle
+  /// of a mostly empty column. This is one scroll, capped and centred, with
+  /// the charts in a grid that reads top-to-bottom like a report.
   Widget _buildLargeLayout(
     BuildContext context,
     bool isDark,
@@ -105,35 +121,48 @@ class ReportsScreen extends ConsumerWidget {
     ReportsPeriod period,
     WidgetRef ref,
   ) {
-    return Row(
-      children: [
-        Expanded(
-          flex: 1,
-          child: SingleChildScrollView(
-            child: Column(
-              children: [
-                _buildPeriodSelector(context, isDark, period, ref),
-                _buildStatsSummary(context, isDark, report),
-              ],
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      child: WebContentColumn(
+        width: ContentWidth.wide,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: 32),
+            WebPageHeader(
+              title: 'Reports',
+              subtitle: 'Where your money went, and who it went to.',
+              actions: [_buildPeriodSelector(context, isDark, period, ref)],
             ),
-          ),
-        ),
-        Expanded(
-          flex: 2,
-          child: SingleChildScrollView(
-            child: Column(
-              children: [
-                _buildCategoryChart(context, isDark, report),
-                _buildMonthlyChart(context, isDark, report),
-              ],
+            const SizedBox(height: 24),
+            _buildStatsSummary(context, isDark, report),
+            const SizedBox(height: 8),
+            // Charts sit two-up on a wide display and stack below that, so
+            // neither one gets squeezed into an unreadable strip.
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final twoUp = constraints.maxWidth >= 900;
+                final category = _buildCategoryChart(context, isDark, report);
+                final monthly = _buildMonthlyChart(context, isDark, report);
+                if (!twoUp) {
+                  return Column(children: [category, monthly]);
+                }
+                return IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(child: category),
+                      Expanded(child: monthly),
+                    ],
+                  ),
+                );
+              },
             ),
-          ),
+            _buildTopCategories(context, isDark, report),
+            const SizedBox(height: 48),
+          ],
         ),
-        Expanded(
-          flex: 1,
-          child: _buildTopCategories(context, isDark, report),
-        ),
-      ],
+      ),
     );
   }
 
@@ -148,9 +177,30 @@ class ReportsScreen extends ConsumerWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          _buildPeriodChip(context, isDark, 'Month', ReportsPeriod.month, period, ref),
-          _buildPeriodChip(context, isDark, 'Quarter', ReportsPeriod.quarter, period, ref),
-          _buildPeriodChip(context, isDark, 'Year', ReportsPeriod.year, period, ref),
+          _buildPeriodChip(
+            context,
+            isDark,
+            'Month',
+            ReportsPeriod.month,
+            period,
+            ref,
+          ),
+          _buildPeriodChip(
+            context,
+            isDark,
+            'Quarter',
+            ReportsPeriod.quarter,
+            period,
+            ref,
+          ),
+          _buildPeriodChip(
+            context,
+            isDark,
+            'Year',
+            ReportsPeriod.year,
+            period,
+            ref,
+          ),
         ],
       ),
     );
@@ -189,7 +239,11 @@ class ReportsScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildStatsSummary(BuildContext context, bool isDark, ReportsData report) {
+  Widget _buildStatsSummary(
+    BuildContext context,
+    bool isDark,
+    ReportsData report,
+  ) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Column(
@@ -242,42 +296,36 @@ class ReportsScreen extends ConsumerWidget {
       decoration: BoxDecoration(
         color: AppColors.surface(isDark),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: AppColors.divider(isDark),
-          width: 1,
-        ),
+        border: Border.all(color: AppColors.divider(isDark), width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            label,
-            style: AppTextStyles.caption(isDark),
-          ),
+          Text(label, style: AppTextStyles.caption(isDark)),
           const SizedBox(height: 8),
           Text(
             CurrencyFormatter.format(amount),
-            style: AppTextStyles.headline3(isDark).copyWith(
-              color: color,
-              fontSize: 18,
-            ),
+            style: AppTextStyles.headline3(
+              isDark,
+            ).copyWith(color: color, fontSize: 18),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildCategoryChart(BuildContext context, bool isDark, ReportsData report) {
+  Widget _buildCategoryChart(
+    BuildContext context,
+    bool isDark,
+    ReportsData report,
+  ) {
     return Container(
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.surface(isDark),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppColors.divider(isDark),
-          width: 1,
-        ),
+        border: Border.all(color: AppColors.divider(isDark), width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -291,7 +339,10 @@ class ReportsScreen extends ConsumerWidget {
             height: 200,
             child: PieChart(
               PieChartData(
-                sections: _buildPieChartSections(report.categorySpending, isDark),
+                sections: _buildPieChartSections(
+                  report.categorySpending,
+                  isDark,
+                ),
                 centerSpaceRadius: 40,
                 sectionsSpace: 2,
               ),
@@ -326,25 +377,25 @@ class ReportsScreen extends ConsumerWidget {
         value: amount,
         title: '${percentage.toStringAsFixed(0)}%',
         radius: 50,
-        titleStyle: AppTextStyles.caption(isDark).copyWith(
-          color: Colors.white,
-          fontWeight: FontWeight.bold,
-        ),
+        titleStyle: AppTextStyles.caption(
+          isDark,
+        ).copyWith(color: Colors.white, fontWeight: FontWeight.bold),
       );
     }).toList();
   }
 
-  Widget _buildMonthlyChart(BuildContext context, bool isDark, ReportsData report) {
+  Widget _buildMonthlyChart(
+    BuildContext context,
+    bool isDark,
+    ReportsData report,
+  ) {
     return Container(
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.surface(isDark),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppColors.divider(isDark),
-          width: 1,
-        ),
+        border: Border.all(color: AppColors.divider(isDark), width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -413,17 +464,18 @@ class ReportsScreen extends ConsumerWidget {
     }).toList();
   }
 
-  Widget _buildTopCategories(BuildContext context, bool isDark, ReportsData report) {
+  Widget _buildTopCategories(
+    BuildContext context,
+    bool isDark,
+    ReportsData report,
+  ) {
     return Container(
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.surface(isDark),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppColors.divider(isDark),
-          width: 1,
-        ),
+        border: Border.all(color: AppColors.divider(isDark), width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -438,10 +490,7 @@ class ReportsScreen extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Row(
                 children: [
-                  Text(
-                    category.emoji,
-                    style: const TextStyle(fontSize: 20),
-                  ),
+                  Text(category.emoji, style: const TextStyle(fontSize: 20)),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Column(
@@ -461,7 +510,7 @@ class ReportsScreen extends ConsumerWidget {
                           child: FractionallySizedBox(
                             widthFactor: report.totalSpending > 0
                                 ? (category.amount / report.totalSpending)
-                                    .clamp(0.0, 1.0)
+                                      .clamp(0.0, 1.0)
                                 : 0,
                             alignment: Alignment.centerLeft,
                             child: Container(
@@ -478,10 +527,9 @@ class ReportsScreen extends ConsumerWidget {
                   const SizedBox(width: 8),
                   Text(
                     CurrencyFormatter.compact(category.amount),
-                    style: AppTextStyles.body2(isDark).copyWith(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: AppTextStyles.body2(
+                      isDark,
+                    ).copyWith(fontSize: 13, fontWeight: FontWeight.w600),
                   ),
                 ],
               ),
