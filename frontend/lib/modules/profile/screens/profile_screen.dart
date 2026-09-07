@@ -15,6 +15,10 @@ import '../../../core/theme/theme_provider.dart';
 import '../../../models/user_model.dart';
 import '../../auth/state/auth_provider.dart';
 
+/// Default-currency preference row on the profile screen. See the
+/// comment at the use site for why it is off.
+const bool _kShowDefaultCurrency = false;
+
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 
@@ -102,6 +106,11 @@ class _Body extends ConsumerWidget {
           const SizedBox(height: 8),
           _ThemePicker(isDark: isDark),
           const SizedBox(height: 20),
+          // Hidden until the preference is actually honoured by the create-
+          // group / add-expense flows; today it saves to the backend but
+          // nothing reads it, so showing it would mislead. Flip the flag to
+          // bring the section back — the picker and update path still work.
+          if (_kShowDefaultCurrency) ...[
           _SectionLabel(label: 'PREFERENCES', isDark: isDark),
           const SizedBox(height: 8),
           _MenuGroup(
@@ -139,6 +148,7 @@ class _Body extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 20),
+          ],
           _SectionLabel(label: 'SUPPORT', isDark: isDark),
           const SizedBox(height: 8),
           _MenuGroup(
