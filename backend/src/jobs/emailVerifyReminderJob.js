@@ -125,6 +125,14 @@ export function startEmailVerifyReminderScheduler() {
     logger.info('[emailVerifyReminder] disabled via EMAIL_VERIFY_REMINDERS=false');
     return () => {};
   }
+  // PM2 cluster mode (ecosystem.config.cjs: instances 'max') starts one
+  // process per CPU. Only instance 0 may run the scheduler, otherwise every
+  // worker would send the same reminders on the same day.
+  const instance = process.env.NODE_APP_INSTANCE ?? process.env.pm_id;
+  if (instance !== undefined && String(instance) !== '0') {
+    logger.info({ instance }, '[emailVerifyReminder] not instance 0 — scheduler skipped');
+    return () => {};
+  }
   const tick = async () => {
     const now = new Date();
     const today = now.toISOString().slice(0, 10);
