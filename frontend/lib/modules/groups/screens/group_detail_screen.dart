@@ -7,12 +7,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../widgets/edit_group_sheet.dart';
 import '../widgets/group_cover_thumb.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/currency_formatter.dart';
+import '../../../core/utils/whatsapp_launcher.dart';
 import '../../../components/buttons/donate_heart_button.dart';
 import '../../../components/components.dart';
 import '../../../data/groups/groups_repository.dart';
@@ -455,15 +455,21 @@ class GroupDetailScreen extends ConsumerWidget {
                         label: 'Invite on WhatsApp',
                         color: const Color(0xFF25D366),
                         isDark: isDark,
-                        onTap: () {
+                        onTap: () async {
                           Navigator.pop(sheetCtx);
-                          final phone = member.phone
-                              .replaceAll('+', '')
-                              .replaceAll(' ', '');
-                          final encoded = Uri.encodeComponent(_kInviteMessage);
-                          launchUrl(
-                            Uri.parse('https://wa.me/$phone?text=$encoded'),
-                            mode: LaunchMode.externalApplication,
+                          // Opens WhatsApp directly in this member's chat with
+                          // the invite pre-filled; the user just taps Send.
+                          final ok = await openWhatsAppChat(
+                            phone: member.phone,
+                            message: _kInviteMessage,
+                          );
+                          if (ok || !context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Could not open WhatsApp. Is it installed?',
+                              ),
+                            ),
                           );
                         },
                       ),

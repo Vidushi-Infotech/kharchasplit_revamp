@@ -63,5 +63,14 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+        <!-- Package visibility (Android 11+): needed so url_launcher can
+             open the whatsapp:// scheme directly into a chat (member invite)
+             instead of bouncing through the wa.me web page. -->
+        <package android:name="com.whatsapp"/>
+        <package android:name="com.whatsapp.w4b"/>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="whatsapp"/>
+        </intent>
     </queries>
 </manifest>
