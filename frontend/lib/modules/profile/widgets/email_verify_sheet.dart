@@ -31,6 +31,38 @@ class EmailVerifySheet extends ConsumerStatefulWidget {
     );
   }
 
+  /// Asks before sending anything. Opening the sheet fires an email, so the
+  /// tap on the profile chip should not do that silently — the alert tells
+  /// the user exactly what is about to happen and where the code will go.
+  static Future<void> confirmAndShow(
+    BuildContext context, {
+    required String email,
+  }) async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Verify your email'),
+        content: Text(
+          'We\'ll send a 6-digit verification code to\n$email',
+          style: AppTextStyles.body2(isDark),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Send code'),
+          ),
+        ],
+      ),
+    );
+    if (go != true || !context.mounted) return;
+    await show(context, email: email);
+  }
+
   @override
   ConsumerState<EmailVerifySheet> createState() => _EmailVerifySheetState();
 }

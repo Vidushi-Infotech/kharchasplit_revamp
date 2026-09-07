@@ -81,7 +81,10 @@ class _Body extends ConsumerWidget {
             isDark: isDark,
             onVerifyEmail: verifyEmail.isEmpty
                 ? null
-                : () => EmailVerifySheet.show(context, email: verifyEmail),
+                : () => EmailVerifySheet.confirmAndShow(
+                      context,
+                      email: verifyEmail,
+                    ),
           ),
           const SizedBox(height: 24),
           _SectionLabel(label: 'ACCOUNT', isDark: isDark),
