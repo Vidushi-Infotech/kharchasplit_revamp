@@ -8,6 +8,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/avatar_picker.dart';
 import '../../auth/state/auth_provider.dart';
+import '../widgets/email_verify_sheet.dart';
 
 class EditProfileScreen extends ConsumerStatefulWidget {
   const EditProfileScreen({super.key});
@@ -34,11 +35,19 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     final user = ref.read(authProvider).user;
     _nameController = TextEditingController(text: user?.name ?? '');
     _emailController = TextEditingController(text: user?.email ?? '');
+    // The verify row below the field depends on whether the typed address
+    // still matches the saved one.
+    _emailController.addListener(_onEmailChanged);
+  }
+
+  void _onEmailChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
     _nameController.dispose();
+    _emailController.removeListener(_onEmailChanged);
     _emailController.dispose();
     super.dispose();
   }
@@ -241,6 +250,20 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                       return null;
                     },
                   ),
+                  if (user != null && user.email.trim().isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    _EmailVerifyRow(
+                      isDark: isDark,
+                      verified: user.isEmailVerified,
+                      // A changed address must be saved first — verifying
+                      // would otherwise send the code to the old one.
+                      dirty: _emailController.text.trim() != user.email.trim(),
+                      onVerify: () => EmailVerifySheet.confirmAndShow(
+                        context,
+                        email: user.email,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 18),
                   _SectionLabel(label: 'PHONE', isDark: isDark),
                   const SizedBox(height: 8),
@@ -339,6 +362,65 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Status line under the email field: Verified / Not verified + Verify
+/// button / "save first" hint when the address has been edited.
+class _EmailVerifyRow extends StatelessWidget {
+  const _EmailVerifyRow({
+    required this.isDark,
+    required this.verified,
+    required this.dirty,
+    required this.onVerify,
+  });
+
+  final bool isDark;
+  final bool verified;
+  final bool dirty;
+  final VoidCallback onVerify;
+
+  @override
+  Widget build(BuildContext context) {
+    if (dirty) {
+      return Text(
+        'Save changes to verify the new address',
+        style: AppTextStyles.caption(isDark)
+            .copyWith(color: AppColors.textSecondary(isDark)),
+      );
+    }
+    final color = verified ? AppColors.success : AppColors.warning;
+    return Row(
+      children: [
+        Icon(
+          verified ? Icons.verified_rounded : Icons.error_outline_rounded,
+          size: 16,
+          color: color,
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            verified ? 'Email verified' : 'Email not verified',
+            style: AppTextStyles.caption(isDark)
+                .copyWith(color: color, fontWeight: FontWeight.w700),
+          ),
+        ),
+        if (!verified)
+          OutlinedButton(
+            onPressed: onVerify,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.brand,
+              side: const BorderSide(color: AppColors.brand),
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: const Text('Verify'),
+          ),
+      ],
     );
   }
 }
