@@ -70,6 +70,11 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
     super.dispose();
   }
 
+  /// A group needs at least one other member — splitting with nobody is
+  /// meaningless, and every such group used to be created empty and then
+  /// abandoned. The sticky Create button stays disabled until one is picked.
+  bool get _hasMembers => _selectedContacts.isNotEmpty;
+
   void _onNameChanged() {
     final isValid = _groupNameController.text.trim().isNotEmpty;
     if (isValid != _isNameValid) {
@@ -161,6 +166,14 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
     // but the flag protects against any other path (Enter key, semantics
     // action, hot reload triggering another tap event).
     if (_isCreating) return;
+    if (!_hasMembers) {
+      // Button is disabled in this state, but guard the other entry paths.
+      HapticService.instance.error();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Add at least one member to create a group.')),
+      );
+      return;
+    }
     setState(() => _isCreating = true);
 
     final name = _groupNameController.text.trim();
@@ -308,7 +321,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
             ),
             _StickyCreateBar(
               isDark: isDark,
-              enabled: _isNameValid && !_isCreating,
+              enabled: _isNameValid && _hasMembers && !_isCreating,
               loading: _isCreating,
               horizontalPad: horizontalPad,
               maxFormWidth: maxFormWidth,
@@ -570,7 +583,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          'Pick from your contacts',
+                          'Required · pick at least one from your contacts',
                           style: AppTextStyles.caption(isDark).copyWith(
                             color: AppColors.textSecondary(isDark),
                             fontSize: 12,
