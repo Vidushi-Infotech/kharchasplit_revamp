@@ -36,15 +36,29 @@ const runHour = () => {
  * Users who should get a reminder right now.
  */
 export async function findReminderCandidates() {
+  // "Activity" = anything the user *did*: expenses they paid for, settlements
+  // they initiated, and whatever the app logged to `activities` with them as
+  // the actor. Unioned so the nudge still works if one of those signals is
+  // missing on a given deployment (e.g. activity logging is best-effort).
   const result = await query(
-    `SELECT u.id, u.name, u.email,
+    `WITH recent AS (
+       SELECT paid_by AS user_id, created_at
+         FROM expenses
+        WHERE deleted_at IS NULL AND created_at > NOW() - ($1 || ' days')::interval
+       UNION ALL
+       SELECT from_user_id, created_at
+         FROM settlements
+        WHERE created_at > NOW() - ($1 || ' days')::interval
+       UNION ALL
+       SELECT user_id, created_at
+         FROM activities
+        WHERE deleted_at IS NULL AND created_at > NOW() - ($1 || ' days')::interval
+     )
+     SELECT u.id, u.name, u.email,
             COALESCE(u.email_verify_reminder_count, 0) AS reminder_count,
-            COUNT(a.id)::int AS recent_activity
+            COUNT(r.user_id)::int AS recent_activity
        FROM users u
-       JOIN activities a
-         ON a.user_id = u.id
-        AND a.deleted_at IS NULL
-        AND a.created_at > NOW() - ($1 || ' days')::interval
+       JOIN recent r ON r.user_id = u.id
       WHERE u.deleted_at IS NULL
         AND u.email IS NOT NULL AND u.email <> ''
         AND u.email_verified_at IS NULL
@@ -53,8 +67,8 @@ export async function findReminderCandidates() {
              OR u.email_verify_reminder_at < NOW() - ($2 || ' days')::interval)
         AND COALESCE(u.email_verify_reminder_count, 0) < $3
       GROUP BY u.id
-     HAVING COUNT(a.id) >= $4
-      ORDER BY COUNT(a.id) DESC
+     HAVING COUNT(r.user_id) >= $4
+      ORDER BY COUNT(r.user_id) DESC
       LIMIT 500`,
     [String(ACTIVITY_WINDOW_DAYS), String(REMINDER_COOLDOWN_DAYS), MAX_REMINDERS, minActivity()],
   );
