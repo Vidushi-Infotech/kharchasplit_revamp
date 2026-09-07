@@ -75,6 +75,26 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
   /// abandoned. The sticky Create button stays disabled until one is picked.
   bool get _hasMembers => _selectedContacts.isNotEmpty;
 
+  /// What the Create button should say while it's disabled — the first
+  /// thing the user still has to do, in form order.
+  String? _missingFieldHint() {
+    if (_isNameValid && _hasMembers) return null;
+    if (!_isNameValid && !_hasMembers) return 'Enter group name and add members';
+    if (!_isNameValid) return 'Enter group name';
+    return 'Add at least one member';
+  }
+
+  /// Tapping the disabled bar takes the user to the missing step rather
+  /// than doing nothing: focus the name field, or open the contacts picker.
+  void _onDisabledCreateTap() {
+    HapticService.instance.error();
+    if (!_isNameValid) {
+      _groupNameFocus.requestFocus();
+      return;
+    }
+    if (!_hasMembers) _pickContacts();
+  }
+
   void _onNameChanged() {
     final isValid = _groupNameController.text.trim().isNotEmpty;
     if (isValid != _isNameValid) {
@@ -325,7 +345,12 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
               loading: _isCreating,
               horizontalPad: horizontalPad,
               maxFormWidth: maxFormWidth,
+              // Same pattern as the add-expense bar: while disabled the
+              // button itself says what's still missing instead of just
+              // fading out, and tapping it jumps to that step.
+              disabledHint: _missingFieldHint(),
               onTap: _createGroup,
+              onDisabledTap: _onDisabledCreateTap,
             ),
           ],
         ),
@@ -828,6 +853,8 @@ class _StickyCreateBar extends StatelessWidget {
     required this.horizontalPad,
     required this.maxFormWidth,
     required this.onTap,
+    this.disabledHint,
+    this.onDisabledTap,
   });
 
   final bool isDark;
@@ -836,6 +863,14 @@ class _StickyCreateBar extends StatelessWidget {
   final double horizontalPad;
   final double maxFormWidth;
   final VoidCallback onTap;
+
+  /// Shown in place of the label while [enabled] is false (and not
+  /// loading) — tells the user what's still required.
+  final String? disabledHint;
+
+  /// Called on a tap while disabled (not loading), so the bar can lead the
+  /// user to the missing step instead of silently ignoring the tap.
+  final VoidCallback? onDisabledTap;
 
   @override
   Widget build(BuildContext context) {
@@ -865,11 +900,11 @@ class _StickyCreateBar extends StatelessWidget {
                 enabled: enabled,
                 label: 'Create group',
                 child: Opacity(
-                  opacity: (enabled || loading) ? 1 : 0.45,
+                  opacity: (enabled || loading) ? 1 : 0.6,
                   child: Material(
                     color: Colors.transparent,
                     child: InkWell(
-                      onTap: enabled ? onTap : null,
+                      onTap: enabled ? onTap : (loading ? null : onDisabledTap),
                       borderRadius: BorderRadius.circular(14),
                       child: Ink(
                         height: 52,
@@ -908,19 +943,29 @@ class _StickyCreateBar extends StatelessWidget {
                                 ),
                               )
                             else
-                              const Icon(
-                                Icons.check_rounded,
+                              Icon(
+                                enabled
+                                    ? Icons.check_rounded
+                                    : Icons.info_outline_rounded,
                                 size: 18,
                                 color: Colors.white,
                               ),
                             const SizedBox(width: 8),
-                            Text(
-                              loading ? 'Creating…' : 'Create group',
-                              style: AppTextStyles.body1(isDark).copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 15,
-                                letterSpacing: -0.1,
+                            Flexible(
+                              child: Text(
+                                loading
+                                    ? 'Creating…'
+                                    : (enabled
+                                        ? 'Create group'
+                                        : (disabledHint ?? 'Create group')),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTextStyles.body1(isDark).copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 15,
+                                  letterSpacing: -0.1,
+                                ),
                               ),
                             ),
                           ],
