@@ -54,11 +54,15 @@ void main() async {
           return true;
         };
 
+        // Only the background-handler *registration* belongs before
+        // runApp — it's synchronous and cheap. The rest of push setup
+        // (local-notification plugin, permission prompt, initial-message
+        // lookup) is deferred until after the first frame; see
+        // _KharchaSplitAppState.initState.
         FirebaseMessaging.onBackgroundMessage(
             firebaseMessagingBackgroundHandler);
-        await PushService.instance.init();
       } catch (e, st) {
-        AppLogger.error('Firebase / push init failed',
+        AppLogger.error('Firebase init failed',
             tag: 'main', error: e, stackTrace: st);
       }
     }
@@ -90,15 +94,27 @@ class _KharchaSplitAppState extends ConsumerState<KharchaSplitApp> {
   void initState() {
     super.initState();
     // Route notification taps to the appropriate screen via go_router.
+    // Subscribed BEFORE PushService.init() runs so a cold-start tap
+    // (getInitialMessage) is never emitted into an empty stream.
     if (PushService.isSupportedPlatform) {
       _notifTapSub = PushService.instance.onMessageTap.listen((message) {
         NotificationRouter.handleTap(appRouter, message);
       });
     }
-    // Kick off the in-app update check once the first frame is rendered so
-    // the navigator key is attached and dialogs can be shown. Failures are
-    // swallowed inside the service — version gating is best-effort.
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Push setup runs after the first frame. Doing it in main() blocked
+      // the very first paint behind the Android 13+ / iOS notification
+      // permission dialog, so the app looked frozen on launch. Failures are
+      // logged and ignored — push is not required for the app to work.
+      if (PushService.isSupportedPlatform) {
+        unawaited(PushService.instance.init().catchError((e, st) {
+          AppLogger.error('Push init failed',
+              tag: 'main', error: e, stackTrace: st);
+        }));
+      }
+      // Kick off the in-app update check once the first frame is rendered
+      // so the navigator key is attached and dialogs can be shown. Failures
+      // are swallowed inside the service — version gating is best-effort.
       ref.read(updateServiceProvider).checkForUpdate(
             navigatorKey: appRouter.routerDelegate.navigatorKey,
           );

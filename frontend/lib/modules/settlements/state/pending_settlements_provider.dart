@@ -15,7 +15,7 @@ final pendingIncomingSettlementsProvider =
   final me = ref.watch(authProvider).user;
   if (me == null) return const [];
   final all =
-      await ref.read(settlementsRepositoryProvider).listForGroup(groupId);
+      await ref.read(settlementsRepositoryProvider).listAllForGroup(groupId);
   return all
       .where((s) =>
           s.status == SettlementStatus.pending && s.toUser.id == me.id)
@@ -30,7 +30,7 @@ final pendingOutgoingSettlementsProvider =
   final me = ref.watch(authProvider).user;
   if (me == null) return const [];
   final all =
-      await ref.read(settlementsRepositoryProvider).listForGroup(groupId);
+      await ref.read(settlementsRepositoryProvider).listAllForGroup(groupId);
   return all
       .where((s) =>
           s.status == SettlementStatus.pending && s.fromUser.id == me.id)

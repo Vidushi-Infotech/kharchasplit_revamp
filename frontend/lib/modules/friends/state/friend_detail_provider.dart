@@ -58,10 +58,11 @@ final friendDetailProvider =
         createdAt: DateTime.now(),
       );
 
-  // Fetch expenses for every shared group in parallel.
+  // Fetch ALL expenses for every shared group in parallel — the balance
+  // below is summed client-side, so a truncated page would be wrong.
   final repo = ref.read(expensesRepositoryProvider);
   final perGroup = await Future.wait(
-    sharedGroups.map((g) => repo.listForGroup(g.id)),
+    sharedGroups.map((g) => repo.listAllForGroup(g.id)),
   );
 
   // Keep only expenses that involve both me and the friend.

@@ -35,11 +35,13 @@ final groupDetailProvider = FutureProvider.family<GroupDetail, String>((
   final expensesRepo = ref.read(expensesRepositoryProvider);
   final settlementsRepo = ref.read(settlementsRepositoryProvider);
 
-  // Fetch group + expenses + settlements in parallel.
+  // Fetch group + expenses + settlements in parallel. Balances below are
+  // computed client-side, so we need EVERY expense and settlement — a single
+  // page would silently produce wrong totals past the page size.
   final results = await Future.wait([
     groupsRepo.getById(groupId),
-    expensesRepo.listForGroup(groupId),
-    settlementsRepo.listForGroup(groupId),
+    expensesRepo.listAllForGroup(groupId),
+    settlementsRepo.listAllForGroup(groupId),
   ]);
 
   final group = results[0] as GroupModel;

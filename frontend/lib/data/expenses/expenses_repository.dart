@@ -43,10 +43,41 @@ class ExpensesRepository {
   ExpensesRepository(this._client);
   final ApiClient _client;
 
+  /// One page of expenses. Prefer [listAllForGroup] whenever the result
+  /// feeds a balance calculation — a single page silently truncates the maths
+  /// once a group crosses [limit] expenses.
   Future<List<ExpenseModel>> listForGroup(
     String groupId, {
     int page = 1,
     int limit = 50,
+  }) async {
+    final result = await _fetchPage(groupId, page: page, limit: limit);
+    return result.items;
+  }
+
+  /// Every expense in the group, walking `pagination.hasMore` until the
+  /// backend reports nothing left. Bounded by [_maxPages] as a safety net
+  /// against a misbehaving server that always says `hasMore: true`.
+  Future<List<ExpenseModel>> listAllForGroup(
+    String groupId, {
+    int pageSize = _defaultPageSize,
+  }) async {
+    final out = <ExpenseModel>[];
+    for (var page = 1; page <= _maxPages; page++) {
+      final result = await _fetchPage(groupId, page: page, limit: pageSize);
+      out.addAll(result.items);
+      if (!result.hasMore) break;
+    }
+    return out;
+  }
+
+  static const int _defaultPageSize = 100;
+  static const int _maxPages = 50;
+
+  Future<({List<ExpenseModel> items, bool hasMore})> _fetchPage(
+    String groupId, {
+    required int page,
+    required int limit,
   }) async {
     final res = await _client.dio.get(
       '/expenses',
@@ -56,11 +87,27 @@ class ExpensesRepository {
         'limit': limit,
       },
     );
-    final data = _ensureList(res);
-    return data
+    final body = _ensureSuccess(res);
+    final data = body['data'];
+    if (data is! List) {
+      throw ExpensesApiException('Malformed response — expected list in data');
+    }
+    final items = data
         .whereType<Map<String, dynamic>>()
         .map(ExpenseModel.fromJson)
         .toList();
+    return (items: items, hasMore: _readHasMore(body, items.length, limit));
+  }
+
+  /// Reads `pagination.hasMore` from the envelope. Falls back to "page was
+  /// full" if the backend didn't send pagination metadata, so an older server
+  /// still terminates the loop correctly.
+  static bool _readHasMore(Map<String, dynamic> body, int received, int limit) {
+    final pagination = body['pagination'];
+    if (pagination is Map && pagination['hasMore'] is bool) {
+      return pagination['hasMore'] as bool;
+    }
+    return received >= limit;
   }
 
   Future<ExpenseModel> getById(String expenseId) async {
@@ -176,15 +223,6 @@ class ExpensesRepository {
     final data = body['data'];
     if (data is! Map<String, dynamic>) {
       throw ExpensesApiException('Malformed response — expected object in data');
-    }
-    return data;
-  }
-
-  List<dynamic> _ensureList(Response res) {
-    final body = _ensureSuccess(res);
-    final data = body['data'];
-    if (data is! List) {
-      throw ExpensesApiException('Malformed response — expected list in data');
     }
     return data;
   }
