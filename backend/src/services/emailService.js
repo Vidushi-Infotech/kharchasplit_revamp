@@ -457,6 +457,27 @@ EmailService.sendEmailVerifyReminderEmail = async function ({ toEmail, recipient
   }
 };
 
+/**
+ * Send an already-rendered email. Used by EmailOutbox for every queued
+ * notification email (templates live in emailTemplates.js).
+ */
+EmailService.sendRaw = async function ({ to, subject, text, html }) {
+  if (!to || !to.includes('@')) {
+    return { success: false, error: 'A valid recipient email is required' };
+  }
+  const transporter = getTransporter();
+  if (!transporter) {
+    return { success: false, error: 'SMTP not configured — set SMTP_HOST / SMTP_USER / SMTP_PASSWORD in .env' };
+  }
+  const fromAddr = process.env.SMTP_FROM || 'noreply@kharchasplit.com';
+  try {
+    const info = await transporter.sendMail({ from: fromAddr, to, subject, text, html });
+    return { success: true, messageId: info.messageId };
+  } catch (e) {
+    return { success: false, error: e.message || 'SMTP send failed' };
+  }
+};
+
 function escapeHtml(s) {
   return String(s)
     .replace(/&/g, '&amp;')

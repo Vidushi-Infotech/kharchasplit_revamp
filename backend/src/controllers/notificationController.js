@@ -15,7 +15,7 @@ const PREF_COLUMNS = [
 
 const DEFAULT_PREFS = {
   push_enabled: true,
-  email_enabled: false,
+  email_enabled: true,
   new_expense: true,
   group_invite: true,
   payment_received: true,

@@ -570,6 +570,7 @@ class Group {
         addedGroups.push({
           groupId: invite.group_id,
           groupName: invite.group_name,
+          memberName: name || invite.name,
         });
       }
 

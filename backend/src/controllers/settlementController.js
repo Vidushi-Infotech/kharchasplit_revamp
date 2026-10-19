@@ -70,16 +70,6 @@ const createSettlement = async (req, res, next) => {
       });
     }
 
-    // Check for existing pending settlement between same users in same group
-    const existingPending = await Settlement.findPendingBetweenUsers(groupId, fromUserId, toUserId);
-    if (existingPending) {
-      return res.status(409).json({
-        success: false,
-        error: 'A pending settlement already exists between these users. Please wait for confirmation or cancel the existing one.',
-        existingSettlement: existingPending,
-      });
-    }
-
     // Fetch group + both users in parallel (was 3 sequential queries)
     const [group, usersMap] = await Promise.all([
       Group.findById(groupId),
@@ -88,6 +78,8 @@ const createSettlement = async (req, res, next) => {
     const fromUser = usersMap[fromUserId];
     const toUser = usersMap[toUserId];
 
+    // Settles immediately — no receiver confirmation step. The receiver is
+    // informed via push + email below.
     const settlement = await Settlement.create({
       groupId,
       fromUserId,
@@ -95,14 +87,15 @@ const createSettlement = async (req, res, next) => {
       amount,
       currency,
       notes,
+      status: 'paid',
     });
 
     // Invalidate settlement list cache + balance cache (settlements affect
     // the simplified-debt math).
     cache.invalidate(`group:${groupId}:settlements`);
     cache.invalidate(`group:${groupId}:balances`);
-    // Bust every group member's dashboard cache so the next homescreen load
-    // reflects this new settlement (pending → won't count yet, but listed).
+    // Bust every group member's dashboard cache — the settlement counts
+    // towards balances right away.
     await GroupService.invalidateMemberDashboards(groupId);
 
     // Log activity - use group currency as default instead of USD
@@ -119,15 +112,15 @@ const createSettlement = async (req, res, next) => {
       settlementCurrency
     );
 
-    // Push notify the recipient (and others in group) about the pending
-    // settlement. Don't fail the request if push fails.
+    // Notify only the recipient (inbox + push + email, per their prefs).
+    // Don't fail the request if notifying fails.
     try {
       await NotificationService.notifySettlementCreated(
         groupId,
         { ...settlement, currency: settlementCurrency },
         fromUser.name,
         toUser.name,
-        req.user.id,
+        { groupName: group.name },
       );
     } catch (notifError) {
       console.error('[SettlementController] notify failed:', notifError);
@@ -278,6 +271,27 @@ const deleteSettlement = async (req, res, next) => {
     cache.invalidate(`group:${settlement.group_id}:settlements`);
     cache.invalidate(`group:${settlement.group_id}:balances`);
     await GroupService.invalidateMemberDashboards(settlement.group_id);
+
+    // Settlements count immediately, so removing one silently would put
+    // money back on someone's balance without them knowing — tell them.
+    // (Legacy 'pending' rows never counted, so cancelling one is silent.)
+    if (settlement.status !== 'pending') {
+      try {
+        const [group, actor] = await Promise.all([
+          Group.findById(settlement.group_id),
+          User.findById(req.user.id),
+        ]);
+        await NotificationService.notifySettlementDeleted(
+          settlement.group_id,
+          group?.name || 'your group',
+          settlement,
+          req.user.id,
+          actor?.name || 'A group member',
+        );
+      } catch (notifError) {
+        console.error('[SettlementController] delete notify failed:', notifError);
+      }
+    }
 
     res.json({
       success: true,

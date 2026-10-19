@@ -215,7 +215,7 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
 CREATE TABLE IF NOT EXISTS notification_prefs (
   user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   push_enabled BOOLEAN NOT NULL DEFAULT TRUE,
-  email_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+  email_enabled BOOLEAN NOT NULL DEFAULT TRUE,
   new_expense BOOLEAN NOT NULL DEFAULT TRUE,
   group_invite BOOLEAN NOT NULL DEFAULT TRUE,
   payment_received BOOLEAN NOT NULL DEFAULT TRUE,
@@ -255,6 +255,49 @@ CREATE TABLE IF NOT EXISTS notifications (
   is_read BOOLEAN NOT NULL DEFAULT FALSE,
   read_at TIMESTAMP,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Durable queue for notification emails (services/emailOutbox.js).
+CREATE TABLE IF NOT EXISTS email_outbox (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  to_email VARCHAR(255) NOT NULL,
+  type VARCHAR(50) NOT NULL,
+  subject TEXT NOT NULL,
+  text_body TEXT NOT NULL,
+  html_body TEXT NOT NULL,
+  status VARCHAR(16) NOT NULL DEFAULT 'pending',
+  attempts INTEGER NOT NULL DEFAULT 0,
+  last_error TEXT,
+  message_id TEXT,
+  dedupe_key VARCHAR(255) UNIQUE,
+  send_after TIMESTAMP NOT NULL DEFAULT NOW(),
+  locked_at TIMESTAMP,
+  sent_at TIMESTAMP,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+-- Devices each account has signed in from, for "new sign-in" alerts.
+-- Kept separately from refresh_tokens, which are deleted on logout.
+CREATE TABLE IF NOT EXISTS user_known_devices (
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  fingerprint VARCHAR(255) NOT NULL,
+  first_seen_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  last_seen_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, fingerprint)
+);
+
+-- Auto settlement reminders (jobs/settlementReminderJob.js): one row per
+-- open debt (group, debtor → creditor). Deleted once the debt is settled,
+-- which resets the reminder count.
+CREATE TABLE IF NOT EXISTS auto_reminder_state (
+  group_id UUID NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+  debtor_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  creditor_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  first_seen_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  last_sent_at TIMESTAMP,
+  sent_count INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (group_id, debtor_id, creditor_id)
 );
 `;
 
@@ -466,6 +509,14 @@ CREATE INDEX IF NOT EXISTS idx_notifications_user_created
   ON notifications(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_unread
   ON notifications(user_id) WHERE is_read = FALSE;
+
+-- =====================================================
+-- EMAIL OUTBOX: due-row scan + per-user history
+-- =====================================================
+CREATE INDEX IF NOT EXISTS idx_email_outbox_due
+  ON email_outbox(send_after) WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS idx_email_outbox_user
+  ON email_outbox(user_id, created_at DESC);
 `;
 
 // =====================================================

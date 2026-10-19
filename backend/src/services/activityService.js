@@ -207,8 +207,8 @@ class ActivityService {
       activityType: this.ACTIVITY_TYPES.SETTLEMENT_CREATED,
       entityType: this.ENTITY_TYPES.SETTLEMENT,
       entityId: settlementId,
-      title: 'Settlement created',
-      description: `${fromName} paid ${toName} ${currency} ${amountNum.toFixed(2)} in "${groupName}"`,
+      title: 'Settlement',
+      description: `${fromName} settled ${currency} ${amountNum.toFixed(2)} with ${toName} in "${groupName}"`,
       metadata: { groupName, fromName, toName, amount: amountNum, currency },
     });
   }

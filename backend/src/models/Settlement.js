@@ -75,14 +75,15 @@ class Settlement {
   }
 
   /**
-   * Create new settlement
+   * Create new settlement. A 'paid' settlement is stamped confirmed_at
+   * immediately (no receiver confirmation step).
    */
   static async create(settlementData) {
     const result = await query(
       `INSERT INTO settlements (
-        group_id, from_user_id, to_user_id, amount, currency, status, notes
+        group_id, from_user_id, to_user_id, amount, currency, status, notes, confirmed_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, CASE WHEN $8::boolean THEN NOW() ELSE NULL END)
       RETURNING id, group_id, from_user_id, to_user_id, amount, currency,
                 status, notes, confirmed_at, settled_at, created_at`,
       [
@@ -92,7 +93,8 @@ class Settlement {
         settlementData.amount,
         settlementData.currency || 'INR', // Default to INR to match frontend
         settlementData.status || 'pending',
-        settlementData.notes || null
+        settlementData.notes || null,
+        settlementData.status === 'paid',
       ]
     );
     return result.rows[0];

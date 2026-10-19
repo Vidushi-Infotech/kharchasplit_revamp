@@ -1,5 +1,6 @@
 import Expense from '../models/Expense.js';
 import Group from '../models/Group.js';
+import User from '../models/User.js';
 import GroupService from '../services/groupService.js';
 import ActivityService from '../services/activityService.js';
 import { NotificationService } from '../services/notificationService.js';
@@ -156,6 +157,7 @@ const createExpense = async (req, res, next) => {
         group.name,
         currency || group.currency || 'INR',
         req.user.id,
+        participants,
       );
     } catch (notifError) {
       console.error('[ExpenseController] notify failed:', notifError);
@@ -242,6 +244,35 @@ const updateExpense = async (req, res, next) => {
     Expense.invalidateGroupExpenses(existingExpense.group_id);
     await GroupService.invalidateMemberDashboards(existingExpense.group_id);
 
+    // An edit changes what people owe — tell everyone whose share it touched,
+    // before and after the edit.
+    try {
+      const [group, actor] = await Promise.all([
+        Group.findById(existingExpense.group_id),
+        User.findById(req.user.id),
+      ]);
+      await NotificationService.notifyExpenseChanged('EXPENSE_UPDATED', {
+        groupId: existingExpense.group_id,
+        groupName: group?.name || 'your group',
+        expense: {
+          id,
+          description: expense?.description ?? existingExpense.description,
+          amount: expense?.amount ?? existingExpense.amount,
+          currency: expense?.currency || existingExpense.currency || group?.currency,
+        },
+        actorId: req.user.id,
+        actorName: actor?.name || 'Someone',
+        affectedUserIds: [
+          existingExpense.paid_by,
+          expense?.paid_by,
+          ...existingExpense.participants.map((p) => p.user_id),
+          ...(Array.isArray(participants) ? participants.map((p) => p.userId) : []),
+        ],
+      });
+    } catch (notifError) {
+      console.error('[ExpenseController] update notify failed:', notifError);
+    }
+
     res.json({
       success: true,
       message: 'Expense updated successfully',
@@ -299,6 +330,23 @@ const deleteExpense = async (req, res, next) => {
     // Invalidate group expense/balance caches + every member's dashboard.
     Expense.invalidateGroupExpenses(expense.group_id);
     await GroupService.invalidateMemberDashboards(expense.group_id);
+
+    try {
+      const [group, actor] = await Promise.all([
+        Group.findById(expense.group_id),
+        User.findById(req.user.id),
+      ]);
+      await NotificationService.notifyExpenseChanged('EXPENSE_DELETED', {
+        groupId: expense.group_id,
+        groupName: group?.name || 'your group',
+        expense: { ...expense, currency: expense.currency || group?.currency },
+        actorId: req.user.id,
+        actorName: actor?.name || 'Someone',
+        affectedUserIds: [expense.paid_by, ...expense.participants.map((p) => p.user_id)],
+      });
+    } catch (notifError) {
+      console.error('[ExpenseController] delete notify failed:', notifError);
+    }
 
     res.json({
       success: true,

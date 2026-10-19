@@ -63,10 +63,11 @@ const updateUser = async (req, res, next) => {
     // or email, this PUT must supply both. Email is required so the user can
     // receive password-reset OTPs.
     const current = await User.findById(id);
+    let isCompletingSetup = false;
     if (current) {
       const currentNameEmpty = !current.name || current.name.trim().length === 0;
       const currentEmailEmpty = !current.email;
-      const isCompletingSetup = currentNameEmpty || currentEmailEmpty;
+      isCompletingSetup = currentNameEmpty || currentEmailEmpty;
 
       if (isCompletingSetup) {
         const finalName = (name ?? current.name ?? '').toString().trim();
@@ -108,6 +109,14 @@ const updateUser = async (req, res, next) => {
         Group.invalidateMembers(g.id, id);
       }
     } catch (_) { /* best-effort — don't fail the profile update */ }
+
+    // First time the profile is complete → welcome mail (de-duplicated per
+    // user, so finishing setup twice still sends one).
+    if (isCompletingSetup && user.email) {
+      NotificationService.notifyWelcome(id).catch((err) =>
+        console.error('[UserController] welcome notify failed:', err),
+      );
+    }
 
     res.json({
       success: true,
@@ -152,6 +161,10 @@ const deleteUser = async (req, res, next) => {
         error: 'User not found',
       });
     }
+
+    NotificationService.notifyAccountDeleted(id).catch((err) =>
+      console.error('[UserController] account-deleted notify failed:', err),
+    );
 
     res.json({
       success: true,
@@ -347,6 +360,10 @@ const deactivateUser = async (req, res, next) => {
         error: 'User not found',
       });
     }
+
+    NotificationService.notifyAccountDeleted(id).catch((err) =>
+      console.error('[UserController] account-deleted notify failed:', err),
+    );
 
     res.json({
       success: true,

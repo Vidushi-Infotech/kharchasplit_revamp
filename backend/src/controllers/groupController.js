@@ -376,6 +376,15 @@ const deleteGroup = async (req, res, next) => {
     // Log activity
     await ActivityService.logGroupDeleted(id, req.user.id, group.name);
 
+    // Members lose the group from their list — tell them who deleted it.
+    // (group_members rows survive the soft delete, so the fan-out still works.)
+    try {
+      const actor = await User.findById(req.user.id);
+      await NotificationService.notifyGroupDeleted(id, group.name, req.user.id, actor?.name || 'An admin');
+    } catch (notifError) {
+      console.error('[GroupController] delete notify failed:', notifError);
+    }
+
     res.json({
       success: true,
       message: 'Group deleted successfully',
@@ -457,6 +466,13 @@ const addGroupMember = async (req, res, next) => {
           group.name,
           inviter?.name || 'Someone',
         );
+        // Everyone else in the group: "<name> joined". Skips the adder and
+        // the new member (who just got the invite above).
+        await NotificationService.sendToGroup(id, 'MEMBER_ADDED', {
+          memberName: name,
+          groupName: group.name,
+          groupId: id,
+        }, [req.user.id, userId], { groupId: id });
       } catch (notifError) {
         console.error('[GroupController] notify failed:', notifError);
       }
@@ -902,14 +918,14 @@ const removeGroupMember = async (req, res, next) => {
             memberId: userId,
             memberName: member?.name || 'Member',
             pairwise: named,
-            currency: group?.currency_code || 'INR',
+            currency: group?.currency || 'INR',
           },
         });
       }
 
       // Acknowledged path — create write-off settlements before delete.
-      // Status is 'completed' so the balance compute treats them as
-      // already settled; notes carry an audit trail.
+      // Status is 'paid' (the only status balance math counts) so they zero
+      // the pair; notes carry an audit trail.
       for (const p of writeOffPairs) {
         const amount = Math.abs(p.amount);
         const fromUserId = p.amount > 0 ? userId : p.otherUserId;
@@ -919,8 +935,8 @@ const removeGroupMember = async (req, res, next) => {
           fromUserId,
           toUserId,
           amount,
-          currency: group?.currency_code || 'INR',
-          status: 'completed',
+          currency: group?.currency || 'INR',
+          status: 'paid',
           notes: `Written off — ${member?.name || 'member'} removed by admin`,
         });
       }
@@ -946,8 +962,19 @@ const removeGroupMember = async (req, res, next) => {
         // User left the group - notify other members
         await NotificationService.notifyMemberLeft(id, group.name, userId, member?.name || 'A member');
       } else {
-        // User was removed - notify the removed user and other members
-        await NotificationService.notifyMemberRemoved(id, group.name, userId, member?.name || 'A member', req.user.id);
+        // User was removed - notify the removed user, anyone whose balance
+        // with them was written off, and the rest of the group.
+        const actor = await User.findById(req.user.id);
+        await NotificationService.notifyMemberRemoved(id, group.name, userId, member?.name || 'A member', req.user.id, {
+          actorName: actor?.name || 'An admin',
+          currencyCode: group?.currency || 'INR',
+          writeOffs: writeOffPairs.map((p) => ({
+            otherUserId: p.otherUserId,
+            otherName: members.find((m) => m.user_id === p.otherUserId)?.name || 'A member',
+            amount: Math.abs(p.amount),
+            removedOwed: p.amount > 0,
+          })),
+        });
       }
     } catch (notifError) {
       console.error('[GroupController] Error sending member removal notification:', notifError);
@@ -1227,6 +1254,7 @@ const remindForBalance = async (req, res, next) => {
          AND type = 'SETTLEMENT_REMINDER'
          AND data->>'fromUserId' = $2
          AND data->>'groupId' = $3
+         AND COALESCE(data->>'auto', '') <> 'true'
          AND created_at > NOW() - INTERVAL '6 hours'
        ORDER BY created_at DESC
        LIMIT 1`,
@@ -1246,12 +1274,11 @@ const remindForBalance = async (req, res, next) => {
     const amount = owedToCaller.toFixed(2);
     const currency = group?.currency || 'INR';
 
-    await NotificationService.sendToUser(targetId, 'SETTLEMENT_REMINDER', {
-      amount,
-      currency,
-      groupName: group?.name || 'this group',
-    }, {
+    await NotificationService.notifySettlementReminder(targetId, {
       groupId,
+      groupName: group?.name || 'this group',
+      amount,
+      currencyCode: currency,
       fromUserId: callerId,
       fromUserName: caller?.name || 'A group member',
     });

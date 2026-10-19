@@ -169,6 +169,80 @@ class GroupService {
   }
 
   /**
+   * Every open pairwise debt across groups, in one query — same rules as
+   * getUserPairwiseDebts (expense splits minus 'paid' settlements, netted per
+   * pair). Used by the reminder and weekly-summary jobs.
+   *
+   * Only live groups, current members and real (non-placeholder) accounts.
+   *
+   * @param {Object} [o]
+   * @param {number}  [o.minAmount=0.01]  Ignore debts below this.
+   * @param {boolean} [o.includeArchived=false]
+   * @param {string}  [o.userId]          Only pairs involving this user.
+   * @returns {Promise<Array<{groupId, groupName, currency, debtorId, debtorName, creditorId, creditorName, amount}>>}
+   */
+  static async getOpenPairwiseDebts({ minAmount = 0.01, includeArchived = false, userId = null } = {}) {
+    const result = await query(
+      `WITH flows AS (
+         SELECT e.group_id, es.user_id AS debtor, e.paid_by AS creditor, es.amount
+           FROM expenses e
+           JOIN expense_splits es ON es.expense_id = e.id
+          WHERE e.deleted_at IS NULL AND es.deleted_at IS NULL
+            AND es.user_id <> e.paid_by
+         UNION ALL
+         -- A paying B cancels A's debt to B: model it as B owing A.
+         SELECT group_id, to_user_id, from_user_id, amount
+           FROM settlements
+          WHERE deleted_at IS NULL AND status = 'paid'
+       ),
+       net AS (
+         SELECT group_id,
+                LEAST(debtor, creditor) AS a,
+                GREATEST(debtor, creditor) AS b,
+                SUM(CASE WHEN debtor < creditor THEN amount ELSE -amount END) AS amt -- > 0: a owes b
+           FROM flows
+          GROUP BY 1, 2, 3
+       )
+       SELECT n.group_id, g.name AS group_name, g.currency,
+              CASE WHEN n.amt > 0 THEN n.a ELSE n.b END AS debtor_id,
+              CASE WHEN n.amt > 0 THEN n.b ELSE n.a END AS creditor_id,
+              ABS(n.amt)::numeric(12,2) AS amount
+         FROM net n
+         JOIN groups g ON g.id = n.group_id AND g.deleted_at IS NULL
+        WHERE ABS(n.amt) >= $1
+          AND ($2::boolean OR COALESCE(g.is_archived, FALSE) = FALSE)
+          AND ($3::uuid IS NULL OR n.a = $3::uuid OR n.b = $3::uuid)`,
+      [minAmount, includeArchived, userId],
+    );
+    if (result.rows.length === 0) return [];
+
+    // Drop pairs where either side has left the group or isn't a real account.
+    const people = await query(
+      `SELECT gm.group_id, gm.user_id, COALESCE(NULLIF(u.name, ''), gm.name) AS name
+         FROM group_members gm
+         JOIN users u ON u.id = gm.user_id
+        WHERE gm.deleted_at IS NULL AND u.deleted_at IS NULL
+          AND COALESCE(u.is_placeholder, FALSE) = FALSE
+          AND gm.group_id = ANY($1::uuid[])`,
+      [[...new Set(result.rows.map((r) => r.group_id))]],
+    );
+    const member = new Map(people.rows.map((p) => [`${p.group_id}:${p.user_id}`, p.name || 'A member']));
+
+    return result.rows
+      .filter((r) => member.has(`${r.group_id}:${r.debtor_id}`) && member.has(`${r.group_id}:${r.creditor_id}`))
+      .map((r) => ({
+        groupId: r.group_id,
+        groupName: r.group_name,
+        currency: r.currency || 'INR',
+        debtorId: r.debtor_id,
+        debtorName: member.get(`${r.group_id}:${r.debtor_id}`),
+        creditorId: r.creditor_id,
+        creditorName: member.get(`${r.group_id}:${r.creditor_id}`),
+        amount: Number(r.amount),
+      }));
+  }
+
+  /**
    * Invalidate every group member's per-user dashboard cache.
    *
    * Why: the dashboard endpoint caches under `user:<userId>:dashboard:<limit>`

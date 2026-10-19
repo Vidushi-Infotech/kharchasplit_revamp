@@ -4,6 +4,7 @@ import { generateOTP, getOTPExpiry } from '../utils/otp.js';
 import Group from '../models/Group.js';
 import User from '../models/User.js';
 import EmailService from '../services/emailService.js';
+import { NotificationService } from '../services/notificationService.js';
 
 /**
  * Pull device metadata for a refresh-token row out of the request body
@@ -60,6 +61,36 @@ async function issueTokens(userId, req) {
   );
 
   return { accessToken, refreshToken };
+}
+
+/**
+ * Record the device behind this sign-in and report whether the account has
+ * used it before. Device = name + platform sent by the app, falling back to
+ * the user agent. The first device ever recorded for an account is not
+ * "new" (that is just the first sign-in, or the first since this shipped).
+ */
+async function checkKnownDevice(userId, req) {
+  const device = extractDeviceInfo(req);
+  const fingerprint = (
+    device.deviceName || device.platform
+      ? `d:${device.deviceName || ''}|${device.platform || ''}`
+      : `ua:${device.userAgent || 'unknown'}`
+  ).slice(0, 255);
+  const { rows } = await query(
+    `SELECT COUNT(*)::int AS total,
+            COUNT(*) FILTER (WHERE fingerprint = $2)::int AS matching
+       FROM user_known_devices
+      WHERE user_id = $1`,
+    [userId, fingerprint],
+  );
+  await query(
+    `INSERT INTO user_known_devices (user_id, fingerprint)
+     VALUES ($1, $2)
+     ON CONFLICT (user_id, fingerprint) DO UPDATE SET last_seen_at = NOW()`,
+    [userId, fingerprint],
+  );
+  const { total, matching } = rows[0];
+  return { isNew: total > 0 && matching === 0, device };
 }
 
 function userPayload(row) {
@@ -146,6 +177,7 @@ const register = async (req, res, next) => {
           addedGroups = pendingInvites.map((invite) => ({
             groupId: invite.group_id,
             groupName: invite.group_name,
+            memberName: invite.name,
           }));
           await Group.deletePendingInvitesByIds(pendingInvites.map((i) => i.id));
         }
@@ -158,6 +190,17 @@ const register = async (req, res, next) => {
     }
 
     const { accessToken, refreshToken } = await issueTokens(user.id, req);
+    // Remember this device so a later sign-in elsewhere can be flagged.
+    checkKnownDevice(user.id, req).catch((err) => console.error('[Auth] device record failed:', err));
+
+    // Tell the groups that were waiting on this phone number that the
+    // person has joined. The profile name isn't set yet, so use the name
+    // the inviter typed.
+    for (const g of addedGroups) {
+      NotificationService.notifyMemberJoined(g.groupId, g.groupName, user.id, g.memberName).catch((err) =>
+        console.error('[Auth] member-joined notify failed:', err),
+      );
+    }
 
     res.status(201).json({
       success: true,
@@ -213,6 +256,10 @@ const login = async (req, res, next) => {
     }
 
     const { accessToken, refreshToken } = await issueTokens(user.id, req);
+    // Best effort: a missing table or a failed alert must not block sign-in.
+    checkKnownDevice(user.id, req)
+      .then(({ isNew, device }) => (isNew ? NotificationService.notifyNewLogin(user.id, device) : null))
+      .catch((err) => console.error('[Auth] new-login check failed:', err));
 
     // A user with an empty name (or no email) hasn't completed profile
     // setup yet — push them through it before the dashboard.
@@ -353,8 +400,14 @@ const forgotPasswordVerify = async (req, res, next) => {
       [row.id],
     );
 
+    NotificationService.notifyPasswordChanged(user.id).catch((err) =>
+      console.error('[Auth] password-changed notify failed:', err),
+    );
+
     // Auto-login after reset.
     const { accessToken, refreshToken } = await issueTokens(user.id, req);
+    // Remember this device so a later sign-in elsewhere can be flagged.
+    checkKnownDevice(user.id, req).catch((err) => console.error('[Auth] device record failed:', err));
     const needsProfileSetup =
       !user.name || user.name.trim().length === 0 ||
       !user.email || user.email.trim().length === 0;
@@ -537,6 +590,12 @@ const revokeAllSessions = async (req, res, next) => {
         [userId],
       );
     }
+    if (result.rowCount > 0) {
+      NotificationService.notifySessionsRevoked(userId, result.rowCount).catch((err) =>
+        console.error('[Auth] sessions-revoked notify failed:', err),
+      );
+    }
+
     res.json({
       success: true,
       message: 'Other sessions signed out',

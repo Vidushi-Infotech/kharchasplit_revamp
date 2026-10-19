@@ -14,6 +14,9 @@ import { errorHandler, notFound } from './middleware/errorHandler.js';
 import { cache } from './services/cacheService.js';
 import { logger } from './utils/logger.js';
 import { startEmailVerifyReminderScheduler } from './jobs/emailVerifyReminderJob.js';
+import { startEmailOutboxWorker } from './services/emailOutbox.js';
+import { startSettlementReminderScheduler } from './jobs/settlementReminderJob.js';
+import { startWeeklySummaryScheduler } from './jobs/weeklySummaryJob.js';
 
 // Import routes
 import authRoutes from './routes/authRoutes.js';
@@ -224,6 +227,11 @@ const startServer = async () => {
 
     // Daily "verify your email" nudge for active, unverified users.
     startEmailVerifyReminderScheduler();
+    // Retries queued notification emails (sends normally happen inline).
+    startEmailOutboxWorker();
+    // Daily automatic settle-up reminders + Monday weekly summary (opt-in).
+    startSettlementReminderScheduler();
+    startWeeklySummaryScheduler();
 
     server = app.listen(PORT, () => {
       console.log('');

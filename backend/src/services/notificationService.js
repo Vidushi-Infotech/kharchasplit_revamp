@@ -1,28 +1,58 @@
 /**
- * Notification Service
- * Push notifications via Firebase Cloud Messaging.
+ * Notification Service — the single dispatcher for user notifications.
  *
- * Token lookup uses the user_devices table (multi-device per user).
- * Every send is filtered through notification_prefs so server-stored
- * user preferences are honored consistently across devices.
+ * One call (sendToUser / sendToUsers / sendToGroup) fans out to every
+ * channel the type is configured for:
+ *   - inbox: in-app notifications feed (unless the type sets inbox: false)
+ *   - push:  Firebase Cloud Messaging via user_devices (multi-device)
+ *   - email: rendered from emailTemplates.js and queued in EmailOutbox
+ *
+ * Channel rules (see _resolveChannels):
+ *   - The type's category toggle (prefKey) gates every channel.
+ *   - push_enabled only gates push; the inbox stays populated.
+ *   - email_enabled gates email, and only verified addresses get mail.
+ *   - `security: true` types ignore prefs and email verification — those
+ *     mails always go out.
+ *   - `allowUnverified: true` types still respect prefs but may reach an
+ *     unverified address (welcome mail — nothing sensitive in it).
+ *
+ * additionalData keys that never reach the device or inbox:
+ *   dedupeId      entity id for email de-duplication
+ *   emailContext  { [userId]: {...} } extra per-recipient template data
  */
 
 import admin from 'firebase-admin';
 import { query } from '../config/database.js';
 import { isFirebaseReady } from '../config/firebaseAdmin.js';
 import { logger } from '../utils/logger.js';
+import { currencySymbol } from '../utils/currency.js';
+import * as EmailTemplates from './emailTemplates.js';
+import { enqueue as enqueueEmail } from './emailOutbox.js';
+import GroupService from './groupService.js';
 
 /**
- * Notification types. `prefKey` maps each type to the column in
- * notification_prefs that gates whether it gets delivered. Types whose
- * prefKey is `null` are always sent if push is enabled globally.
+ * Notification types.
+ *   prefKey   column in notification_prefs gating this type (null = no toggle)
+ *   email     template (data, recipient) => { subject, text, html }
+ *   security  always deliver email, regardless of prefs / verification
+ *   allowUnverified  email may go to an unverified address (prefs still apply)
+ *   inbox     false to skip the in-app feed
+ *   push      false to skip FCM
  */
 const NOTIFICATION_TYPES = {
   SETTLEMENT_CREATED: {
-    title: 'Payment initiated',
-    getBody: (data) => `${data.fromUserName} marked payment of ${data.currency}${data.amount} to ${data.toUserName}`,
+    title: 'Payment received',
+    getBody: (data) => `${data.fromUserName} settled ${data.currency}${data.amount} with you`,
     channelId: 'payments',
     prefKey: 'payment_received',
+    email: EmailTemplates.settlementReceived,
+  },
+  SETTLEMENT_DELETED: {
+    title: 'Settlement removed',
+    getBody: (data) => `${data.actorName} removed the ${data.currency}${data.amount} settlement from ${data.fromUserName} to ${data.toUserName} in "${data.groupName}"`,
+    channelId: 'payments',
+    prefKey: 'payment_received',
+    email: EmailTemplates.settlementDeleted,
   },
   SETTLEMENT_CONFIRMED: {
     title: 'Payment confirmed',
@@ -32,9 +62,12 @@ const NOTIFICATION_TYPES = {
   },
   SETTLEMENT_REMINDER: {
     title: 'Time to settle up',
-    getBody: (data) => `You owe ${data.currency}${data.amount} in ${data.groupName}`,
+    getBody: (data) => (data.fromUserName
+      ? `You owe ${data.currency}${data.amount} to ${data.fromUserName} in ${data.groupName}`
+      : `You owe ${data.currency}${data.amount} in ${data.groupName}`),
     channelId: 'payments',
     prefKey: 'settlement_reminder',
+    email: EmailTemplates.settlementReminder,
   },
 
   GROUP_INVITE: {
@@ -42,24 +75,28 @@ const NOTIFICATION_TYPES = {
     getBody: (data) => `${data.inviterName} invited you to ${data.groupName}`,
     channelId: 'groups',
     prefKey: 'group_invite',
+    email: EmailTemplates.groupInvite,
   },
   GROUP_ARCHIVED: {
     title: 'Group archived',
     getBody: (data) => `"${data.groupName}" has been archived`,
     channelId: 'groups',
     prefKey: null,
+    email: EmailTemplates.groupClosedSummary,
   },
   GROUP_COMPLETED: {
     title: 'Group closed',
     getBody: (data) => `"${data.groupName}" has been marked as complete`,
     channelId: 'groups',
     prefKey: null,
+    email: EmailTemplates.groupClosedSummary,
   },
   GROUP_DELETED: {
     title: 'Group deleted',
-    getBody: (data) => `"${data.groupName}" has been deleted`,
+    getBody: (data) => `${data.actorName} deleted "${data.groupName}"`,
     channelId: 'groups',
     prefKey: null,
+    email: EmailTemplates.groupDeleted,
   },
 
   MEMBER_REMOVED: {
@@ -67,6 +104,22 @@ const NOTIFICATION_TYPES = {
     getBody: (data) => `${data.memberName} was removed from "${data.groupName}"`,
     channelId: 'groups',
     prefKey: null,
+  },
+  REMOVED_FROM_GROUP: {
+    title: 'Removed from group',
+    getBody: (data) => `${data.actorName} removed you from "${data.groupName}"`,
+    channelId: 'groups',
+    prefKey: null,
+    email: EmailTemplates.removedFromGroup,
+  },
+  BALANCE_WRITTEN_OFF: {
+    title: 'Balance written off',
+    getBody: (data) => (data.youOwed === 'true'
+      ? `Your ${data.currency}${data.amount} owed to ${data.memberName} in "${data.groupName}" was cleared`
+      : `${data.currency}${data.amount} owed to you by ${data.memberName} in "${data.groupName}" was written off`),
+    channelId: 'payments',
+    prefKey: 'payment_received',
+    email: EmailTemplates.balanceWrittenOff,
   },
   MEMBER_LEFT: {
     title: 'Member left',
@@ -83,27 +136,85 @@ const NOTIFICATION_TYPES = {
 
   EXPENSE_ADDED: {
     title: 'New expense',
-    getBody: (data) => `${data.paidByName} added "${data.description}" (${data.currency}${data.amount}) in "${data.groupName}"`,
+    getBody: (data) => `${data.paidByName} added "${data.description}" (${data.currency}${data.amount}) in "${data.groupName}"`
+      + (data.yourShare ? ` · your share ${data.currency}${data.yourShare}` : ''),
     channelId: 'expenses',
     prefKey: 'new_expense',
   },
   EXPENSE_UPDATED: {
     title: 'Expense updated',
-    getBody: (data) => `"${data.description}" was updated in "${data.groupName}"`,
+    getBody: (data) => `${data.actorName} updated "${data.description}" (${data.currency}${data.amount}) in "${data.groupName}"`,
     channelId: 'expenses',
     prefKey: 'new_expense',
   },
   EXPENSE_DELETED: {
     title: 'Expense deleted',
-    getBody: (data) => `"${data.description}" was deleted from "${data.groupName}"`,
+    getBody: (data) => `${data.actorName} deleted "${data.description}" (${data.currency}${data.amount}) from "${data.groupName}"`,
     channelId: 'expenses',
     prefKey: 'new_expense',
+  },
+
+  // Security — email always goes out; no category toggle.
+  NEW_LOGIN: {
+    title: 'New sign-in',
+    getBody: (data) => `Your account was signed in on ${data.deviceName || data.platform || 'a new device'}`,
+    channelId: 'account',
+    prefKey: null,
+    security: true,
+    email: EmailTemplates.newLogin,
+  },
+  PASSWORD_CHANGED: {
+    title: 'Password changed',
+    getBody: () => 'Your KharchaSplit password was changed',
+    channelId: 'account',
+    prefKey: null,
+    security: true,
+    push: false,
+    email: EmailTemplates.passwordChanged,
+  },
+  SESSIONS_REVOKED: {
+    title: 'Signed out everywhere',
+    getBody: (data) => `Your account was signed out of ${data.revokedCount} other session(s)`,
+    channelId: 'account',
+    prefKey: null,
+    security: true,
+    push: false,
+    email: EmailTemplates.sessionsRevoked,
+  },
+  WEEKLY_SUMMARY: {
+    title: 'Your week on KharchaSplit',
+    getBody: () => 'Your weekly summary is in your inbox',
+    channelId: 'account',
+    prefKey: 'weekly_summary',
+    inbox: false,
+    push: false,
+    email: EmailTemplates.weeklySummary,
+  },
+  WELCOME: {
+    title: 'Welcome to KharchaSplit',
+    getBody: () => 'Your account is ready',
+    channelId: 'account',
+    prefKey: null,
+    allowUnverified: true,
+    inbox: false,
+    push: false,
+    email: EmailTemplates.welcome,
+  },
+  ACCOUNT_DELETED: {
+    title: 'Account deleted',
+    getBody: () => 'Your KharchaSplit account was deleted',
+    channelId: 'account',
+    prefKey: null,
+    security: true,
+    inbox: false,
+    push: false,
+    email: EmailTemplates.accountDeleted,
   },
 };
 
 const DEFAULT_PREFS = {
   push_enabled: true,
-  email_enabled: false,
+  email_enabled: true,
   new_expense: true,
   group_invite: true,
   payment_received: true,
@@ -155,19 +266,82 @@ class NotificationService {
   }
 
   /**
-   * Filter a list of userIds by their notification prefs. Returns the
-   * subset who should receive the given notification type.
+   * Decide, per channel, which of `userIds` should receive `type`.
+   * Returns { inboxIds, pushIds, emailRecipients: [{ id, name, email }] }.
    */
-  static async _filterByPrefs(userIds, type) {
-    if (!userIds || userIds.length === 0) return [];
+  static async _resolveChannels(userIds, type) {
+    const empty = { inboxIds: [], pushIds: [], emailRecipients: [] };
+    if (!userIds || userIds.length === 0) return empty;
     const config = NOTIFICATION_TYPES[type];
+    if (!config) return empty;
+
     const prefs = await this.getPrefsForUsers(userIds);
-    return userIds.filter((uid) => {
+    const categoryOn = (uid) => {
+      if (config.security || !config.prefKey) return true;
       const p = prefs[uid] || DEFAULT_PREFS;
-      if (!p.push_enabled) return false;
-      if (config?.prefKey && p[config.prefKey] === false) return false;
-      return true;
-    });
+      return p[config.prefKey] !== false;
+    };
+    const allowed = userIds.filter(categoryOn);
+
+    const inboxIds = config.inbox === false ? [] : allowed;
+    const pushIds = config.push === false
+      ? []
+      : allowed.filter((uid) => (prefs[uid] || DEFAULT_PREFS).push_enabled);
+
+    let emailRecipients = [];
+    const emailIds = config.email
+      ? allowed.filter((uid) => config.security || (prefs[uid] || DEFAULT_PREFS).email_enabled)
+      : [];
+    if (emailIds.length > 0) {
+      // Security mail still reaches a just-deleted account, so no
+      // deleted_at filter for those.
+      const result = await query(
+        `SELECT id, name, email, email_verified_at
+           FROM users
+          WHERE id = ANY($1::uuid[])
+            ${config.security ? '' : 'AND deleted_at IS NULL'}`,
+        [emailIds],
+      );
+      emailRecipients = result.rows
+        .filter((u) => u.email && u.email.includes('@'))
+        .filter((u) => config.security || config.allowUnverified || u.email_verified_at)
+        .map((u) => ({ id: u.id, name: u.name, email: u.email }));
+    }
+
+    return { inboxIds, pushIds, emailRecipients };
+  }
+
+  /**
+   * Render and queue one email per recipient. Never throws — email trouble
+   * must not break the request that triggered it.
+   */
+  static async _queueEmails(recipients, type, data, additionalData) {
+    const config = NOTIFICATION_TYPES[type];
+    if (!config?.email || recipients.length === 0) return;
+    await Promise.all(recipients.map(async (r) => {
+      try {
+        const { emailContext, ...rest } = additionalData;
+        const perRecipient = emailContext?.[r.id] || {};
+        const { subject, text, html } = config.email({ ...rest, ...data, ...perRecipient }, r);
+        // One mail per (type, entity, recipient) — a retried request is a no-op.
+        const entity = additionalData.dedupeId || additionalData.settlementId || additionalData.expenseId;
+        const dedupeKey = entity ? `${type}:${entity}:${r.id}` : null;
+        await enqueueEmail({ userId: r.id, toEmail: r.email, type, subject, text, html, dedupeKey });
+      } catch (err) {
+        logger.error({ err, type, userId: r.id }, '[NotificationService] email queue failed');
+      }
+    }));
+  }
+
+  /** Shared fan-out used by sendToUser / sendToUsers / sendToGroup. */
+  static async _deliver(userIds, type, data, additionalData = {}) {
+    const { inboxIds, pushIds, emailRecipients } = await this._resolveChannels(userIds, type);
+    // Internal-only keys never go to the device payload.
+    const { dedupeId, emailContext, ...pushExtra } = additionalData;
+    await this._logInbox(inboxIds, type, data, pushExtra);
+    await this._queueEmails(emailRecipients, type, data, additionalData);
+    const tokens = await this._fetchTokens(pushIds);
+    return this._pushMany(tokens, type, data, pushExtra);
   }
 
   /**
@@ -246,25 +420,16 @@ class NotificationService {
   }
 
   static async sendToUser(userId, type, data, additionalData = {}) {
-    const allowedIds = await this._filterByPrefs([userId], type);
-    await this._logInbox(allowedIds, type, data, additionalData);
-    const tokens = await this._fetchTokens(allowedIds);
-    return this._pushMany(tokens, type, data, additionalData);
+    return this._deliver([userId], type, data, additionalData);
   }
 
   static async sendToUsers(userIds, type, data, additionalData = {}) {
-    const allowedIds = await this._filterByPrefs(userIds, type);
-    await this._logInbox(allowedIds, type, data, additionalData);
-    const tokens = await this._fetchTokens(allowedIds);
-    return this._pushMany(tokens, type, data, additionalData);
+    return this._deliver([...new Set(userIds)], type, data, additionalData);
   }
 
   static async sendToGroup(groupId, type, data, excludeUserIds = [], additionalData = {}) {
     const memberIds = await this._groupMemberIds(groupId, excludeUserIds);
-    const allowedIds = await this._filterByPrefs(memberIds, type);
-    await this._logInbox(allowedIds, type, data, additionalData);
-    const tokens = await this._fetchTokens(allowedIds);
-    return this._pushMany(tokens, type, data, additionalData);
+    return this._deliver(memberIds, type, data, additionalData);
   }
 
   static async _pushMany(tokens, type, data, additionalData) {
@@ -508,49 +673,141 @@ class NotificationService {
   // Convenience methods (keep existing call sites working + add new ones)
   // =====================
 
-  static async notifySettlementCreated(groupId, settlement, fromUserName, toUserName, excludeUserId) {
-    const currencySymbols = { INR: '₹', USD: '$', EUR: '€', GBP: '£' };
-    const currency = currencySymbols[settlement.currency] || settlement.currency;
-    return this.sendToGroup(groupId, 'SETTLEMENT_CREATED', {
+  /**
+   * Settlements are final on creation — only the recipient is told
+   * (inbox + push + email).
+   */
+  static async notifySettlementCreated(groupId, settlement, fromUserName, toUserName, extra = {}) {
+    return this.sendToUser(settlement.to_user_id, 'SETTLEMENT_CREATED', {
       fromUserName,
       toUserName,
       amount: settlement.amount,
-      currency,
+      currency: currencySymbol(settlement.currency),
+      currencyCode: settlement.currency,
+      groupName: extra.groupName || '',
+      notes: settlement.notes || '',
       groupId,
-    }, [excludeUserId], { groupId, settlementId: settlement.id });
+    }, { groupId, settlementId: settlement.id });
   }
 
   static async notifySettlementConfirmed(groupId, settlement, fromUserName, toUserName, excludeUserId) {
-    const currencySymbols = { INR: '₹', USD: '$', EUR: '€', GBP: '£' };
-    const currency = currencySymbols[settlement.currency] || settlement.currency;
     return this.sendToGroup(groupId, 'SETTLEMENT_CONFIRMED', {
       fromUserName,
       toUserName,
       amount: settlement.amount,
-      currency,
+      currency: currencySymbol(settlement.currency),
       groupId,
     }, [excludeUserId], { groupId, settlementId: settlement.id });
   }
 
+  /**
+   * A settlement was removed, so the money counts as owed again. Tell both
+   * parties except whoever removed it.
+   */
+  static async notifySettlementDeleted(groupId, groupName, settlement, actorId, actorName) {
+    const recipients = [settlement.from_user_id, settlement.to_user_id].filter((id) => id && id !== actorId);
+    return this.sendToUsers(recipients, 'SETTLEMENT_DELETED', {
+      actorName,
+      fromUserName: settlement.from_user_name || 'Someone',
+      toUserName: settlement.to_user_name || 'someone',
+      amount: settlement.amount,
+      currency: currencySymbol(settlement.currency),
+      currencyCode: settlement.currency,
+      groupName,
+      groupId,
+    }, { groupId, settlementId: settlement.id });
+  }
+
+  /**
+   * Archived / completed: push to everyone except the admin, plus a summary
+   * email per member listing their own open balances.
+   */
+  static async _notifyGroupClosed(type, closeKind, groupId, groupName, actorId) {
+    const [memberIds, actor, groupRow, totals] = await Promise.all([
+      this._groupMemberIds(groupId, [actorId]),
+      query('SELECT name FROM users WHERE id = $1', [actorId]),
+      query('SELECT currency FROM groups WHERE id = $1', [groupId]),
+      query(
+        `SELECT COALESCE(SUM(amount), 0) AS total
+           FROM expenses WHERE group_id = $1 AND deleted_at IS NULL`,
+        [groupId],
+      ),
+    ]);
+    const memberNames = await query(
+      `SELECT gm.user_id, COALESCE(u.name, gm.name) AS name
+         FROM group_members gm LEFT JOIN users u ON u.id = gm.user_id
+        WHERE gm.group_id = $1`,
+      [groupId],
+    );
+    const nameOf = Object.fromEntries(memberNames.rows.map((r) => [r.user_id, r.name || 'A member']));
+
+    const emailContext = {};
+    await Promise.all(memberIds.map(async (uid) => {
+      const pair = await GroupService.getUserPairwiseDebts(groupId, uid);
+      emailContext[uid] = {
+        balances: [...pair.entries()]
+          .filter(([, amt]) => Math.abs(amt) > 0.005)
+          .map(([otherId, amt]) => ({ otherName: nameOf[otherId] || 'A member', amount: Math.abs(amt), youOwe: amt > 0 })),
+      };
+    }));
+
+    return this.sendToUsers(memberIds, type, {
+      groupName,
+      groupId,
+      actorName: actor.rows[0]?.name || 'An admin',
+      closeKind,
+      totalSpent: totals.rows[0].total,
+      currencyCode: groupRow.rows[0]?.currency || 'INR',
+    }, { groupId, emailContext });
+  }
+
   static async notifyGroupArchived(groupId, groupName, excludeUserId) {
-    return this.sendToGroup(groupId, 'GROUP_ARCHIVED', { groupName, groupId }, [excludeUserId], { groupId });
+    return this._notifyGroupClosed('GROUP_ARCHIVED', 'archived', groupId, groupName, excludeUserId);
   }
 
   static async notifyGroupCompleted(groupId, groupName, excludeUserId) {
-    return this.sendToGroup(groupId, 'GROUP_COMPLETED', { groupName, groupId }, [excludeUserId], { groupId });
+    return this._notifyGroupClosed('GROUP_COMPLETED', 'completed', groupId, groupName, excludeUserId);
   }
 
-  static async notifyMemberRemoved(groupId, groupName, removedUserId, removedUserName, removedByUserId) {
-    await this.sendToUser(removedUserId, 'MEMBER_REMOVED', {
-      memberName: 'You',
+  /**
+   * Admin removed someone. The removed user gets their own notice (with any
+   * written-off balances); the rest of the group gets MEMBER_REMOVED; anyone
+   * whose balance with them was written off is told the amount.
+   */
+  static async notifyMemberRemoved(groupId, groupName, removedUserId, removedUserName, removedByUserId, extra = {}) {
+    const { actorName = 'An admin', currencyCode = 'INR', writeOffs = [] } = extra;
+    await this.sendToUser(removedUserId, 'REMOVED_FROM_GROUP', {
+      actorName,
       groupName,
       groupId,
-    }, { groupId });
+      currencyCode,
+    }, {
+      groupId,
+      dedupeId: `removed-${groupId}-${Date.now()}`,
+      emailContext: {
+        [removedUserId]: {
+          writeOffs: writeOffs.map((w) => ({ otherName: w.otherName, amount: w.amount, youOwed: w.removedOwed })),
+        },
+      },
+    });
+    // The admin doing the removal already knows about their own write-off.
+    const othersWrittenOff = writeOffs.filter((w) => w.otherUserId !== removedByUserId);
+    await Promise.all(othersWrittenOff.map((w) => this.sendToUser(w.otherUserId, 'BALANCE_WRITTEN_OFF', {
+      actorName,
+      memberName: removedUserName,
+      groupName,
+      groupId,
+      amount: Number(w.amount).toFixed(2),
+      currency: currencySymbol(currencyCode),
+      currencyCode,
+      // From the other party's side: they owed the removed member.
+      youOwed: String(!w.removedOwed),
+    }, { groupId })));
     return this.sendToGroup(groupId, 'MEMBER_REMOVED', {
       memberName: removedUserName,
       groupName,
       groupId,
-    }, [removedUserId, removedByUserId], { groupId });
+    }, [removedUserId, removedByUserId, ...writeOffs.map((w) => w.otherUserId)], { groupId });
   }
 
   static async notifyMemberLeft(groupId, groupName, leftUserId, leftUserName) {
@@ -559,6 +816,18 @@ class NotificationService {
       groupName,
       groupId,
     }, [leftUserId], { groupId });
+  }
+
+  /**
+   * Someone joined from a pending invite (registered after being invited by
+   * phone). Tell the rest of the group, the inviter included.
+   */
+  static async notifyMemberJoined(groupId, groupName, newUserId, newMemberName) {
+    return this.sendToGroup(groupId, 'MEMBER_ADDED', {
+      memberName: newMemberName || 'A new member',
+      groupName,
+      groupId,
+    }, [newUserId], { groupId });
   }
 
   static async notifyMemberAdded(groupId, groupName, newMemberName, addedByUserId) {
@@ -570,19 +839,61 @@ class NotificationService {
   }
 
   /**
-   * Notify all group members (except the payer) that a new expense was added.
+   * Notify all group members (except whoever added it) that a new expense
+   * was added. Participants also see their own share in the message.
+   *
+   * @param {Array<{userId: string, amount: number}>} [participants]
    */
-  static async notifyExpenseAdded(groupId, expense, paidByName, groupName, currencyCode, excludeUserId) {
-    const currencySymbols = { INR: '₹', USD: '$', EUR: '€', GBP: '£' };
-    const currency = currencySymbols[currencyCode] || currencyCode || '';
-    return this.sendToGroup(groupId, 'EXPENSE_ADDED', {
+  static async notifyExpenseAdded(groupId, expense, paidByName, groupName, currencyCode, excludeUserId, participants = []) {
+    const base = {
       paidByName,
       description: expense.description,
       amount: expense.amount,
-      currency,
+      currency: currencySymbol(currencyCode),
       groupName,
       groupId,
-    }, [excludeUserId], { groupId, expenseId: expense.id });
+    };
+    const extra = { groupId, expenseId: expense.id };
+    const shares = new Map(
+      participants
+        .filter((p) => p.userId && p.userId !== excludeUserId && Number(p.amount) > 0)
+        .map((p) => [p.userId, Number(p.amount).toFixed(2)]),
+    );
+    const memberIds = await this._groupMemberIds(groupId, [excludeUserId]);
+    const others = memberIds.filter((id) => !shares.has(id));
+    await Promise.all([
+      ...[...shares].filter(([id]) => memberIds.includes(id)).map(([id, share]) =>
+        this.sendToUser(id, 'EXPENSE_ADDED', { ...base, yourShare: share }, extra)),
+      others.length ? this.sendToUsers(others, 'EXPENSE_ADDED', base, extra) : null,
+    ]);
+  }
+
+  /**
+   * Expense edited or deleted — notify everyone whose share it touched
+   * (participants before and after the change, plus the payer), except the
+   * person who made the change.
+   */
+  static async notifyExpenseChanged(type, { groupId, groupName, expense, actorId, actorName, affectedUserIds }) {
+    const recipients = [...new Set(affectedUserIds)].filter((id) => id && id !== actorId);
+    return this.sendToUsers(recipients, type, {
+      actorName,
+      description: expense.description,
+      amount: expense.amount,
+      currency: currencySymbol(expense.currency),
+      groupName,
+      groupId,
+    }, { groupId, expenseId: expense.id });
+  }
+
+  /**
+   * Group deleted — every member except the admin who deleted it.
+   */
+  static async notifyGroupDeleted(groupId, groupName, actorId, actorName) {
+    return this.sendToGroup(groupId, 'GROUP_DELETED', {
+      groupName,
+      actorName,
+      groupId,
+    }, [actorId], { groupId, dedupeId: `group-${groupId}` });
   }
 
   /**
@@ -599,15 +910,52 @@ class NotificationService {
   /**
    * Notify a single user they have an unsettled balance reminder.
    */
-  static async notifySettlementReminder(userId, groupId, groupName, amount, currencyCode) {
-    const currencySymbols = { INR: '₹', USD: '$', EUR: '€', GBP: '£' };
-    const currency = currencySymbols[currencyCode] || currencyCode || '';
+  static async notifySettlementReminder(userId, { groupId, groupName, amount, currencyCode, fromUserId, fromUserName, auto = false }) {
     return this.sendToUser(userId, 'SETTLEMENT_REMINDER', {
       groupName,
       amount,
-      currency,
+      currency: currencySymbol(currencyCode),
+      currencyCode,
+      fromUserName: fromUserName || '',
       groupId,
-    }, { groupId });
+    }, {
+      groupId,
+      fromUserId: fromUserId || '',
+      // Scheduled (jobs/settlementReminderJob.js) rather than sent by a person.
+      ...(auto ? { auto: 'true' } : {}),
+    });
+  }
+
+  // =====================
+  // Security notices — email always goes out (see `security: true`)
+  // =====================
+
+  static async notifyNewLogin(userId, device = {}) {
+    return this.sendToUser(userId, 'NEW_LOGIN', {
+      deviceName: device.deviceName || '',
+      platform: device.platform || '',
+      ipAddress: device.ipAddress || '',
+      at: new Date().toISOString(),
+    });
+  }
+
+  static async notifyPasswordChanged(userId) {
+    return this.sendToUser(userId, 'PASSWORD_CHANGED', { at: new Date().toISOString() });
+  }
+
+  static async notifySessionsRevoked(userId, revokedCount) {
+    return this.sendToUser(userId, 'SESSIONS_REVOKED', {
+      revokedCount: String(revokedCount),
+      at: new Date().toISOString(),
+    });
+  }
+
+  static async notifyWelcome(userId) {
+    return this.sendToUser(userId, 'WELCOME', {}, { dedupeId: `welcome-${userId}` });
+  }
+
+  static async notifyAccountDeleted(userId) {
+    return this.sendToUser(userId, 'ACCOUNT_DELETED', { at: new Date().toISOString() });
   }
 }
 
