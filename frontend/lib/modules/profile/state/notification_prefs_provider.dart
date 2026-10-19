@@ -14,7 +14,7 @@ import '../../auth/state/auth_provider.dart';
 class NotificationPrefs {
   const NotificationPrefs({
     this.pushEnabled = true,
-    this.emailEnabled = false,
+    this.emailEnabled = true,
     this.newExpense = true,
     this.groupInvite = true,
     this.paymentReceived = true,
@@ -72,7 +72,7 @@ class NotificationPrefs {
         json[key] is bool ? json[key] as bool : fallback;
     return NotificationPrefs(
       pushEnabled: b('pushEnabled', true),
-      emailEnabled: b('emailEnabled', false),
+      emailEnabled: b('emailEnabled', true),
       newExpense: b('newExpense', true),
       groupInvite: b('groupInvite', true),
       paymentReceived: b('paymentReceived', true),

@@ -54,6 +54,7 @@ class _GroupActivityTabState extends ConsumerState<GroupActivityTab> {
     'EXPENSE_DELETED',
     'SETTLEMENT_CREATED',
     'SETTLEMENT_CONFIRMED',
+    'SETTLEMENT_DELETED',
   };
 
   @override

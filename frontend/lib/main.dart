@@ -17,6 +17,7 @@ import 'core/state/connectivity_provider.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_provider.dart';
 import 'core/routing/app_router.dart';
+import 'modules/notifications/state/push_refresh_provider.dart';
 
 void main() async {
   // runZonedGuarded catches uncaught async errors that escape the framework.
@@ -102,6 +103,8 @@ class _KharchaSplitAppState extends ConsumerState<KharchaSplitApp> {
         NotificationRouter.handleTap(appRouter, message);
       });
     }
+    // Refetch balances / groups when a relevant push lands in the foreground.
+    ref.read(pushRefreshProvider);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       // Push setup runs after the first frame. Doing it in main() blocked
       // the very first paint behind the Android 13+ / iOS notification

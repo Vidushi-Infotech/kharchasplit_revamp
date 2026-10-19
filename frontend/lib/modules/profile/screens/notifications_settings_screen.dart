@@ -6,6 +6,7 @@ import '../../../core/services/haptic_service.dart';
 import '../../../core/state/haptic_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../auth/state/auth_provider.dart';
 import '../state/notification_prefs_provider.dart';
 
 class NotificationsSettingsScreen extends ConsumerWidget {
@@ -17,7 +18,13 @@ class NotificationsSettingsScreen extends ConsumerWidget {
     final prefs = ref.watch(notificationPrefsProvider);
     final notifier = ref.read(notificationPrefsProvider.notifier);
     final screenWidth = MediaQuery.sizeOf(context).width;
-    final pushDisabled = !prefs.pushEnabled;
+    // Weekly summary is email-only and goes to verified addresses only.
+    final emailVerified = ref.watch(authProvider).user?.isEmailVerified ?? false;
+    final weeklyBlockedHint = !prefs.emailEnabled
+        ? 'Turn on Email to get the weekly summary.'
+        : !emailVerified
+            ? 'Verify your email (Profile → Verify) to get the weekly summary.'
+            : null;
 
     return Scaffold(
       backgroundColor: AppColors.background(isDark),
@@ -54,7 +61,9 @@ class NotificationsSettingsScreen extends ConsumerWidget {
                     _ToggleItem(
                       icon: Icons.mail_outline_rounded,
                       title: 'Email',
-                      subtitle: 'Receipts and important updates',
+                      subtitle:
+                          'Payments, reminders and group changes. '
+                          'Security alerts are always emailed.',
                       value: prefs.emailEnabled,
                       onChanged: (v) => notifier
                           .update((p) => p.copyWith(emailEnabled: v)),
@@ -80,14 +89,12 @@ class NotificationsSettingsScreen extends ConsumerWidget {
                   ],
                 ),
                 const SizedBox(height: 22),
+                // These gate every channel (inbox, push, email) for their
+                // category, so they stay usable when push is off.
                 _SectionLabel(label: 'ACTIVITY', isDark: isDark),
                 const SizedBox(height: 8),
                 _ToggleGroup(
                   isDark: isDark,
-                  disabled: pushDisabled,
-                  disabledHint: pushDisabled
-                      ? 'Enable push notifications to use these.'
-                      : null,
                   items: [
                     _ToggleItem(
                       icon: Icons.add_card_rounded,
@@ -121,14 +128,6 @@ class NotificationsSettingsScreen extends ConsumerWidget {
                       onChanged: (v) => notifier
                           .update((p) => p.copyWith(settlementReminder: v)),
                     ),
-                    _ToggleItem(
-                      icon: Icons.alternate_email_rounded,
-                      title: 'Comments & mentions',
-                      subtitle: 'When you\'re tagged in a note',
-                      value: prefs.commentMention,
-                      onChanged: (v) => notifier
-                          .update((p) => p.copyWith(commentMention: v)),
-                    ),
                   ],
                 ),
                 const SizedBox(height: 22),
@@ -136,22 +135,18 @@ class NotificationsSettingsScreen extends ConsumerWidget {
                 const SizedBox(height: 8),
                 _ToggleGroup(
                   isDark: isDark,
+                  disabled: weeklyBlockedHint != null,
+                  disabledHint: weeklyBlockedHint,
                   items: [
                     _ToggleItem(
                       icon: Icons.calendar_view_week_rounded,
                       title: 'Weekly summary',
-                      subtitle: 'A digest of your spending every week',
+                      subtitle:
+                          'Monday email with your week\'s spending and open '
+                          'balances',
                       value: prefs.weeklySummary,
                       onChanged: (v) =>
                           notifier.update((p) => p.copyWith(weeklySummary: v)),
-                    ),
-                    _ToggleItem(
-                      icon: Icons.calendar_month_rounded,
-                      title: 'Monthly summary',
-                      subtitle: 'A month-end report with insights',
-                      value: prefs.monthlySummary,
-                      onChanged: (v) => notifier
-                          .update((p) => p.copyWith(monthlySummary: v)),
                     ),
                   ],
                 ),
@@ -168,14 +163,6 @@ class NotificationsSettingsScreen extends ConsumerWidget {
                       value: prefs.productUpdates,
                       onChanged: (v) => notifier
                           .update((p) => p.copyWith(productUpdates: v)),
-                    ),
-                    _ToggleItem(
-                      icon: Icons.local_offer_outlined,
-                      title: 'Tips & offers',
-                      subtitle: 'Personalized tips and occasional offers',
-                      value: prefs.tipsAndOffers,
-                      onChanged: (v) =>
-                          notifier.update((p) => p.copyWith(tipsAndOffers: v)),
                     ),
                   ],
                 ),

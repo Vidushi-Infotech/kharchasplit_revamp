@@ -9,10 +9,15 @@ import 'package:go_router/go_router.dart';
 ///   EXPENSE_ADDED        → { type, groupId, expenseId }
 ///   SETTLEMENT_CREATED   → { type, groupId, settlementId }
 ///   SETTLEMENT_CONFIRMED → { type, groupId, settlementId }
+///   SETTLEMENT_DELETED   → { type, groupId, settlementId }
 ///   SETTLEMENT_REMINDER  → { type, groupId }
 ///   GROUP_INVITE         → { type, groupId }
 ///   MEMBER_ADDED/LEFT/.. → { type, groupId }
 ///   EXPENSE_UPDATED/DEL  → { type, groupId, expenseId? }
+///   GROUP_DELETED        → { type, groupId }  (group is gone → groups list)
+///   REMOVED_FROM_GROUP   → { type, groupId }  (no access any more → groups list)
+///   BALANCE_WRITTEN_OFF  → { type, groupId }
+///   NEW_LOGIN / PASSWORD_CHANGED / SESSIONS_REVOKED → { type }  (→ Security)
 class NotificationRouter {
   NotificationRouter._();
 
@@ -48,7 +53,9 @@ class NotificationRouter {
       case 'EXPENSE_DELETED':
       case 'SETTLEMENT_CREATED':
       case 'SETTLEMENT_CONFIRMED':
+      case 'SETTLEMENT_DELETED':
       case 'SETTLEMENT_REMINDER':
+      case 'BALANCE_WRITTEN_OFF':
       case 'GROUP_INVITE':
       case 'GROUP_ARCHIVED':
       case 'GROUP_COMPLETED':
@@ -58,6 +65,17 @@ class NotificationRouter {
         if (groupId != null && groupId.isNotEmpty) {
           router.push('/home/groups/$groupId');
         }
+        return;
+
+      case 'GROUP_DELETED':
+      case 'REMOVED_FROM_GROUP':
+        router.push('/home/groups');
+        return;
+
+      case 'NEW_LOGIN':
+      case 'PASSWORD_CHANGED':
+      case 'SESSIONS_REVOKED':
+        router.push('/home/profile/security');
         return;
 
       default:

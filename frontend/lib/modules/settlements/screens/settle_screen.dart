@@ -92,13 +92,19 @@ class _SettleScreenState extends ConsumerState<SettleScreen> {
           );
       ref.invalidate(dashboardProvider);
       ref.invalidate(groupDetailProvider(group.id));
-      // Also refresh the pending-settlement sections so the new "Awaiting
-      // confirmation" entry shows on the group's Balance tab immediately,
-      // without needing a manual reload.
+      // Settlements are final on creation; refresh the pending sections too
+      // so any legacy pending entries stay in sync.
       ref.invalidate(pendingOutgoingSettlementsProvider(group.id));
       ref.invalidate(pendingIncomingSettlementsProvider(group.id));
       if (!mounted) return;
-      _toast('Settlement recorded.');
+      final recipientName = group.members
+          .firstWhereOrNull((m) => m.id == widget.recipientUserId)
+          ?.name;
+      _toast(
+        recipientName == null || recipientName.isEmpty
+            ? 'Settled up.'
+            : 'Settled up. $recipientName has been notified.',
+      );
       context.pop();
     } catch (e) {
       if (!mounted) return;

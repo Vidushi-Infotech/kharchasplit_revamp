@@ -322,6 +322,9 @@ class _NotificationCard extends StatelessWidget {
       case 'SETTLEMENT_CREATED':
       case 'SETTLEMENT_CONFIRMED':
         return Icons.payments_rounded;
+      case 'SETTLEMENT_DELETED':
+      case 'BALANCE_WRITTEN_OFF':
+        return Icons.money_off_rounded;
       case 'SETTLEMENT_REMINDER':
         return Icons.alarm_rounded;
       case 'GROUP_INVITE':
@@ -330,10 +333,17 @@ class _NotificationCard extends StatelessWidget {
         return Icons.person_add_rounded;
       case 'MEMBER_REMOVED':
       case 'MEMBER_LEFT':
+      case 'REMOVED_FROM_GROUP':
         return Icons.person_remove_rounded;
       case 'GROUP_ARCHIVED':
       case 'GROUP_COMPLETED':
         return Icons.archive_rounded;
+      case 'GROUP_DELETED':
+        return Icons.delete_outline_rounded;
+      case 'NEW_LOGIN':
+      case 'PASSWORD_CHANGED':
+      case 'SESSIONS_REVOKED':
+        return Icons.shield_outlined;
       default:
         return Icons.notifications_outlined;
     }
@@ -352,6 +362,13 @@ class _NotificationCard extends StatelessWidget {
       case 'MEMBER_REMOVED':
       case 'MEMBER_LEFT':
       case 'EXPENSE_DELETED':
+      case 'SETTLEMENT_DELETED':
+      case 'BALANCE_WRITTEN_OFF':
+      case 'REMOVED_FROM_GROUP':
+      case 'GROUP_DELETED':
+      case 'NEW_LOGIN':
+      case 'PASSWORD_CHANGED':
+      case 'SESSIONS_REVOKED':
         return AppColors.warning;
       default:
         return AppColors.tealDark;
