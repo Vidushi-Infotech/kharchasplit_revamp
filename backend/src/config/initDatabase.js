@@ -323,6 +323,33 @@ CREATE TABLE IF NOT EXISTS direct_pairs (
   PRIMARY KEY (user_low, user_high),
   CHECK (user_low < user_high)
 );
+
+-- Who paid how much (services/ledger.js). Existing expenses are backfilled
+-- by migrations/021; until then the ledger falls back to expenses.paid_by.
+CREATE TABLE IF NOT EXISTS expense_payers (
+  expense_id UUID NOT NULL REFERENCES expenses(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id),
+  amount DECIMAL(12, 2) NOT NULL CHECK (amount > 0),
+  PRIMARY KEY (expense_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS expense_comments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  expense_id UUID NOT NULL REFERENCES expenses(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  body TEXT NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  deleted_at TIMESTAMP
+);
+
+-- State of an expense before each edit (services/expenseHistory.js).
+CREATE TABLE IF NOT EXISTS expense_revisions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  expense_id UUID NOT NULL REFERENCES expenses(id) ON DELETE CASCADE,
+  edited_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  snapshot JSONB NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
 `;
 
 // =====================================================
@@ -358,6 +385,8 @@ const columnAdditions = [
   { table: 'groups', column: 'simplify_debts', type: 'BOOLEAN NOT NULL DEFAULT FALSE' },
   // 'group' | 'direct' (hidden pair group for non-group expenses, migration 020).
   { table: 'groups', column: 'kind', type: "VARCHAR(10) NOT NULL DEFAULT 'group'" },
+  // {"type":"percentage"|"shares","values":{userId: n}} (migration 021).
+  { table: 'groups', column: 'default_split', type: 'JSONB' },
 
   // Expenses table columns
   { table: 'expenses', column: 'deleted_at', type: 'TIMESTAMP' },
@@ -367,6 +396,8 @@ const columnAdditions = [
   { table: 'expenses', column: 'split_type', type: "VARCHAR(20) DEFAULT 'equal'" },
   { table: 'expenses', column: 'receipt_base64', type: 'TEXT' },
   { table: 'expenses', column: 'notes', type: 'TEXT' },
+  // How a plain-amount split was entered, e.g. {"mode":"adjustment",…}.
+  { table: 'expenses', column: 'split_meta', type: 'JSONB' },
   { table: 'expenses', column: 'is_deleted', type: 'BOOLEAN DEFAULT FALSE' },
 
   // Expense splits columns

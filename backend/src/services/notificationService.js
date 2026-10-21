@@ -164,6 +164,12 @@ const NOTIFICATION_TYPES = {
     channelId: 'expenses',
     prefKey: 'new_expense',
   },
+  EXPENSE_COMMENT: {
+    title: 'New comment',
+    getBody: (data) => `${data.authorName} on "${data.description}": ${data.comment}`,
+    channelId: 'expenses',
+    prefKey: 'comment_mention',
+  },
   EXPENSE_UPDATED: {
     title: 'Expense updated',
     getBody: (data) => `${data.actorName} updated "${data.description}" (${data.currency}${data.amount}) in "${data.groupName}"`,

@@ -96,6 +96,7 @@ router.post(
 
 // Archive/Unarchive routes
 router.put('/:id/archive', authenticate, groupController.rejectDirect, groupController.archiveGroup);
+router.put('/:id/default-split', authenticate, groupController.rejectDirect, groupController.setDefaultSplit);
 router.put('/:id/simplify', authenticate, groupController.rejectDirect, groupController.setSimplifyDebts);
 router.put('/:id/unarchive', authenticate, groupController.rejectDirect, groupController.unarchiveGroup);
 router.put('/:id/complete', authenticate, groupController.rejectDirect, groupController.completeGroup);

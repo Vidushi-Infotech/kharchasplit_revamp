@@ -7,8 +7,8 @@ import { query } from '../config/database.js';
  * dashboard, reports, reminder / weekly-summary jobs) is derived from the
  * same set of directed flows:
  *
- *   - an expense split: the split's user owes the payer their share
- *     (rows where the user is the payer cancel out and are skipped);
+ *   - an expense split: the split's user owes each payer their share of it,
+ *     in proportion to what each payer paid (expense_payers);
  *   - a 'paid' settlement A → B: cancels A's debt to B, i.e. B owes A.
  *
  * Pending / failed / deleted settlements, deleted expenses and deleted
@@ -19,21 +19,49 @@ import { query } from '../config/database.js';
  */
 
 /**
+ * SQL for who paid each expense and what fraction of it:
+ * rows (expense_id, user_id, share) with the shares of one expense summing
+ * to 1. From expense_payers; an expense without payer rows (created before
+ * migration 021, or by an old server during a deploy) counts as fully paid
+ * by expenses.paid_by.
+ */
+function payersSql(groupCond) {
+  const x = groupCond ? `AND x.group_id ${groupCond}` : '';
+  return `
+    SELECT ep.expense_id, ep.user_id,
+           ep.amount / NULLIF(SUM(ep.amount) OVER (PARTITION BY ep.expense_id), 0) AS share
+      FROM expense_payers ep
+      JOIN expenses x ON x.id = ep.expense_id
+     WHERE x.deleted_at IS NULL ${x}
+    UNION ALL
+    SELECT x.id, x.paid_by, 1
+      FROM expenses x
+     WHERE x.deleted_at IS NULL AND x.paid_by IS NOT NULL ${x}
+       AND NOT EXISTS (SELECT 1 FROM expense_payers q WHERE q.expense_id = x.id)`;
+}
+
+/**
  * SQL for the flow rows (group_id, debtor_id, creditor_id, amount).
  *
+ * An expense split: the split's user owes each payer their share of it
+ * (one payer → the whole split amount, as before multi-payer). Rows where
+ * the user is that payer cancel out and are skipped. Amounts are exact
+ * NUMERIC; callers round to paise after summing.
+ *
  * @param {string} [groupCond] Condition on group_id, e.g. "= $1" or
- *   "IN (SELECT group_id FROM active_groups)". It is applied inside both
- *   branches of the UNION so Postgres can use the group_id indexes.
+ *   "IN (SELECT group_id FROM active_groups)". It is applied inside every
+ *   branch so Postgres can use the group_id indexes.
  */
 export function flowsSql(groupCond = null) {
   const e = groupCond ? `AND e.group_id ${groupCond}` : '';
   const s = groupCond ? `AND s.group_id ${groupCond}` : '';
   return `
-    SELECT e.group_id, es.user_id AS debtor_id, e.paid_by AS creditor_id, es.amount
+    SELECT e.group_id, es.user_id AS debtor_id, p.user_id AS creditor_id, es.amount * p.share AS amount
       FROM expenses e
       JOIN expense_splits es ON es.expense_id = e.id
+      JOIN (${payersSql(groupCond)}) p ON p.expense_id = e.id
      WHERE e.deleted_at IS NULL AND es.deleted_at IS NULL
-       AND es.user_id <> e.paid_by ${e}
+       AND es.user_id <> p.user_id ${e}
     UNION ALL
     -- A paying B cancels A's debt to B: model it as B owing A.
     SELECT s.group_id, s.to_user_id, s.from_user_id, s.amount

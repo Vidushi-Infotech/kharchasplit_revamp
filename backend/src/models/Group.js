@@ -10,7 +10,7 @@ class Group {
     return cache.getOrSet(`group:${id}`, TTL.GROUP_DETAIL, async () => {
       const result = await query(
         `SELECT g.id, g.name, g.description, g.currency,
-                g.is_archived, g.archived_at, g.completed_at, g.simplify_debts, g.kind, g.created_by, g.created_at, g.updated_at,
+                g.is_archived, g.archived_at, g.completed_at, g.simplify_debts, g.kind, g.default_split, g.created_by, g.created_at, g.updated_at,
                 (SELECT COUNT(*) FROM group_members gm
                  WHERE gm.group_id = g.id AND gm.deleted_at IS NULL) as member_count,
                 (SELECT COUNT(*) FROM expenses e
@@ -31,7 +31,7 @@ class Group {
   static async findByIdFull(id) {
     const result = await query(
       `SELECT g.id, g.name, g.description, g.cover_image_base64, g.currency,
-              g.is_archived, g.archived_at, g.completed_at, g.simplify_debts, g.kind, g.created_by, g.created_at, g.updated_at,
+              g.is_archived, g.archived_at, g.completed_at, g.simplify_debts, g.kind, g.default_split, g.created_by, g.created_at, g.updated_at,
               (SELECT COUNT(*) FROM group_members gm
                WHERE gm.group_id = g.id AND gm.deleted_at IS NULL) as member_count,
               (SELECT COUNT(*) FROM expenses e
@@ -54,7 +54,7 @@ class Group {
     // render the actual photo (cover images are compressed to ~30-80KB).
     const result = await query(
       `SELECT g.id, g.name, g.description, g.created_by, g.created_at, g.updated_at,
-              g.currency, g.is_archived, g.archived_at, g.completed_at, g.simplify_debts, g.kind, g.cover_image_base64,
+              g.currency, g.is_archived, g.archived_at, g.completed_at, g.simplify_debts, g.kind, g.default_split, g.cover_image_base64,
               (SELECT COUNT(*) FROM group_members gm2
                WHERE gm2.group_id = g.id AND gm2.deleted_at IS NULL) as member_count,
               (SELECT COUNT(*) FROM expenses e

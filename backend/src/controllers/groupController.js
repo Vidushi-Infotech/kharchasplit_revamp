@@ -1,10 +1,11 @@
-import { userPairNets, groupNetPaise, fromPaise } from '../services/ledger.js';
+import { userPairNets, groupNetPaise, fromPaise, flowsSql } from '../services/ledger.js';
 import ExcelJS from 'exceljs';
 
 import { query } from '../config/database.js';
 import { cache } from '../services/cacheService.js';
 import { getOrCreateDirectGroup, DirectGroupError } from '../services/directGroupService.js';
 import Group from '../models/Group.js';
+import Expense from '../models/Expense.js';
 import Settlement from '../models/Settlement.js';
 import GroupService from '../services/groupService.js';
 import ActivityService from '../services/activityService.js';
@@ -99,6 +100,7 @@ const getGroups = async (req, res, next) => {
         completedAt: group.completed_at || null,
         simplifyDebts: !!group.simplify_debts,
         kind: group.kind || 'group',
+        defaultSplit: group.default_split || null,
         memberCount: parseInt(group.member_count) || 0,
         expenseCount: parseInt(group.expense_count) || 0,
         totalExpenses: parseFloat(group.total_expenses) || 0,
@@ -179,6 +181,7 @@ const getGroup = async (req, res, next) => {
         completedAt: group.completed_at || null,
         simplifyDebts: !!group.simplify_debts,
         kind: group.kind || 'group',
+        defaultSplit: group.default_split || null,
         memberCount: parseInt(group.member_count) || 0,
         expenseCount: parseInt(group.expense_count) || 0,
         totalExpenses: parseFloat(group.total_expenses) || 0,
@@ -1091,6 +1094,53 @@ const rejectDirect = async (req, res, next) => {
 };
 
 /**
+ * Set or clear the group's default split (admin only) — what Add expense
+ * starts from, e.g. rent split 60/40.
+ * PUT /api/v1/groups/:id/default-split
+ *   { defaultSplit: null | { type: 'percentage'|'shares', values: { userId: n } } }
+ * Members who leave later are skipped by the app and the rest renormalised.
+ */
+const setDefaultSplit = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    await GroupService.validateAdminAccess(id, req.user.id);
+    const ds = req.body.defaultSplit ?? null;
+    if (ds !== null) {
+      const entries = Object.entries(ds?.values ?? {});
+      if (!['percentage', 'shares'].includes(ds?.type) || entries.length < 2
+        || !entries.every(([, v]) => Number.isFinite(Number(v)) && Number(v) >= 0)) {
+        return res.status(400).json({ success: false, error: 'defaultSplit needs a type (percentage or shares) and a value per member' });
+      }
+      if (ds.type === 'percentage'
+        && Math.round(entries.reduce((s, [, v]) => s + Number(v), 0) * 100) !== 10000) {
+        return res.status(400).json({ success: false, error: 'Percentages must add up to 100' });
+      }
+      const { rows } = await query(
+        `SELECT user_id FROM group_members
+          WHERE group_id = $1 AND deleted_at IS NULL AND user_id = ANY($2::uuid[])`,
+        [id, entries.map(([k]) => k).filter((k) => /^[0-9a-f-]{36}$/i.test(k))],
+      );
+      if (rows.length !== entries.length) {
+        return res.status(400).json({ success: false, error: 'Everyone in the default split must be a member of the group' });
+      }
+    }
+    const clean = ds === null ? null : {
+      type: ds.type,
+      values: Object.fromEntries(Object.entries(ds.values).map(([k, v]) => [k, Number(v)])),
+    };
+    await query('UPDATE groups SET default_split = $2 WHERE id = $1 AND deleted_at IS NULL',
+      [id, clean === null ? null : JSON.stringify(clean)]);
+    cache.del(`group:${id}`);
+    res.json({ success: true, data: { defaultSplit: clean } });
+  } catch (error) {
+    if (error.message === 'User is not an admin of this group') {
+      return res.status(403).json({ success: false, error: error.message });
+    }
+    next(error);
+  }
+};
+
+/**
  * Archive group
  * PUT /api/v1/groups/:id/archive
  */
@@ -1517,57 +1567,37 @@ const exportGroup = async (req, res, next) => {
       if (!memberTotals.has(uid)) {
         memberTotals.set(uid, { name: name || 'Unknown', paid: 0, share: 0 });
       } else if (name && memberTotals.get(uid).name === 'Unknown') {
-        memberTotals.get(uid).name = name;
+        memberTotals.set(uid, { ...memberTotals.get(uid), name });
       }
       return memberTotals.get(uid);
     };
     for (const m of members) ensureMember(m.user_id, m.name);
+    // Paid = what each person actually paid (several payers per expense).
+    const payersOf = await Expense.payersByExpense(expenses.map((e) => e.id));
     for (const e of expenses) {
-      const m = ensureMember(e.paid_by, e.paid_by_name);
-      m.paid += parseFloat(e.amount);
+      for (const p of payersOf[e.id] || []) ensureMember(p.user_id, p.name).paid += parseFloat(p.amount);
       for (const s of splitsByExpense[e.id] || []) {
-        const mm = ensureMember(s.user_id, s.user_name);
-        mm.share += parseFloat(s.amount);
+        ensureMember(s.user_id, s.user_name).share += parseFloat(s.amount);
       }
     }
 
-    // Pairwise net debts among all members (positive net = row owes column).
-    // O(n*m) over expenses+splits — fine for any realistic group.
-    const pairwise = new Map(); // key = `${ower}__${owed}`
-    const addPair = (ower, owed, amount) => {
-      if (!ower || !owed || ower === owed) return;
-      const key = `${ower}__${owed}`;
-      pairwise.set(key, (pairwise.get(key) || 0) + amount);
-    };
-    for (const e of expenses) {
-      const payer = e.paid_by;
-      for (const s of splitsByExpense[e.id] || []) {
-        if (s.user_id !== payer) addPair(s.user_id, payer, parseFloat(s.amount));
-      }
-    }
-    for (const st of settlements) {
-      if (st.status !== 'paid') continue;
-      // from_user paid to to_user → from owes less / to is owed less
-      addPair(st.from_user_id, st.to_user_id, -parseFloat(st.amount));
-    }
-    // Collapse symmetric pairs into one net edge.
-    const seen = new Set();
+    // Pairwise net debts from the ledger (services/ledger.js) — the same
+    // numbers as the app's Balances tab with simplify off.
+    const nameOf = (uid) => memberTotals.get(uid)?.name || 'Unknown';
+    const pairRows = await query(
+      `SELECT LEAST(debtor_id, creditor_id) AS a, GREATEST(debtor_id, creditor_id) AS b,
+              SUM(CASE WHEN debtor_id < creditor_id THEN amount ELSE -amount END) AS amt
+         FROM (${flowsSql('= $1')}) f
+        GROUP BY 1, 2`,
+      [id],
+    );
     const netDebts = [];
-    for (const [key, amount] of pairwise.entries()) {
-      const [a, b] = key.split('__');
-      const reverseKey = `${b}__${a}`;
-      if (seen.has(key) || seen.has(reverseKey)) continue;
-      const reverse = pairwise.get(reverseKey) || 0;
-      const net = amount - reverse;
-      seen.add(key);
-      seen.add(reverseKey);
+    for (const r of pairRows.rows) {
+      const net = Math.round(Number(r.amt) * 100) / 100; // > 0: a owes b
       if (Math.abs(net) < 0.005) continue;
-      const nameOf = (uid) => memberTotals.get(uid)?.name || 'Unknown';
-      if (net > 0) {
-        netDebts.push({ from: nameOf(a), to: nameOf(b), amount: net });
-      } else {
-        netDebts.push({ from: nameOf(b), to: nameOf(a), amount: -net });
-      }
+      netDebts.push(net > 0
+        ? { from: nameOf(r.a), to: nameOf(r.b), amount: net }
+        : { from: nameOf(r.b), to: nameOf(r.a), amount: -net });
     }
     netDebts.sort((a, b) => b.amount - a.amount);
 
@@ -1774,6 +1804,7 @@ export default {
   removeGroupMember,
   updateMemberRole,
   archiveGroup,
+  setDefaultSplit,
   getDirectGroup,
   rejectDirect,
   setSimplifyDebts,

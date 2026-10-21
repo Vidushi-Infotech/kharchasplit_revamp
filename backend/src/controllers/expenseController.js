@@ -6,6 +6,7 @@ import ActivityService from '../services/activityService.js';
 import { NotificationService } from '../services/notificationService.js';
 import { cache } from '../services/cacheService.js';
 import { query } from '../config/database.js';
+import { parsePayers, largestPayer, checkTotals, splitInput } from '../utils/expenseInput.js';
 
 /**
  * Get expenses for a group
@@ -156,9 +157,23 @@ const createExpense = async (req, res, next) => {
     // Get group name for activity log
     const group = await Group.findById(groupId);
     if (rejectIfArchived(group, res)) return;
+    let payers = null;
+    let split;
+    try {
+      if (req.body.payers !== undefined) {
+        payers = parsePayers(req.body.payers);
+        checkTotals(amount, payers, participants);
+      }
+      split = splitInput(req.body);
+    } catch (e) {
+      if (e.status === 400) return res.status(400).json({ success: false, code: e.code, error: e.message });
+      throw e;
+    }
+    const payerId = payers ? largestPayer(payers) : paidById;
     if (await rejectNonMembers(
       groupId,
-      [paidById || req.user.id, ...(participants || []).map((p) => p?.userId)],
+      [payerId || req.user.id, ...(payers || []).map((p) => p.userId),
+        ...(participants || []).map((p) => p?.userId)],
       res,
     )) return;
 
@@ -169,14 +184,16 @@ const createExpense = async (req, res, next) => {
         amount,
         currency,
         category,
-        paidById,
+        paidById: payerId,
         paidByName,
-        splitType,
+        splitType: split.splitType,
+        splitMeta: split.splitMeta,
         receiptBase64,
         notes,
         expenseDate,
       },
-      participants
+      participants,
+      payers,
     );
 
     // Invalidate group expense/balance caches
@@ -263,21 +280,54 @@ const updateExpense = async (req, res, next) => {
     // Verify user has access
     await GroupService.validateGroupAccess(existingExpense.group_id, req.user.id);
     if (rejectIfArchived(await Group.findById(existingExpense.group_id), res)) return;
-    if (await rejectNonMembers(
-      existingExpense.group_id,
-      [paidById, ...(Array.isArray(participants) ? participants : []).map((p) => p?.userId)],
-      res,
-      [existingExpense.paid_by, ...(existingExpense.participants || []).map((p) => p.user_id)],
-    )) return;
-
-    // Only the *original* payer may edit. Payer can be reassigned via
-    // `paidById` in the body, but the caller must currently be the payer.
-    if (existingExpense.paid_by !== req.user.id) {
+    // Any payer of the expense may edit it (before multi-payer: the payer).
+    const payerIds = (existingExpense.payers || []).map((p) => p.user_id);
+    if (!payerIds.includes(req.user.id) && existingExpense.paid_by !== req.user.id) {
       return res.status(403).json({
         success: false,
         error: 'Only the person who paid can edit this expense',
       });
     }
+
+    // An app build that doesn't know about multiple payers would send one
+    // payer and silently drop the others. Refuse rather than lose data.
+    const changesMoney = amount !== undefined || paidById !== undefined || Array.isArray(participants);
+    if (req.body.payers === undefined && payerIds.length > 1 && changesMoney) {
+      return res.status(409).json({
+        success: false,
+        code: 'UPDATE_APP',
+        error: 'This expense was paid by more than one person. Update KharchaSplit to edit it.',
+      });
+    }
+
+    let payers;
+    let split;
+    try {
+      if (req.body.payers !== undefined) {
+        payers = parsePayers(req.body.payers);
+        checkTotals(
+          amount ?? existingExpense.amount,
+          payers,
+          Array.isArray(participants)
+            ? participants
+            : existingExpense.participants.map((p) => ({ amount: p.amount })),
+        );
+      }
+      split = splitInput(req.body);
+    } catch (e) {
+      if (e.status === 400) return res.status(400).json({ success: false, code: e.code, error: e.message });
+      throw e;
+    }
+    const newPayerId = payers ? largestPayer(payers) : paidById;
+
+    if (await rejectNonMembers(
+      existingExpense.group_id,
+      [newPayerId, ...(payers || []).map((p) => p.userId),
+        ...(Array.isArray(participants) ? participants : []).map((p) => p?.userId)],
+      res,
+      [existingExpense.paid_by, ...payerIds,
+        ...(existingExpense.participants || []).map((p) => p.user_id)],
+    )) return;
 
     const fields = {
       description,
@@ -287,16 +337,19 @@ const updateExpense = async (req, res, next) => {
       receiptBase64,
       notes,
       expenseDate,
-      paidById,
-      splitType,
+      paidById: newPayerId,
+      splitType: split.splitType,
+      splitMeta: split.splitMeta,
     };
 
-    // When the client sends a fresh participants array we re-write splits in
-    // a transaction; otherwise we leave splits alone (legacy callers that
-    // only patch description / notes / category).
-    const expense = Array.isArray(participants)
-      ? await Expense.updateWithSplits(id, fields, participants)
-      : await Expense.update(id, fields);
+    // Splits are rewritten only when the client sends participants (legacy
+    // callers patch just description / notes / category). The previous
+    // state is kept as a revision (GET /expenses/:id/history).
+    const expense = await Expense.edit(id, fields, {
+      participants: Array.isArray(participants) ? participants : undefined,
+      payers,
+      editorId: req.user.id,
+    });
 
     // Invalidate group expense/balance caches + every member's dashboard.
     Expense.invalidateGroupExpenses(existingExpense.group_id);
@@ -323,6 +376,8 @@ const updateExpense = async (req, res, next) => {
         affectedUserIds: [
           existingExpense.paid_by,
           expense?.paid_by,
+          ...payerIds,
+          ...(payers || []).map((p) => p.userId),
           ...existingExpense.participants.map((p) => p.user_id),
           ...(Array.isArray(participants) ? participants.map((p) => p.userId) : []),
         ],
@@ -365,11 +420,12 @@ const deleteExpense = async (req, res, next) => {
       });
     }
 
-    // Only the person who added (paid for) the expense can delete it.
+    // Only someone who paid for the expense can delete it.
     // NB: Expense.findById returns the column as `paid_by` (see the
     // SELECT in models/Expense.js) — `paid_by_id` was undefined here, so
     // this check rejected *every* delete with a 403, including the payer's.
-    if (expense.paid_by !== req.user.id) {
+    if (expense.paid_by !== req.user.id
+      && !(expense.payers || []).some((p) => p.user_id === req.user.id)) {
       return res.status(403).json({
         success: false,
         error: 'Only the person who added this expense can delete it.',
