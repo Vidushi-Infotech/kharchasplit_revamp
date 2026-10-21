@@ -1,7 +1,8 @@
-import { userPairNetsSql, groupNetPaise, fromPaise } from '../services/ledger.js';
+import { userPairNets, groupNetPaise, fromPaise } from '../services/ledger.js';
 import ExcelJS from 'exceljs';
 
 import { query } from '../config/database.js';
+import { cache } from '../services/cacheService.js';
 import Group from '../models/Group.js';
 import Settlement from '../models/Settlement.js';
 import GroupService from '../services/groupService.js';
@@ -49,25 +50,19 @@ const getGroups = async (req, res, next) => {
     // positive but they owe one specific member there. The group card and
     // simplify-debt math still want the net.
     const balancesByGroup = {};
-    if (groupIds.length > 0) {
-      const placeholders = groupIds.map((_, i) => `$${i + 2}`).join(', ');
-      const balanceResult = await query(
-        `WITH pair_net AS (${userPairNetsSql('$1', `IN (${placeholders})`)})
-         SELECT group_id,
-                COALESCE(SUM(net), 0)                  AS my_balance,
-                COALESCE(SUM(GREATEST(net, 0)), 0)     AS you_are_owed_in_group,
-                COALESCE(SUM(GREATEST(-net, 0)), 0)    AS you_owe_in_group
-         FROM pair_net
-         GROUP BY group_id`,
-        [userId, ...groupIds]
-      );
-      for (const row of balanceResult.rows) {
-        balancesByGroup[row.group_id] = {
-          myBalance: parseFloat(row.my_balance),
-          youAreOwedInGroup: parseFloat(row.you_are_owed_in_group),
-          youOweInGroup: parseFloat(row.you_owe_in_group),
-        };
-      }
+    // Visible debts (raw pairwise, or simplified where the group has
+    // simplify_debts on) — see services/ledger.js userPairNets.
+    for (const r of await userPairNets(userId, groupIds)) {
+      const b = balancesByGroup[r.group_id]
+        ?? (balancesByGroup[r.group_id] = { myBalance: 0, youAreOwedInGroup: 0, youOweInGroup: 0 });
+      b.myBalance += r.net;
+      if (r.net > 0) b.youAreOwedInGroup += r.net;
+      else b.youOweInGroup -= r.net;
+    }
+    for (const b of Object.values(balancesByGroup)) {
+      b.myBalance = Math.round(b.myBalance * 100) / 100;
+      b.youAreOwedInGroup = Math.round(b.youAreOwedInGroup * 100) / 100;
+      b.youOweInGroup = Math.round(b.youOweInGroup * 100) / 100;
     }
 
     const groupsWithMembers = groups.map(group => {
@@ -101,6 +96,7 @@ const getGroups = async (req, res, next) => {
         isArchived: !!group.is_archived,
         archivedAt: group.archived_at || null,
         completedAt: group.completed_at || null,
+        simplifyDebts: !!group.simplify_debts,
         memberCount: parseInt(group.member_count) || 0,
         expenseCount: parseInt(group.expense_count) || 0,
         totalExpenses: parseFloat(group.total_expenses) || 0,
@@ -179,6 +175,7 @@ const getGroup = async (req, res, next) => {
         isArchived: !!group.is_archived,
         archivedAt: group.archived_at || null,
         completedAt: group.completed_at || null,
+        simplifyDebts: !!group.simplify_debts,
         memberCount: parseInt(group.member_count) || 0,
         expenseCount: parseInt(group.expense_count) || 0,
         totalExpenses: parseFloat(group.total_expenses) || 0,
@@ -1015,6 +1012,45 @@ const updateMemberRole = async (req, res, next) => {
 };
 
 /**
+ * Turn "Simplify group debts" on or off (admin only).
+ * PUT /api/v1/groups/:id/simplify  { enabled: boolean }
+ *
+ * Changes who owes whom (not how much anyone owes in total), so every
+ * balance view and the auto-reminder state for the group are reset.
+ */
+const setSimplifyDebts = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { enabled } = req.body;
+    if (typeof enabled !== 'boolean') {
+      return res.status(400).json({ success: false, error: 'enabled must be true or false' });
+    }
+    await GroupService.validateAdminAccess(id, req.user.id);
+    const group = await Group.findById(id);
+    if (!group) {
+      return res.status(404).json({ success: false, error: 'Group not found' });
+    }
+
+    const changed = await Group.setSimplifyDebts(id, enabled);
+    if (changed) {
+      cache.invalidate(`group:${id}:balances`);
+      await GroupService.invalidateMemberDashboards(id);
+      // Reminder bookkeeping is per (debtor, creditor) pair, and the pairs
+      // just changed — start the reminder cadence afresh.
+      await query('DELETE FROM auto_reminder_state WHERE group_id = $1', [id]);
+      await ActivityService.logSimplifyDebts(id, req.user.id, group.name, enabled);
+    }
+
+    res.json({ success: true, data: { simplifyDebts: enabled } });
+  } catch (error) {
+    if (error.message === 'User is not an admin of this group') {
+      return res.status(403).json({ success: false, error: error.message });
+    }
+    next(error);
+  }
+};
+
+/**
  * Archive group
  * PUT /api/v1/groups/:id/archive
  */
@@ -1233,7 +1269,7 @@ const remindForBalance = async (req, res, next) => {
     // Pairwise from caller's perspective:
     //   pair[targetId] > 0  → caller owes target (don't remind)
     //   pair[targetId] < 0  → target owes caller |that much|
-    const pair = await GroupService.getUserPairwiseDebts(groupId, callerId);
+    const pair = await GroupService.getUserVisibleDebts(groupId, callerId);
     const owedToCaller = -(pair.get(targetId) || 0);
     if (owedToCaller <= 0.01) {
       return res.status(400).json({
@@ -1698,6 +1734,7 @@ export default {
   removeGroupMember,
   updateMemberRole,
   archiveGroup,
+  setSimplifyDebts,
   unarchiveGroup,
   completeGroup,
   remindForBalance,

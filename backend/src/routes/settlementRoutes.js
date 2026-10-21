@@ -32,6 +32,23 @@ router.post(
   settlementController.createSettlement
 );
 
+router.post(
+  '/settle-all',
+  authenticate,
+  idempotent,
+  [
+    body('friendId').isUUID(),
+    body('currency').isString().isLength({ min: 3, max: 10 }),
+    body('expected').isArray({ min: 1, max: 200 }),
+    body('expected.*.groupId').isUUID(),
+    body('expected.*.amount').isFloat(),
+    body('method').optional({ values: 'null' }).isIn(SETTLEMENT_METHODS),
+    body('notes').optional({ values: 'null' }).isString().isLength({ max: 500 }),
+  ],
+  validate,
+  settlementController.settleAll
+);
+
 router.patch('/:id/confirm', authenticate, settlementController.confirmSettlement);
 router.delete('/:id', authenticate, settlementController.deleteSettlement);
 

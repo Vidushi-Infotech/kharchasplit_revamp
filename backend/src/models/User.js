@@ -11,7 +11,7 @@ class User {
   static async findById(id) {
     return cache.getOrSet(`user:${id}:profile`, TTL.USER_PROFILE, async () => {
       const result = await query(
-        'SELECT id, phone_number, name, email, profile_image_base64, preferred_currency, email_verified_at, created_at, updated_at FROM users WHERE id = $1 AND deleted_at IS NULL',
+        'SELECT id, phone_number, name, email, profile_image_base64, preferred_currency, email_verified_at, upi_id, created_at, updated_at FROM users WHERE id = $1 AND deleted_at IS NULL',
         [id]
       );
       return result.rows[0] || null;
@@ -195,6 +195,9 @@ class User {
    */
   static async update(id, userData) {
     const { name, email, profileImageBase64, preferredCurrency } = userData;
+    // upiId: undefined = leave as is; null = clear; string = set (already
+    // validated by utils/upi.js).
+    const setUpi = userData.upiId !== undefined;
     const result = await query(
       `UPDATE users
        SET name = COALESCE($1, name),
@@ -207,10 +210,11 @@ class User {
            END,
            profile_image_base64 = COALESCE($3, profile_image_base64),
            preferred_currency = COALESCE($4, preferred_currency),
+           upi_id = CASE WHEN $6::boolean THEN $7 ELSE upi_id END,
            updated_at = NOW()
        WHERE id = $5 AND deleted_at IS NULL
-       RETURNING id, phone_number, name, email, profile_image_base64, preferred_currency, email_verified_at, updated_at`,
-      [name, email, profileImageBase64, preferredCurrency, id]
+       RETURNING id, phone_number, name, email, profile_image_base64, preferred_currency, email_verified_at, upi_id, updated_at`,
+      [name, email, profileImageBase64, preferredCurrency, id, setUpi, setUpi ? userData.upiId : null]
     );
     if (result.rows[0]) this.invalidateUser(id);
     return result.rows[0] || null;

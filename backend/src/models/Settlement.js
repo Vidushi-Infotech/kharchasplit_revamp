@@ -5,7 +5,7 @@ class Settlement {
   // Columns shared by all settlement queries
   static get COLUMNS() {
     return `s.id, s.group_id, s.from_user_id, s.to_user_id, s.amount, s.currency,
-            s.status, s.notes, s.method, s.confirmed_at, s.settled_at, s.created_at`;
+            s.status, s.notes, s.method, s.batch_id, s.confirmed_at, s.settled_at, s.created_at`;
   }
 
   /**
@@ -85,7 +85,7 @@ class Settlement {
       )
       VALUES ($1, $2, $3, $4, $5, $6, $7, CASE WHEN $8::boolean THEN NOW() ELSE NULL END, $9)
       RETURNING id, group_id, from_user_id, to_user_id, amount, currency,
-                status, notes, method, confirmed_at, settled_at, created_at`,
+                status, notes, method, batch_id, confirmed_at, settled_at, created_at`,
       [
         settlementData.groupId,
         settlementData.fromUserId,
@@ -111,7 +111,7 @@ class Settlement {
            confirmed_at = NOW()
        WHERE id = $1 AND status = 'pending' AND deleted_at IS NULL
        RETURNING id, group_id, from_user_id, to_user_id, amount, currency,
-                 status, notes, method, confirmed_at, settled_at, created_at`,
+                 status, notes, method, batch_id, confirmed_at, settled_at, created_at`,
       [id]
     );
     return result.rows[0] || null;
@@ -127,7 +127,7 @@ class Settlement {
            notes = COALESCE($2, notes)
        WHERE id = $3 AND status = 'pending' AND deleted_at IS NULL
        RETURNING id, group_id, from_user_id, to_user_id, amount, currency,
-                 status, notes, method, confirmed_at, settled_at, created_at`,
+                 status, notes, method, batch_id, confirmed_at, settled_at, created_at`,
       [settlementData.amount, settlementData.notes, id]
     );
     return result.rows[0] || null;

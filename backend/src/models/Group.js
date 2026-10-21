@@ -10,7 +10,7 @@ class Group {
     return cache.getOrSet(`group:${id}`, TTL.GROUP_DETAIL, async () => {
       const result = await query(
         `SELECT g.id, g.name, g.description, g.currency,
-                g.is_archived, g.archived_at, g.completed_at, g.created_by, g.created_at, g.updated_at,
+                g.is_archived, g.archived_at, g.completed_at, g.simplify_debts, g.created_by, g.created_at, g.updated_at,
                 (SELECT COUNT(*) FROM group_members gm
                  WHERE gm.group_id = g.id AND gm.deleted_at IS NULL) as member_count,
                 (SELECT COUNT(*) FROM expenses e
@@ -31,7 +31,7 @@ class Group {
   static async findByIdFull(id) {
     const result = await query(
       `SELECT g.id, g.name, g.description, g.cover_image_base64, g.currency,
-              g.is_archived, g.archived_at, g.completed_at, g.created_by, g.created_at, g.updated_at,
+              g.is_archived, g.archived_at, g.completed_at, g.simplify_debts, g.created_by, g.created_at, g.updated_at,
               (SELECT COUNT(*) FROM group_members gm
                WHERE gm.group_id = g.id AND gm.deleted_at IS NULL) as member_count,
               (SELECT COUNT(*) FROM expenses e
@@ -54,7 +54,7 @@ class Group {
     // render the actual photo (cover images are compressed to ~30-80KB).
     const result = await query(
       `SELECT g.id, g.name, g.description, g.created_by, g.created_at, g.updated_at,
-              g.currency, g.is_archived, g.archived_at, g.completed_at, g.cover_image_base64,
+              g.currency, g.is_archived, g.archived_at, g.completed_at, g.simplify_debts, g.cover_image_base64,
               (SELECT COUNT(*) FROM group_members gm2
                WHERE gm2.group_id = g.id AND gm2.deleted_at IS NULL) as member_count,
               (SELECT COUNT(*) FROM expenses e
@@ -143,6 +143,21 @@ class Group {
     );
     if (result.rows[0]) cache.del(`group:${id}`);
     return result.rows[0] || null;
+  }
+
+  /**
+   * Turn "Simplify group debts" on/off. Returns false when it already had
+   * that value (or the group is gone).
+   */
+  static async setSimplifyDebts(id, enabled) {
+    const result = await query(
+      `UPDATE groups SET simplify_debts = $2
+        WHERE id = $1 AND deleted_at IS NULL AND simplify_debts <> $2
+        RETURNING id`,
+      [id, enabled]
+    );
+    if (result.rows.length > 0) cache.del(`group:${id}`);
+    return result.rows.length > 0;
   }
 
   /**

@@ -60,23 +60,35 @@ export const toPaise = (amount) => Math.round(Number(amount) * 100);
 export const fromPaise = (paise) => (paise / 100).toFixed(2);
 
 /**
+ * Each member's net position in each of several groups, in paise.
+ * @returns {Promise<Map<string, Map<string, number>>>} groupId → (userId →
+ *   paise; positive = is owed, negative = owes). Zero nets are omitted.
+ */
+export async function groupsNetPaise(groupIds) {
+  const out = new Map();
+  if (groupIds.length === 0) return out;
+  const result = await query(
+    `SELECT f.group_id, v.user_id, SUM(v.delta) AS net
+       FROM (${flowsSql('= ANY($1::uuid[])')}) f
+       CROSS JOIN LATERAL (VALUES (f.creditor_id, f.amount), (f.debtor_id, -f.amount)) v(user_id, delta)
+      GROUP BY f.group_id, v.user_id`,
+    [groupIds],
+  );
+  for (const r of result.rows) {
+    const p = toPaise(r.net);
+    if (p === 0) continue;
+    if (!out.has(r.group_id)) out.set(r.group_id, new Map());
+    out.get(r.group_id).set(r.user_id, p);
+  }
+  return out;
+}
+
+/**
  * Each member's net position in a group, in paise.
  * @returns {Promise<Map<string, number>>} positive = is owed, negative = owes
  */
 export async function groupNetPaise(groupId) {
-  const result = await query(
-    `SELECT v.user_id, SUM(v.delta) AS net
-       FROM (${flowsSql('= $1')}) f
-       CROSS JOIN LATERAL (VALUES (f.creditor_id, f.amount), (f.debtor_id, -f.amount)) v(user_id, delta)
-      GROUP BY v.user_id`,
-    [groupId],
-  );
-  const net = new Map();
-  for (const r of result.rows) {
-    const p = toPaise(r.net);
-    if (p !== 0) net.set(r.user_id, p);
-  }
-  return net;
+  return (await groupsNetPaise([groupId])).get(groupId) ?? new Map();
 }
 
 /**
@@ -113,7 +125,9 @@ export function simplify(netPaise) {
 }
 
 /**
- * One user's pairwise debts in a group.
+ * One user's raw pairwise debts in a group, ignoring simplify_debts. Used
+ * where every underlying debt must be cleared (leaving / removing a member);
+ * for what the user sees, use userVisibleDebts.
  * @returns {Promise<Map<string, number>>} otherUserId → rupees; positive =
  *   the user owes the other party, negative = the other party owes them.
  */
@@ -123,4 +137,71 @@ export async function userPairDebts(groupId, userId) {
     [groupId, userId],
   );
   return new Map(result.rows.map((r) => [r.other_user_id, -Number(r.net)]));
+}
+
+/**
+ * The ids (of `groupIds`) of groups with "Simplify group debts" on.
+ * @returns {Promise<Set<string>>}
+ */
+export async function simplifiedGroupIds(groupIds) {
+  if (groupIds.length === 0) return new Set();
+  const result = await query(
+    'SELECT id FROM groups WHERE id = ANY($1::uuid[]) AND simplify_debts',
+    [groupIds],
+  );
+  return new Set(result.rows.map((r) => r.id));
+}
+
+/**
+ * The debts a user sees, per group and other user — what the Balances tab,
+ * groups list, dashboard, reports, friends and settle-all agree on.
+ *
+ * Normally the raw pairwise net. In a group with simplify_debts on, the
+ * transfers of simplify() instead: every member's total is unchanged, but
+ * debts are re-routed to minimise the number of payments, so the user may
+ * owe someone they never shared an expense with.
+ *
+ * @param {string}   userId
+ * @param {string[]} groupIds
+ * @returns {Promise<Array<{group_id, other_user_id, net: number}>>} rupees;
+ *   net > 0 = the other user owes `userId`. Zero rows are omitted.
+ */
+export async function userPairNets(userId, groupIds) {
+  if (groupIds.length === 0) return [];
+  const simplified = await simplifiedGroupIds(groupIds);
+  const plain = groupIds.filter((id) => !simplified.has(id));
+  const rows = [];
+
+  if (plain.length > 0) {
+    const result = await query(
+      `SELECT group_id, other_user_id, net
+         FROM (${userPairNetsSql('$1', '= ANY($2::uuid[])')}) p
+        WHERE net <> 0`,
+      [userId, plain],
+    );
+    for (const r of result.rows) {
+      rows.push({ group_id: r.group_id, other_user_id: r.other_user_id, net: Number(r.net) });
+    }
+  }
+
+  for (const [groupId, net] of await groupsNetPaise([...simplified])) {
+    for (const t of simplify(net)) {
+      if (t.toUserId === userId) {
+        rows.push({ group_id: groupId, other_user_id: t.fromUserId, net: Number(t.amount) });
+      } else if (t.fromUserId === userId) {
+        rows.push({ group_id: groupId, other_user_id: t.toUserId, net: -Number(t.amount) });
+      }
+    }
+  }
+  return rows;
+}
+
+/**
+ * One user's visible debts in a group (see userPairNets), with the same
+ * sign convention as userPairDebts: positive = the user owes the other.
+ * @returns {Promise<Map<string, number>>}
+ */
+export async function userVisibleDebts(groupId, userId) {
+  const rows = await userPairNets(userId, [groupId]);
+  return new Map(rows.map((r) => [r.other_user_id, -r.net]));
 }

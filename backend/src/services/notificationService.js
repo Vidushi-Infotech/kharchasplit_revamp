@@ -48,6 +48,15 @@ const NOTIFICATION_TYPES = {
     prefKey: 'payment_received',
     email: EmailTemplates.settlementReceived,
   },
+  SETTLE_ALL_RECEIVED: {
+    title: 'Payment received',
+    getBody: (data) => (data.groupCount === '1'
+      ? `${data.fromUserName} paid you ${data.currency}${data.amount} in "${data.groupName}"`
+      : `${data.fromUserName} paid you ${data.currency}${data.amount} and settled up across ${data.groupCount} groups`),
+    channelId: 'payments',
+    prefKey: 'payment_received',
+    email: EmailTemplates.settlementReceived,
+  },
   SETTLEMENT_DELETED: {
     title: 'Payment deleted',
     getBody: (data) => `${data.actorName} deleted the ${data.currency}${data.amount} payment from ${data.fromUserName} to ${data.toUserName} in "${data.groupName}"`,
@@ -69,6 +78,19 @@ const NOTIFICATION_TYPES = {
     channelId: 'payments',
     prefKey: 'settlement_reminder',
     email: EmailTemplates.settlementReminder,
+  },
+
+  UPI_ID_REQUESTED: {
+    title: 'Add your UPI ID',
+    getBody: (data) => `${data.requesterName} wants to pay you ${data.currency}${data.amount}. Add your UPI ID so they can pay in one tap`,
+    channelId: 'payments',
+    prefKey: 'payment_received',
+  },
+  PAYMENT_NOT_RECEIVED: {
+    title: 'Payment not received',
+    getBody: (data) => `${data.toUserName} says they didn't receive your ${data.currency}${data.amount} payment in "${data.groupName}". It was removed, so the balance is open again`,
+    channelId: 'payments',
+    prefKey: 'payment_received',
   },
 
   GROUP_INVITE: {
@@ -744,7 +766,7 @@ class NotificationService {
 
     const emailContext = {};
     await Promise.all(memberIds.map(async (uid) => {
-      const pair = await GroupService.getUserPairwiseDebts(groupId, uid);
+      const pair = await GroupService.getUserVisibleDebts(groupId, uid);
       emailContext[uid] = {
         balances: [...pair.entries()]
           .filter(([, amt]) => Math.abs(amt) > 0.005)

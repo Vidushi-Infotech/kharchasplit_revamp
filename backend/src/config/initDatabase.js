@@ -330,6 +330,8 @@ const columnAdditions = [
   { table: 'users', column: 'email_verify_reminder_at', type: 'TIMESTAMP' },
   { table: 'users', column: 'email_verify_reminder_count', type: 'INTEGER DEFAULT 0' },
   { table: 'users', column: 'profile_image_base64', type: 'TEXT' },
+  // UPI VPA, shown only to people who owe this user (migration 019).
+  { table: 'users', column: 'upi_id', type: 'VARCHAR(100)' },
 
   // Groups table columns
   { table: 'groups', column: 'currency', type: "VARCHAR(10) DEFAULT 'INR'" },
@@ -340,6 +342,9 @@ const columnAdditions = [
   { table: 'groups', column: 'archived_at', type: 'TIMESTAMP WITH TIME ZONE' },
   // Set when a fully settled group is marked complete (it is archived too).
   { table: 'groups', column: 'completed_at', type: 'TIMESTAMP WITH TIME ZONE' },
+  // "Simplify group debts" (services/ledger.js). Not the legacy
+  // simplified_debts column, which defaults to TRUE and was never read.
+  { table: 'groups', column: 'simplify_debts', type: 'BOOLEAN NOT NULL DEFAULT FALSE' },
 
   // Expenses table columns
   { table: 'expenses', column: 'deleted_at', type: 'TIMESTAMP' },
@@ -362,6 +367,8 @@ const columnAdditions = [
   { table: 'settlements', column: 'notes', type: 'TEXT' },
   // cash | upi | bank_transfer | other; NULL on older rows (shown as "Other").
   { table: 'settlements', column: 'method', type: 'VARCHAR(20)' },
+  // Shared by the rows of one "Settle all balances" (migration 019).
+  { table: 'settlements', column: 'batch_id', type: 'UUID' },
   { table: 'settlements', column: 'status', type: "VARCHAR(20) DEFAULT 'pending'" },
   { table: 'settlements', column: 'confirmed_at', type: 'TIMESTAMP' },
 

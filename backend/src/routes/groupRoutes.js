@@ -83,6 +83,7 @@ router.post(
 
 // Archive/Unarchive routes
 router.put('/:id/archive', authenticate, groupController.archiveGroup);
+router.put('/:id/simplify', authenticate, groupController.setSimplifyDebts);
 router.put('/:id/unarchive', authenticate, groupController.unarchiveGroup);
 router.put('/:id/complete', authenticate, groupController.completeGroup);
 

@@ -1,4 +1,4 @@
-import { userPairNetsSql, toPaise, fromPaise } from '../services/ledger.js';
+import { userPairNets, toPaise, fromPaise } from '../services/ledger.js';
 import { query } from '../config/database.js';
 import User from '../models/User.js';
 import Group from '../models/Group.js';
@@ -6,6 +6,36 @@ import { NotificationService } from '../services/notificationService.js';
 import { cache } from '../services/cacheService.js';
 import EmailService from '../services/emailService.js';
 import { generateOTP, getOTPExpiry } from '../utils/otp.js';
+import { normalizeUpiId } from '../utils/upi.js';
+
+/** Ids of the live groups the user is currently a member of. */
+const activeGroupIds = async (userId) => (await query(
+  `SELECT g.id FROM groups g
+     JOIN group_members gm ON gm.group_id = g.id
+    WHERE gm.user_id = $1 AND gm.deleted_at IS NULL AND g.deleted_at IS NULL`,
+  [userId],
+)).rows.map((r) => r.id);
+
+/**
+ * Pair-level totals from userPairNets rows, as the dashboard and reports
+ * show them. Pair-level, not per-group net: if Akash owes me 2200 in the
+ * same group where I owe R Ansari 1633, I am owed 2200 AND owe 1633 (the
+ * per-group net of +566 would hide the debt). total = owed - owe.
+ */
+const pairTotals = (rows) => {
+  let owed = 0;
+  let owe = 0;
+  for (const r of rows) {
+    const p = toPaise(r.net);
+    if (p > 0) owed += p;
+    else owe -= p;
+  }
+  return {
+    you_are_owed: fromPaise(owed),
+    you_owe: fromPaise(owe),
+    total: fromPaise(owed - owe),
+  };
+};
 
 /**
  * Get user by ID
@@ -34,6 +64,8 @@ const getUser = async (req, res, next) => {
         profileImageBase64: user.profile_image_base64,
         preferredCurrency: user.preferred_currency,
         emailVerifiedAt: user.email_verified_at || null,
+        // Only to the user themself; payers get it via /payment-info.
+        ...(user.id === req.user.id ? { upiId: user.upi_id || null } : {}),
         createdAt: user.created_at,
         updatedAt: user.updated_at,
       },
@@ -51,6 +83,15 @@ const updateUser = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { name, email, profileImageBase64, preferredCurrency } = req.body;
+
+    let upiId;
+    if (req.body.upiId !== undefined) {
+      try {
+        upiId = normalizeUpiId(req.body.upiId);
+      } catch (e) {
+        return res.status(400).json({ success: false, error: e.message });
+      }
+    }
 
     // Verify user owns this account
     if (req.user.id !== id) {
@@ -93,6 +134,7 @@ const updateUser = async (req, res, next) => {
       email,
       profileImageBase64,
       preferredCurrency,
+      upiId,
     });
 
     if (!user) {
@@ -130,6 +172,7 @@ const updateUser = async (req, res, next) => {
         profileImageBase64: user.profile_image_base64,
         preferredCurrency: user.preferred_currency,
         emailVerifiedAt: user.email_verified_at || null,
+        upiId: user.upi_id || null,
         updatedAt: user.updated_at,
       },
     });
@@ -511,24 +554,8 @@ const getDashboard = async (req, res, next) => {
     //
     // total = you_are_owed - you_owe (mathematically equal to the old per-group
     // sum, so existing TOTAL invariants are preserved).
-    const balancesResult = await query(
-      `WITH active_groups AS (
-         SELECT g.id AS group_id
-         FROM groups g
-         JOIN group_members gm ON gm.group_id = g.id
-         WHERE gm.user_id = $1
-           AND gm.deleted_at IS NULL
-           AND g.deleted_at IS NULL
-       ),
-       pair_net AS (${userPairNetsSql('$1', 'IN (SELECT group_id FROM active_groups)')})
-       SELECT COALESCE(SUM(GREATEST(net, 0)), 0) AS you_are_owed,
-              COALESCE(SUM(GREATEST(-net, 0)), 0) AS you_owe,
-              COALESCE(SUM(net), 0) AS total
-       FROM pair_net`,
-      [id]
-    );
+    const balances = pairTotals(await userPairNets(id, await activeGroupIds(id)));
 
-    const balances = balancesResult.rows[0] || {};
 
     // Latest expenses across the user's groups, with the group name + paid-by user.
     // One query, with all splits batch-fetched separately.
@@ -874,20 +901,19 @@ const getFriends = async (req, res, next) => {
       return res.status(403).json({ success: false, error: 'You can only fetch your own friends' });
     }
 
-    const { rows: netRows } = await query(
-      `WITH my_groups AS (
-         SELECT g.id AS group_id, g.name, g.currency
-           FROM groups g
-           JOIN group_members gm ON gm.group_id = g.id
-          WHERE gm.user_id = $1 AND gm.deleted_at IS NULL AND g.deleted_at IS NULL
-       ),
-       pair_net AS (${userPairNetsSql('$1', 'IN (SELECT group_id FROM my_groups)')})
-       SELECT pn.other_user_id, pn.group_id, mg.name AS group_name, mg.currency, pn.net
-         FROM pair_net pn
-         JOIN my_groups mg ON mg.group_id = pn.group_id
-        WHERE pn.net <> 0`,
+    const { rows: myGroups } = await query(
+      `SELECT g.id, g.name, g.currency
+         FROM groups g
+         JOIN group_members gm ON gm.group_id = g.id
+        WHERE gm.user_id = $1 AND gm.deleted_at IS NULL AND g.deleted_at IS NULL`,
       [id],
     );
+    const groupById = new Map(myGroups.map((g) => [g.id, g]));
+    const netRows = (await userPairNets(id, myGroups.map((g) => g.id))).map((r) => ({
+      ...r,
+      group_name: groupById.get(r.group_id).name,
+      currency: groupById.get(r.group_id).currency,
+    }));
 
     const { rows: shared } = await query(
       `SELECT other.user_id, COUNT(DISTINCT other.group_id)::int AS shared_groups
@@ -956,6 +982,101 @@ const getFriends = async (req, res, next) => {
   }
 };
 
+/**
+ * What the caller owes `otherId`, in rupees, per group they currently
+ * share (visible debts — see services/ledger.js userPairNets).
+ * @returns {Promise<Array<{groupId, amount}>>} only groups where the caller owes
+ */
+const amountsOwedTo = async (callerId, otherId) => {
+  const { rows } = await query(
+    `SELECT a.group_id
+       FROM group_members a
+       JOIN group_members b ON b.group_id = a.group_id AND b.user_id = $2 AND b.deleted_at IS NULL
+       JOIN groups g ON g.id = a.group_id AND g.deleted_at IS NULL
+      WHERE a.user_id = $1 AND a.deleted_at IS NULL`,
+    [callerId, otherId],
+  );
+  return (await userPairNets(callerId, rows.map((r) => r.group_id)))
+    .filter((r) => r.other_user_id === otherId && r.net < 0)
+    .map((r) => ({ groupId: r.group_id, amount: -r.net }));
+};
+
+/**
+ * How to pay someone: their UPI ID — but only for a caller who currently
+ * owes them money in a shared group (a VPA often contains a phone number).
+ * GET /api/v1/users/:id/payment-info
+ * → { name, hasUpiId, upiId (null unless the caller owes them), owedAmount }
+ */
+const getPaymentInfo = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    if (id === req.user.id) {
+      return res.status(400).json({ success: false, error: 'You can\'t pay yourself' });
+    }
+    const user = await User.findById(id);
+    if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+
+    const owed = await amountsOwedTo(req.user.id, id);
+    const owedAmount = Number(fromPaise(owed.reduce((s, o) => s + toPaise(o.amount), 0)));
+    res.json({
+      success: true,
+      data: {
+        userId: id,
+        name: user.name,
+        hasUpiId: !!user.upi_id,
+        upiId: owedAmount > 0 ? user.upi_id || null : null,
+        owedAmount,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Ask someone you owe to add their UPI ID (push + inbox to them).
+ * POST /api/v1/users/:id/upi-request
+ * At most one request per (caller, target) per 24h.
+ */
+const requestUpiId = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    if (id === req.user.id) {
+      return res.status(400).json({ success: false, error: 'You can\'t ask yourself' });
+    }
+    const [target, caller] = await Promise.all([User.findById(id), User.findById(req.user.id)]);
+    if (!target) return res.status(404).json({ success: false, error: 'User not found' });
+    if (target.upi_id) {
+      return res.status(409).json({ success: false, code: 'UPI_ID_EXISTS', error: `${target.name || 'They'} already added a UPI ID` });
+    }
+    const owed = await amountsOwedTo(req.user.id, id);
+    if (owed.length === 0) {
+      return res.status(400).json({ success: false, error: 'You can only ask people you owe money to' });
+    }
+    const recent = await query(
+      `SELECT 1 FROM notifications
+        WHERE user_id = $1 AND type = 'UPI_ID_REQUESTED' AND data->>'requesterId' = $2
+          AND created_at > NOW() - INTERVAL '24 hours'
+        LIMIT 1`,
+      [id, req.user.id],
+    );
+    if (recent.rowCount > 0) {
+      return res.status(429).json({ success: false, error: 'You already asked in the last 24 hours' });
+    }
+
+    const amount = fromPaise(owed.reduce((s, o) => s + toPaise(o.amount), 0));
+    await NotificationService.sendToUser(id, 'UPI_ID_REQUESTED', {
+      requesterId: req.user.id,
+      requesterName: caller?.name || 'Someone',
+      amount,
+      currency: '₹',
+    });
+    res.json({ success: true, message: 'Request sent' });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const getReports = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -988,22 +1109,8 @@ const getReports = async (req, res, next) => {
     // Pair-level netting — same shape as the dashboard query so the Reports
     // screen's you_are_owed / you_owe match the homescreen exactly. See the
     // long comment in getDashboard for the why.
-    const balancesResult = await query(
-      `WITH active_groups AS (
-         SELECT g.id AS group_id
-         FROM groups g
-         JOIN group_members gm ON gm.group_id = g.id
-         WHERE gm.user_id = $1
-           AND gm.deleted_at IS NULL
-           AND g.deleted_at IS NULL
-       ),
-       pair_net AS (${userPairNetsSql('$1', 'IN (SELECT group_id FROM active_groups)')})
-       SELECT COALESCE(SUM(GREATEST(net, 0)), 0) AS you_are_owed,
-              COALESCE(SUM(GREATEST(-net, 0)), 0) AS you_owe
-       FROM pair_net`,
-      [id]
-    );
-    const balances = balancesResult.rows[0] || {};
+    const balances = pairTotals(await userPairNets(id, await activeGroupIds(id)));
+
 
     // Per-category spend = amount the caller *consumed* (their own split row)
     // within the window. Counts the caller's portion of every expense in
@@ -1219,4 +1326,6 @@ export default {
   exportUserData,
   getReports,
   getFriends,
+  getPaymentInfo,
+  requestUpiId,
 };

@@ -67,6 +67,22 @@ class ActivityService {
   }
 
   /**
+   * Log "Simplify group debts" being turned on or off
+   */
+  static async logSimplifyDebts(groupId, userId, groupName, enabled) {
+    return await Activity.create({
+      groupId,
+      userId,
+      activityType: this.ACTIVITY_TYPES.GROUP_UPDATED,
+      entityType: this.ENTITY_TYPES.GROUP,
+      entityId: groupId,
+      title: enabled ? 'Simplify debts turned on' : 'Simplify debts turned off',
+      description: `${enabled ? 'Turned on' : 'Turned off'} simplify debts in "${groupName}"`,
+      metadata: { groupName, changes: { simplifyDebts: enabled } },
+    });
+  }
+
+  /**
    * Log group deleted activity
    */
   static async logGroupDeleted(groupId, userId, groupName) {

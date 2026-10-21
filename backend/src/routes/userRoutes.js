@@ -41,6 +41,9 @@ router.get('/:id/reports', authenticate, userController.getReports);
 
 router.get('/:id/friends', authenticate, userController.getFriends);
 
+router.get('/:id/payment-info', authenticate, userController.getPaymentInfo);
+router.post('/:id/upi-request', authenticate, userController.requestUpiId);
+
 router.get('/:id/export', authenticate, userController.exportUserData);
 
 router.get('/:id', authenticate, userController.getUser);

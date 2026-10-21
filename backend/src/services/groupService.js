@@ -2,7 +2,7 @@ import Group from '../models/Group.js';
 import User from '../models/User.js';
 import { query } from '../config/database.js';
 import { cache, TTL } from '../services/cacheService.js';
-import { flowsSql, groupNetPaise, simplify, userPairDebts } from './ledger.js';
+import { flowsSql, groupNetPaise, groupsNetPaise, simplify, userPairDebts, userVisibleDebts } from './ledger.js';
 
 class GroupService {
   /**
@@ -49,8 +49,19 @@ class GroupService {
   }
 
   /**
-   * Every open pairwise debt across groups, in one query — the Ledger's
-   * flows netted per pair. Used by the reminder and weekly-summary jobs.
+   * The debts a user sees in a group (simplified when the group has
+   * simplify_debts on). Same Map shape/sign as getUserPairwiseDebts. Use
+   * for anything shown to the user (reminders, summaries); use the raw
+   * pairwise version where every underlying debt must be cleared.
+   */
+  static async getUserVisibleDebts(groupId, userId) {
+    return userVisibleDebts(groupId, userId);
+  }
+
+  /**
+   * Every open debt across groups as users see them: the Ledger's flows
+   * netted per pair, or simplify()'s transfers in groups with
+   * simplify_debts on. Used by the reminder and weekly-summary jobs.
    *
    * Only live groups, current members and real (non-placeholder) accounts.
    *
@@ -76,12 +87,34 @@ class GroupService {
               CASE WHEN n.amt > 0 THEN n.b ELSE n.a END AS creditor_id,
               ABS(n.amt)::numeric(12,2) AS amount
          FROM net n
-         JOIN groups g ON g.id = n.group_id AND g.deleted_at IS NULL
+         JOIN groups g ON g.id = n.group_id AND g.deleted_at IS NULL AND NOT g.simplify_debts
         WHERE ABS(n.amt) >= $1
           AND ($2::boolean OR COALESCE(g.is_archived, FALSE) = FALSE)
           AND ($3::uuid IS NULL OR n.a = $3::uuid OR n.b = $3::uuid)`,
       [minAmount, includeArchived, userId],
     );
+
+    const simplifiedGroups = await query(
+      `SELECT id, name, currency FROM groups
+        WHERE simplify_debts AND deleted_at IS NULL
+          AND ($1::boolean OR COALESCE(is_archived, FALSE) = FALSE)`,
+      [includeArchived],
+    );
+    const info = new Map(simplifiedGroups.rows.map((g) => [g.id, g]));
+    for (const [groupId, net] of await groupsNetPaise([...info.keys()])) {
+      for (const t of simplify(net)) {
+        if (Number(t.amount) < minAmount) continue;
+        if (userId && t.fromUserId !== userId && t.toUserId !== userId) continue;
+        result.rows.push({
+          group_id: groupId,
+          group_name: info.get(groupId).name,
+          currency: info.get(groupId).currency,
+          debtor_id: t.fromUserId,
+          creditor_id: t.toUserId,
+          amount: t.amount,
+        });
+      }
+    }
     if (result.rows.length === 0) return [];
 
     // Drop pairs where either side has left the group or isn't a real account.
