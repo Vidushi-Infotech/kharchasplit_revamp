@@ -2,13 +2,16 @@ import 'dart:async';
 
 import 'package:dio/dio.dart';
 
+import 'request_meta_interceptor.dart';
+
 /// Retries *idempotent* requests that failed for transient reasons.
 ///
 /// Scope is deliberately narrow:
-/// * Only `GET` / `HEAD`. A `POST /expenses` that timed out may well have
-///   been applied server-side; replaying it would double-book the expense.
-///   Mutations get no automatic retry until the backend supports an
-///   `Idempotency-Key` header.
+/// * Only `GET` / `HEAD`, plus POSTs carrying an `Idempotency-Key` (added by
+///   [RequestMetaInterceptor] to creates). A `POST /expenses` that timed out
+///   may well have been applied server-side; with the same key the server
+///   replays that result instead of double-booking the expense. Other
+///   mutations are never retried automatically.
 /// * Only transient failures — connect / send / receive timeouts, socket
 ///   errors, and 502 / 503 / 504. A 4xx or a 500 is not going to fix itself.
 /// * Never when we already know we're offline. [OfflineInterceptor] rejects
@@ -35,6 +38,32 @@ class RetryInterceptor extends Interceptor {
     DioExceptionType.receiveTimeout,
     DioExceptionType.connectionError,
   };
+
+  /// A retried create can reach the server while the first attempt is still
+  /// running; the server answers 409 + Retry-After. Wait and ask again with
+  /// the same key, which then returns the finished result.
+  @override
+  Future<void> onResponse(
+    Response<dynamic> response,
+    ResponseInterceptorHandler handler,
+  ) async {
+    final options = response.requestOptions;
+    final attempt = (options.extra[_attemptKey] as int?) ?? 0;
+    final inFlight = response.statusCode == 409 &&
+        response.headers.value('retry-after') != null &&
+        options.headers.containsKey(RequestMetaInterceptor.idempotencyHeader);
+    if (!inFlight || attempt >= delays.length) {
+      return handler.next(response);
+    }
+    final wait = int.tryParse(response.headers.value('retry-after')!) ?? 2;
+    await Future<void>.delayed(Duration(seconds: wait.clamp(1, 5)));
+    options.extra[_attemptKey] = attempt + 1;
+    try {
+      return handler.resolve(await _dio.fetch<dynamic>(options));
+    } on DioException catch (e) {
+      return handler.reject(e);
+    }
+  }
 
   @override
   Future<void> onError(
@@ -64,7 +93,9 @@ class RetryInterceptor extends Interceptor {
     final options = err.requestOptions;
     if (options.extra['noRetry'] == true) return false;
     final method = options.method.toUpperCase();
-    if (method != 'GET' && method != 'HEAD') return false;
+    final idempotentPost = method == 'POST' &&
+        options.headers.containsKey(RequestMetaInterceptor.idempotencyHeader);
+    if (method != 'GET' && method != 'HEAD' && !idempotentPost) return false;
     if (err.error == 'offline') return false;
 
     if (_retryableTypes.contains(err.type)) return true;

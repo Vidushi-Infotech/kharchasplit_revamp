@@ -30,6 +30,11 @@ class SettlementModel extends Equatable {
   final SettlementStatus status;
   final DateTime createdAt;
 
+  /// True only for server status 'paid' — the one status the backend
+  /// ledger counts (services/ledger.js). Legacy 'completed' rows display
+  /// as completed but don't move balances.
+  final bool countsTowardBalance;
+
   const SettlementModel({
     required this.id,
     required this.fromUser,
@@ -41,6 +46,7 @@ class SettlementModel extends Equatable {
     this.note,
     this.status = SettlementStatus.completed,
     required this.createdAt,
+    this.countsTowardBalance = true,
   });
 
   factory SettlementModel.fromJson(Map<String, dynamic> json) {
@@ -83,6 +89,7 @@ class SettlementModel extends Equatable {
               : SettlementStatus.completed,
       createdAt:
           created is String ? DateTime.parse(created) : DateTime.now(),
+      countsTowardBalance: json['status'] == null || statusRaw == 'paid',
     );
   }
 
@@ -97,6 +104,7 @@ class SettlementModel extends Equatable {
     String? note,
     SettlementStatus? status,
     DateTime? createdAt,
+    bool? countsTowardBalance,
   }) {
     return SettlementModel(
       id: id ?? this.id,
@@ -109,6 +117,7 @@ class SettlementModel extends Equatable {
       note: note ?? this.note,
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
+      countsTowardBalance: countsTowardBalance ?? this.countsTowardBalance,
     );
   }
 
@@ -150,5 +159,6 @@ class SettlementModel extends Equatable {
         note,
         status,
         createdAt,
+        countsTowardBalance,
       ];
 }

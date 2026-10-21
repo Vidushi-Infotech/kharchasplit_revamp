@@ -13,6 +13,7 @@ class AppVersionConfig {
     required this.softUpdateMessage,
     required this.androidStoreUrl,
     required this.iosStoreUrl,
+    this.features = const {},
   });
 
   /// Latest released version (e.g. "3.3.0"). No build code suffix.
@@ -35,6 +36,9 @@ class AppVersionConfig {
   final String androidStoreUrl;
   final String iosStoreUrl;
 
+  /// Server feature flags (backend FEATURES env). Empty on older backends.
+  final Set<String> features;
+
   factory AppVersionConfig.fromJson(Map<String, dynamic> json) {
     final stores =
         (json['storeUrls'] as Map?)?.cast<String, dynamic>() ?? const {};
@@ -54,6 +58,9 @@ class AppVersionConfig {
       iosStoreUrl:
           (stores['ios'] as String?) ??
           'https://apps.apple.com/app/id6754237285',
+      features: ((json['features'] as List?) ?? const [])
+          .whereType<String>()
+          .toSet(),
     );
   }
 }

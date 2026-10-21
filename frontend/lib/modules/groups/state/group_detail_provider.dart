@@ -16,7 +16,6 @@ class GroupDetail {
     required this.members,
     required this.expenses,
     required this.settlements,
-    required this.memberBalances,
     required this.totalExpense,
   });
 
@@ -24,7 +23,6 @@ class GroupDetail {
   final List<UserModel> members;
   final List<ExpenseModel> expenses;
   final List<SettlementModel> settlements;
-  final Map<String, double> memberBalances;
   final double totalExpense;
 }
 
@@ -41,9 +39,9 @@ final groupDetailProvider =
   final expensesRepo = ref.read(expensesRepositoryProvider);
   final settlementsRepo = ref.read(settlementsRepositoryProvider);
 
-  // Fetch group + expenses + settlements in parallel. Balances below are
-  // computed client-side, so we need EVERY expense and settlement — a single
-  // page would silently produce wrong totals past the page size.
+  // Fetch group + expenses + settlements in parallel. Pairwise balances are
+  // computed client-side (computePairwiseDebts), so we need EVERY expense
+  // and settlement — a single page would silently produce wrong totals.
   final results = await Future.wait([
     groupsRepo.getById(groupId),
     expensesRepo.listAllForGroup(groupId),
@@ -54,7 +52,6 @@ final groupDetailProvider =
   final expenses = results[1] as List<ExpenseModel>;
   final settlements = results[2] as List<SettlementModel>;
 
-  final balances = _computeBalances(group.members, expenses, settlements);
   final totalExpense = expenses.fold<double>(0, (s, e) => s + e.amount);
 
   return GroupDetail(
@@ -62,40 +59,9 @@ final groupDetailProvider =
     members: group.members,
     expenses: expenses,
     settlements: settlements,
-    memberBalances: balances,
     totalExpense: totalExpense,
   );
 });
-
-/// Mirrors backend `groupService._computeBalances`:
-/// positive = others owe me, negative = I owe.
-///
-/// Combines expense splits AND settlements:
-///   expense:    paidBy is owed; each split user owes
-///   settlement: fromUser's debt shrinks (+); toUser's claim shrinks (-)
-///
-/// Pending + completed settlements both count; failed/cancelled don't.
-Map<String, double> _computeBalances(
-  List<UserModel> members,
-  List<ExpenseModel> expenses,
-  List<SettlementModel> settlements,
-) {
-  final balances = <String, double>{for (final m in members) m.id: 0};
-  for (final expense in expenses) {
-    final paidBy = expense.paidBy.id;
-    for (final split in expense.splits) {
-      if (split.userId == paidBy) continue;
-      balances[paidBy] = (balances[paidBy] ?? 0) + split.owedShare;
-      balances[split.userId] = (balances[split.userId] ?? 0) - split.owedShare;
-    }
-  }
-  for (final s in settlements) {
-    if (s.status == SettlementStatus.failed) continue;
-    balances[s.fromUser.id] = (balances[s.fromUser.id] ?? 0) + s.amount;
-    balances[s.toUser.id] = (balances[s.toUser.id] ?? 0) - s.amount;
-  }
-  return balances;
-}
 
 /// Net pairwise balance between [myId] and every other person, from myId's
 /// perspective:
@@ -103,8 +69,9 @@ Map<String, double> _computeBalances(
 ///   pair[otherId] < 0  → they owe me |that much|
 ///   pair[otherId] ~ 0  → settled
 ///
-/// Only CONFIRMED (completed) settlements reduce a balance — a pending
-/// settlement is still awaiting confirmation and must not zero the debt.
+/// Same rules as the backend ledger (services/ledger.js): only settlements
+/// the server marked 'paid' reduce a balance — not pending ones awaiting
+/// confirmation, and not legacy 'completed' rows.
 Map<String, double> computePairwiseDebts({
   required String myId,
   required List<ExpenseModel> expenses,
@@ -126,7 +93,7 @@ Map<String, double> computePairwiseDebts({
     }
   }
   for (final s in settlements) {
-    if (s.status != SettlementStatus.completed) continue;
+    if (!s.countsTowardBalance) continue;
     if (s.fromUser.id == myId) {
       pair[s.toUser.id] = (pair[s.toUser.id] ?? 0) - s.amount;
     } else if (s.toUser.id == myId) {

@@ -11,6 +11,7 @@ import '../services/connectivity_service.dart';
 import '../services/token_storage.dart';
 import '../state/connectivity_provider.dart';
 import 'offline_interceptor.dart';
+import 'request_meta_interceptor.dart';
 import 'retry_interceptor.dart';
 
 final tokenStorageProvider = Provider<TokenStorage>((ref) => TokenStorage());
@@ -31,7 +32,10 @@ class ApiClient {
     // Offline interceptor runs FIRST so requests fail fast and don't
     // bother going through the auth interceptor while we're offline.
     dio.interceptors.add(OfflineInterceptor(_connectivity));
-    // Transient-failure retry for GETs. Sits before auth so a retried
+    // Version header + Idempotency-Key. Before the retry interceptor, so a
+    // retried create carries the same key as the first attempt.
+    dio.interceptors.add(RequestMetaInterceptor());
+    // Transient-failure retry for GETs and idempotent creates. Sits before auth so a retried
     // request goes back through the auth interceptor and picks up a
     // refreshed token if one landed in between.
     dio.interceptors.add(RetryInterceptor(dio));

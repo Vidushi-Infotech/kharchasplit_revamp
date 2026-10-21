@@ -1,0 +1,206 @@
+import 'package:collection/collection.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../data/expenses/expenses_repository.dart';
+import '../../../models/models.dart';
+import '../../../modules/dashboard/state/dashboard_provider.dart';
+import '../../../modules/groups/state/group_detail_provider.dart';
+import '../../../modules/groups/state/groups_provider.dart';
+import 'add_expense_provider.dart';
+import 'expense_detail_provider.dart';
+
+/// Non-UI pieces of the Add/Edit expense save flow: payer resolution,
+/// split math / request payload, the create-or-update API call, and the
+/// post-save cache invalidation. The screen keeps the orchestration that
+/// touches BuildContext (snackbars, haptics, navigation, `mounted`).
+
+/// Payer for the request: explicit pick, else me as a group member, else a
+/// [UserModel] built from the signed-in user.
+UserModel resolveExpensePayer(
+  AddExpenseState state,
+  List<UserModel> members,
+  UserModel currentUser,
+) {
+  return state.paidBy ??
+      members.firstWhereOrNull((m) => m.id == currentUser.id) ??
+      UserModel(
+        id: currentUser.id,
+        name: currentUser.name,
+        email: currentUser.email,
+        phone: currentUser.phone,
+        avatarUrl: currentUser.avatarUrl,
+        createdAt: currentUser.createdAt,
+      );
+}
+
+/// Per-participant amounts (and percentage / shares) for the request.
+List<ExpenseParticipant> buildExpenseParticipants(
+  AddExpenseState state,
+  List<UserModel> members,
+  UserModel paidBy,
+) {
+  final memberById = {for (final m in members) m.id: m};
+  final includedIds = state.includedMemberIds.isNotEmpty
+      ? state.includedMemberIds.toList()
+      : members.map((m) => m.id).toList();
+
+  double shareFor(String id) {
+    final raw = state.splits[id] ?? 0;
+    switch (state.splitType) {
+      case SplitType.equal:
+        if (includedIds.isEmpty) return state.amount;
+        return state.amount / includedIds.length;
+      case SplitType.exact:
+        return raw;
+      case SplitType.percentage:
+        return state.amount * raw / 100;
+      case SplitType.shares:
+        final totalShares = includedIds.fold<double>(
+          0,
+          (sum, mid) => sum + (state.splits[mid] ?? 0),
+        );
+        if (totalShares <= 0) return 0;
+        return state.amount * raw / totalShares;
+    }
+  }
+
+  double? percentageFor(String id) =>
+      state.splitType == SplitType.percentage ? (state.splits[id] ?? 0) : null;
+  int? sharesFor(String id) => state.splitType == SplitType.shares
+      ? (state.splits[id] ?? 0).round()
+      : null;
+
+  return includedIds.isEmpty
+      ? [
+          ExpenseParticipant(
+            userId: paidBy.id,
+            name: paidBy.name,
+            amount: state.amount,
+          ),
+        ]
+      : includedIds.map((id) {
+          final member = memberById[id];
+          return ExpenseParticipant(
+            userId: id,
+            name: member?.name ?? id,
+            amount: shareFor(id),
+            percentage: percentageFor(id),
+            shares: sharesFor(id),
+          );
+        }).toList();
+}
+
+String backendSplitType(SplitType t) {
+  switch (t) {
+    case SplitType.equal:
+      return 'equal';
+    case SplitType.percentage:
+      return 'percentage';
+    case SplitType.shares:
+      return 'shares';
+    case SplitType.exact:
+      return 'unequal';
+  }
+}
+
+/// PUTs to /expenses/:id when [expenseId] is non-null, else POSTs a new one.
+Future<void> submitExpense(
+  ExpensesRepository repo, {
+  required String? expenseId,
+  required String groupId,
+  required AddExpenseState state,
+  required UserModel paidBy,
+  required List<ExpenseParticipant> participants,
+}) async {
+  if (expenseId != null) {
+    await repo.update(
+      expenseId,
+      description: state.title!.trim(),
+      amount: state.amount,
+      currency: state.currency,
+      category: (state.category ?? CategoryModel.other).id,
+      notes: state.notes,
+      expenseDate: state.date,
+      receiptBase64: state.receiptBase64,
+      paidById: paidBy.id,
+      splitType: backendSplitType(state.splitType),
+      participants: participants,
+    );
+  } else {
+    await repo.create(
+      groupId: groupId,
+      description: state.title!.trim(),
+      amount: state.amount,
+      currency: state.currency,
+      category: (state.category ?? CategoryModel.other).id,
+      paidById: paidBy.id,
+      paidByName: paidBy.name,
+      splitType: backendSplitType(state.splitType),
+      notes: state.notes,
+      expenseDate: state.date,
+      receiptBase64: state.receiptBase64,
+      participants: participants,
+    );
+  }
+}
+
+/// Refreshes every cache that shows the saved expense.
+void invalidateAfterExpenseSave(
+  WidgetRef ref, {
+  required String groupId,
+  required String? expenseId,
+}) {
+  ref.invalidate(dashboardProvider);
+  ref.invalidate(groupDetailProvider(groupId));
+  // Re-fetch the groups list so the dashboard "Your Groups" carousel picks
+  // up the new recency order (this group jumps to the front now that the
+  // backend bumped its updated_at).
+  ref.invalidate(groupsProvider);
+  if (expenseId != null) {
+    ref.invalidate(expenseDetailProvider(expenseId));
+  }
+}
+
+/// Equal-split write-back. The derivation lives in
+/// [equalSplitDerivedProvider] — a pure function of (amount,
+/// splitType, includedMemberIds, members). `ref.listen` fires only
+/// when the EqualSplitDerived value structurally changes (the class
+/// implements ==).
+///
+/// The state write is deferred to a post-frame callback because the
+/// derived provider watches addExpenseProvider — writing back
+/// synchronously inside the listener dirties the dependency, and
+/// Riverpod refuses to recompute the same provider twice in one
+/// frame ("Bad state: Tried to rebuild `Provider<EqualSplitDerived?>`
+/// multiple times in the same frame"). Posting the write to the
+/// next frame lets Riverpod's per-frame bookkeeping reset; the
+/// structural `==` on EqualSplitDerived then short-circuits the
+/// next listener fire (prev == next) and the loop terminates.
+///
+/// Must be called from the screen's `build` (it registers a `ref.listen`).
+void listenEqualSplitWriteBack(
+  WidgetRef ref,
+  String? groupId, {
+  required bool Function() isMounted,
+}) {
+  ref.listen<EqualSplitDerived?>(equalSplitDerivedProvider(groupId), (
+    prev,
+    next,
+  ) {
+    if (next == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!isMounted()) return;
+      final current = ref.read(addExpenseProvider);
+      if (mapEquals(current.splits, next.splits) &&
+          setEquals(current.includedMemberIds, next.includedMemberIds)) {
+        return;
+      }
+      ref.read(addExpenseProvider.notifier).state = current.copyWith(
+        splits: next.splits,
+        includedMemberIds: next.includedMemberIds,
+      );
+    });
+  });
+}
