@@ -26,9 +26,10 @@ Future<void> showMemberActionsSheet({
   required UserModel member,
   required bool isAdmin,
   required bool isSelf,
+  bool isDirect = false,
 }) async {
   final isDark = Theme.of(context).brightness == Brightness.dark;
-  final canRemove = isAdmin && !isSelf;
+  final canRemove = isAdmin && !isSelf && !isDirect;
 
   await showModalBottomSheet<void>(
     context: context,
@@ -113,17 +114,22 @@ Future<void> showMemberActionsSheet({
                   ),
                 ),
                 const SizedBox(height: 14),
-                SheetAction(
-                  icon: Icons.email_outlined,
-                  label: 'Invite on Mail',
-                  color: AppColors.brand,
-                  isDark: isDark,
-                  onTap: () {
-                    Navigator.pop(sheetCtx);
-                    showEmailInviteDialog(groupId, context, ref, member);
-                  },
-                ),
-                const SizedBox(height: 8),
+                // Group email invites are rejected on non-group expenses
+                // (DIRECT_GROUP); the WhatsApp / copy-link invites below
+                // only invite them to the app.
+                if (!isDirect) ...[
+                  SheetAction(
+                    icon: Icons.email_outlined,
+                    label: 'Invite on Mail',
+                    color: AppColors.brand,
+                    isDark: isDark,
+                    onTap: () {
+                      Navigator.pop(sheetCtx);
+                      showEmailInviteDialog(groupId, context, ref, member);
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                ],
                 if (member.phone.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 8),

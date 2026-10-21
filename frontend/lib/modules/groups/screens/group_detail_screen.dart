@@ -27,9 +27,13 @@ class GroupDetailScreen extends ConsumerWidget {
     final detailAsync = ref.watch(groupDetailProvider(groupId));
     final myId = ref.watch(myIdProvider);
     final loadedDetail = detailAsync.value;
+    // A direct (non-group) group has no admin: the server rejects every
+    // admin action on it, so none of them is offered.
+    final isDirect = loadedDetail?.group.isDirect ?? false;
     final isAdmin =
         loadedDetail != null &&
         myId != null &&
+        !isDirect &&
         loadedDetail.group.createdBy == myId;
 
     // NOTE on the inner Consumers below: `tab` deliberately is NOT
@@ -44,6 +48,7 @@ class GroupDetailScreen extends ConsumerWidget {
       appBar: GroupDetailTopBar(
         isDark: isDark,
         isAdmin: isAdmin,
+        isDirect: isDirect,
         canManage: loadedDetail != null && myId != null,
         onClose: () {
           if (Navigator.of(context).canPop()) {

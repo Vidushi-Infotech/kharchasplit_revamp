@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/constants/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../state/group_detail_provider.dart';
 import 'add_member_button.dart';
-import 'group_cover_thumb.dart';
+import '../state/group_display.dart';
+import 'group_detail_cover.dart';
 import 'group_hero_card.dart';
 import 'group_lifecycle_actions.dart';
 import 'group_member_actions.dart';
@@ -27,7 +29,7 @@ Widget buildGroupCompactHeader(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         buildGroupArchivedBanner(context, ref, detail, isAdmin),
-        GroupHeroCard(detail: detail),
+        GroupHeroCard(detail: detail, myId: myId),
         const SizedBox(height: 18),
         Padding(
           padding: const EdgeInsets.only(left: 4, right: 4, bottom: 8),
@@ -44,9 +46,11 @@ Widget buildGroupCompactHeader(
                   ),
                 ),
               ),
-              AddMemberButton(
-                onTap: () => showGroupInviteDialog(groupId, context, ref),
-              ),
+              // Non-group expenses are only ever the two of you.
+              if (!detail.group.isDirect)
+                AddMemberButton(
+                  onTap: () => showGroupInviteDialog(groupId, context, ref),
+                ),
             ],
           ),
         ),
@@ -89,9 +93,9 @@ Widget buildGroupStandardHeader(
         // Group title with cover image (or emoji fallback)
         Row(
           children: [
-            GroupCoverThumb(
-              coverImageBase64: detail.group.coverImageBase64,
-              coverEmoji: detail.group.coverEmoji,
+            GroupDetailCover(
+              group: detail.group,
+              myId: myId,
               size: 52,
               borderRadius: 14,
               emojiFontSize: 32,
@@ -99,11 +103,21 @@ Widget buildGroupStandardHeader(
             ),
             const SizedBox(width: 16),
             Expanded(
-              child: Text(
-                detail.group.name,
-                style: AppTextStyles.headline2(isDark),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    detail.group.displayTitle(myId),
+                    style: AppTextStyles.headline2(isDark),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (detail.group.isDirect)
+                    Text(
+                      AppStrings.nonGroupExpenses,
+                      style: AppTextStyles.caption(isDark),
+                    ),
+                ],
               ),
             ),
           ],
@@ -152,9 +166,10 @@ Widget buildGroupStandardHeader(
                 ),
               ),
             ),
-            AddMemberButton(
-              onTap: () => showGroupInviteDialog(groupId, context, ref),
-            ),
+            if (!detail.group.isDirect)
+              AddMemberButton(
+                onTap: () => showGroupInviteDialog(groupId, context, ref),
+              ),
           ],
         ),
         const SizedBox(height: 12),

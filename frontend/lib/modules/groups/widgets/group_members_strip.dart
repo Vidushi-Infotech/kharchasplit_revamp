@@ -38,6 +38,7 @@ Widget buildGroupMembersList(
               member: member,
               isAdmin: isAdmin,
               isSelf: member.id == myId,
+              isDirect: detail.group.isDirect,
             ),
             child: Column(
               children: [

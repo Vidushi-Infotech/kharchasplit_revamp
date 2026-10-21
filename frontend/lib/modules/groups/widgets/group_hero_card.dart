@@ -1,18 +1,25 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/currency_formatter.dart';
+import '../../../core/constants/app_strings.dart';
 import '../state/group_detail_provider.dart';
-import 'group_cover_thumb.dart';
+import '../state/group_display.dart';
+import 'group_detail_cover.dart';
 
 class GroupHeroCard extends StatelessWidget {
-  const GroupHeroCard({super.key, required this.detail});
+  const GroupHeroCard({super.key, required this.detail, this.myId});
   final GroupDetail detail;
+
+  /// Names a direct (non-group) group after the friend.
+  final String? myId;
 
   @override
   Widget build(BuildContext context) {
     final total = CurrencyFormatter.format(detail.totalExpense, currency: '₹');
     final memberCount = detail.members.length;
     final expenseCount = detail.expenses.length;
+    // Non-group expenses: always the two of you, so no member count.
+    final isDirect = detail.group.isDirect;
 
     return RepaintBoundary(
       child: Container(
@@ -56,9 +63,9 @@ class GroupHeroCard extends StatelessWidget {
                             color: Colors.white.withValues(alpha: 0.24),
                           ),
                         ),
-                        child: GroupCoverThumb(
-                          coverImageBase64: detail.group.coverImageBase64,
-                          coverEmoji: detail.group.coverEmoji,
+                        child: GroupDetailCover(
+                          group: detail.group,
+                          myId: myId,
                           size: 48,
                           borderRadius: 14,
                           emojiFontSize: 24,
@@ -72,7 +79,9 @@ class GroupHeroCard extends StatelessWidget {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              'GROUP',
+                              isDirect
+                                  ? AppStrings.nonGroupExpenses.toUpperCase()
+                                  : 'GROUP',
                               style: TextStyle(
                                 color: Colors.white.withValues(alpha: 0.78),
                                 fontSize: 10,
@@ -82,7 +91,7 @@ class GroupHeroCard extends StatelessWidget {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              detail.group.name,
+                              detail.group.displayTitle(myId),
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 20,
@@ -116,17 +125,19 @@ class GroupHeroCard extends StatelessWidget {
                       Expanded(
                         child: _HeroStat(label: 'TOTAL SPENT', value: total),
                       ),
-                      Container(
-                        width: 1,
-                        height: 28,
-                        color: Colors.white.withValues(alpha: 0.18),
-                      ),
-                      Expanded(
-                        child: _HeroStat(
-                          label: 'MEMBERS',
-                          value: '$memberCount',
+                      if (!isDirect) ...[
+                        Container(
+                          width: 1,
+                          height: 28,
+                          color: Colors.white.withValues(alpha: 0.18),
                         ),
-                      ),
+                        Expanded(
+                          child: _HeroStat(
+                            label: 'MEMBERS',
+                            value: '$memberCount',
+                          ),
+                        ),
+                      ],
                       Container(
                         width: 1,
                         height: 28,

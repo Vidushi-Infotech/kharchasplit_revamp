@@ -1,6 +1,7 @@
 import 'package:collection/collection.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/constants/app_strings.dart';
 import '../../../data/friends/friends_repository.dart';
 import '../../auth/state/auth_provider.dart';
 import '../../groups/state/groups_provider.dart';
@@ -59,6 +60,17 @@ final visibleFriendsProvider = Provider<AsyncValue<List<FriendBalance>>>((ref) {
       );
 });
 
+/// Friends whose name contains [query] (case-insensitive), for pickers such
+/// as the ➕ sheet. Empty while loading or on error — pickers treat friends
+/// as an optional extra next to groups.
+final friendsMatchingProvider =
+    Provider.autoDispose.family<List<FriendBalance>, String>((ref, query) {
+  final list = ref.watch(friendsProvider).value ?? const <FriendBalance>[];
+  final q = query.trim().toLowerCase();
+  if (q.isEmpty) return list;
+  return list.where((f) => f.user.name.toLowerCase().contains(q)).toList();
+});
+
 /// Overall balance per currency code across all friends (positive = you
 /// are owed). Currencies are never converted, so a mixed list yields one
 /// entry per currency; zero totals are dropped (empty map = all settled).
@@ -110,4 +122,10 @@ extension FriendBalanceX on FriendBalance {
                   2)
             e.key,
       ];
+}
+
+extension FriendGroupBalanceX on FriendGroupBalance {
+  /// Short label for lists: "Non-group" for the hidden direct group, else
+  /// the group's name.
+  String get shortName => isDirect ? AppStrings.nonGroup : groupName;
 }

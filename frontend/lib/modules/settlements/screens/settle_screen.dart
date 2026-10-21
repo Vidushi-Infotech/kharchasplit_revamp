@@ -17,6 +17,7 @@ import '../../auth/state/auth_provider.dart';
 import '../../dashboard/state/dashboard_provider.dart';
 import '../../groups/state/group_detail_provider.dart';
 import '../state/pending_settlements_provider.dart';
+import '../state/settle_group_options_provider.dart';
 import '../../groups/state/groups_provider.dart';
 import '../widgets/payment_method_selector.dart';
 import '../widgets/settle_upi_section.dart';
@@ -131,10 +132,14 @@ class _SettleScreenState extends ConsumerState<SettleScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final groups = ref.watch(groupsProvider).value ?? const <GroupModel>[];
-    final shared = groups
-        .where((g) => g.members.any((m) => m.id == widget.recipientUserId))
-        .toList();
+    // Includes a non-group (direct) initialGroupId, which isn't in the
+    // groups list.
+    final shared = ref.watch(
+      settleGroupOptionsProvider((
+        recipientId: widget.recipientUserId,
+        initialGroupId: widget.initialGroupId,
+      )),
+    );
     final me = ref.watch(authProvider).user;
 
     // Apply initialGroupId once, after groups have loaded.
@@ -152,7 +157,7 @@ class _SettleScreenState extends ConsumerState<SettleScreen> {
       }
     }
 
-    final recipient = _findRecipient(groups, widget.recipientUserId);
+    final recipient = _findRecipient(shared, widget.recipientUserId);
 
     return Scaffold(
       appBar: AppBar(

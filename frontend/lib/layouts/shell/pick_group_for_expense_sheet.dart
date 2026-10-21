@@ -2,17 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/constants/app_strings.dart';
 import '../../core/services/haptic_service.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../models/group_model.dart';
+import '../../modules/friends/state/friends_provider.dart';
 import '../../modules/groups/state/groups_provider.dart';
+import 'pick_friend_for_expense_section.dart';
 
 /// Bottom sheet shown when the user taps the floating Create (+) button.
-/// Lets them pick a group to add an expense to. Tapping a group closes
-/// the sheet and navigates to `/add-expense/:groupId`. There's also a
-/// secondary "Create a new group" action for the empty / new-group case.
+/// Lets them pick a group — or a friend, for a non-group expense — to add
+/// an expense to. Tapping a group closes the sheet and navigates to
+/// `/add-expense/:groupId`; friends are handled by
+/// [PickFriendForExpenseSliver]. There's also a secondary "Create a new
+/// group" action for the empty / new-group case.
 class PickGroupForExpenseSheet extends ConsumerStatefulWidget {
   const PickGroupForExpenseSheet({super.key});
 
@@ -118,7 +123,7 @@ class _PickGroupForExpenseSheetState
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            'Pick a group to add the expense to',
+                            AppStrings.pickGroupOrFriend,
                             style: AppTextStyles.caption(isDark).copyWith(
                               color: AppColors.textSecondary(isDark),
                             ),
@@ -133,7 +138,7 @@ class _PickGroupForExpenseSheetState
                           : Icons.search_rounded,
                       semanticLabel: _searching
                           ? 'Close search'
-                          : 'Search groups',
+                          : AppStrings.searchGroupsOrFriends,
                       onTap: _toggleSearch,
                     ),
                     const SizedBox(width: 8),
@@ -163,7 +168,7 @@ class _PickGroupForExpenseSheetState
                           filled: true,
                           fillColor: AppColors.cardBg(isDark),
                           isDense: true,
-                          hintText: 'Search groups',
+                          hintText: AppStrings.searchGroupsOrFriends,
                           hintStyle: AppTextStyles.body2(isDark).copyWith(
                             color: AppColors.textSecondary(isDark),
                             fontSize: 14,
@@ -232,7 +237,10 @@ class _PickGroupForExpenseSheetState
                         .where((g) => !g.isArchived)
                         .toList();
                     final visible = _filter(groups);
-                    if (groups.isEmpty) {
+                    final friends = ref.watch(friendsMatchingProvider(_query));
+                    final hasFriends =
+                        ref.watch(friendsProvider).value?.isNotEmpty ?? false;
+                    if (groups.isEmpty && !hasFriends) {
                       return _EmptyState(
                         isDark: isDark,
                         onCreateGroup: () {
@@ -241,31 +249,43 @@ class _PickGroupForExpenseSheetState
                         },
                       );
                     }
-                    if (visible.isEmpty) {
+                    if (visible.isEmpty && friends.isEmpty) {
                       return _NoResults(isDark: isDark, query: _query);
                     }
-                    return ListView(
+                    return CustomScrollView(
                       controller: scrollController,
-                      padding: const EdgeInsets.fromLTRB(20, 6, 20, 24),
-                      children: [
-                        for (int i = 0; i < visible.length; i++)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: _GroupRow(
-                              group: visible[i],
-                              isDark: isDark,
-                              onTap: () {
-                                HapticService.instance.tap();
-                                Navigator.of(context).pop();
-                                context.pushNamed(
-                                  'add-expense-to-group',
-                                  pathParameters: {
-                                    'groupId': visible[i].id,
-                                  },
-                                );
-                              },
+                      slivers: [
+                        if (visible.isNotEmpty && friends.isNotEmpty)
+                          const SliverToBoxAdapter(
+                            child: PickSheetSectionHeader(
+                              title: AppStrings.groups,
                             ),
                           ),
+                        SliverPadding(
+                          padding: const EdgeInsets.fromLTRB(20, 6, 20, 0),
+                          sliver: SliverList.builder(
+                            itemCount: visible.length,
+                            itemBuilder: (context, i) => Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: _GroupRow(
+                                group: visible[i],
+                                isDark: isDark,
+                                onTap: () {
+                                  HapticService.instance.tap();
+                                  Navigator.of(context).pop();
+                                  context.pushNamed(
+                                    'add-expense-to-group',
+                                    pathParameters: {
+                                      'groupId': visible[i].id,
+                                    },
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        ),
+                        PickFriendForExpenseSliver(friends: friends),
+                        const SliverToBoxAdapter(child: SizedBox(height: 24)),
                       ],
                     );
                   },
@@ -583,8 +603,8 @@ class _NoResults extends StatelessWidget {
             const SizedBox(height: 10),
             Text(
               query.isEmpty
-                  ? 'No groups match'
-                  : 'No groups match "$query"',
+                  ? 'Nothing matches'
+                  : 'Nothing matches "$query"',
               style: AppTextStyles.body1(isDark).copyWith(
                 fontWeight: FontWeight.w600,
               ),

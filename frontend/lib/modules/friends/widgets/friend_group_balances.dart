@@ -8,7 +8,8 @@ import '../state/friends_provider.dart';
 import 'friend_balance_label.dart';
 
 /// Per-group breakdown as a sliver: "In Goa trip: Asha owes you ₹500" /
-/// "In Flat: you owe ₹200". Tapping a row opens the group.
+/// "In Flat: you owe ₹200" / "Non-group expenses: you owe ₹100". Tapping a
+/// row opens the group (the hidden non-group one too).
 class FriendGroupBalancesSliver extends StatelessWidget {
   const FriendGroupBalancesSliver({super.key, required this.friend});
 
@@ -36,15 +37,23 @@ class FriendGroupBalancesSliver extends StatelessWidget {
         }
         final g = groups[index - 1];
         final amount = formatFriendAmount(g.net, g.currency);
-        final text = g.net > 0
-            ? AppStrings.inGroupNameOwesYou(g.groupName, friend.user.name, amount)
-            : AppStrings.inGroupYouOwe(g.groupName, amount);
+        final String text;
+        if (g.isDirect) {
+          text = g.net > 0
+              ? AppStrings.nonGroupNameOwesYou(friend.user.name, amount)
+              : AppStrings.nonGroupYouOwe(amount);
+        } else {
+          text = g.net > 0
+              ? AppStrings.inGroupNameOwesYou(
+                  g.groupName, friend.user.name, amount)
+              : AppStrings.inGroupYouOwe(g.groupName, amount);
+        }
         return Semantics(
           button: true,
           label: '$text. Open group',
           child: ListTile(
             leading: Icon(
-              Icons.group_outlined,
+              g.isDirect ? Icons.person_outline_rounded : Icons.group_outlined,
               color: AppColors.textSecondary(isDark),
             ),
             title: Text(

@@ -9,6 +9,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../data/expenses/expenses_repository.dart';
 import '../../../models/models.dart';
 import '../../../modules/auth/state/auth_provider.dart';
+import '../../../modules/groups/state/group_detail_provider.dart';
 import '../../../modules/groups/state/groups_provider.dart';
 import '../screens/add_expense_screen.dart';
 import 'add_expense_provider.dart';
@@ -47,8 +48,12 @@ mixin AddExpenseSaveFlow on ConsumerState<AddExpenseScreen> {
       return _saveBlocked('You must be signed in to save an expense.');
     }
 
-    final groups = ref.read(groupsProvider).value ?? const <GroupModel>[];
-    final group = groups.firstWhereOrNull((g) => g.id == groupId);
+    // The detail the form already watches; non-group (direct) groups are
+    // never in groupsProvider, so that list is only a fallback.
+    final group =
+        ref.read(groupDetailProvider(groupId)).value?.group ??
+        (ref.read(groupsProvider).value ?? const <GroupModel>[])
+            .firstWhereOrNull((g) => g.id == groupId);
     if (group?.isArchived ?? false) return blockArchivedSave();
     final members = group?.members ?? const <UserModel>[];
     final paidBy = resolveExpensePayer(state, members, currentUser);

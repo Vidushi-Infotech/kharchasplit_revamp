@@ -19,21 +19,24 @@ final friendSharedExpensesProvider = FutureProvider.autoDispose
   if (myId == null) return const [];
   final groups = await ref.watch(groupsProvider.future);
   var balanceGroups = const <FriendGroupBalance>[];
+  String? directGroupId;
   try {
     final friends = await ref.watch(friendsProvider.future);
-    balanceGroups =
-        friends.firstWhereOrNull((f) => f.user.id == friendId)?.groups ??
-            const [];
+    final friend = friends.firstWhereOrNull((f) => f.user.id == friendId);
+    balanceGroups = friend?.groups ?? const [];
+    directGroupId = friend?.directGroupId;
   } catch (_) {
     // Balances failing shouldn't hide the expense history.
   }
 
   // Current shared groups, plus groups that still carry a balance with the
-  // friend (they may have left, or the group may be archived).
+  // friend (they may have left, or the group may be archived), plus the
+  // hidden non-group one (never in groupsProvider).
   final groupIds = <String>{
     for (final g in groups)
       if (g.members.any((m) => m.id == friendId)) g.id,
     ...balanceGroups.map((g) => g.groupId),
+    ?directGroupId,
   };
   if (groupIds.isEmpty) return const [];
 
@@ -65,6 +68,14 @@ class FriendActions {
     return _ref
         .read(groupsRepositoryProvider)
         .sendReminder(groupId: groupId, userId: friendId);
+  }
+
+  /// Id of the hidden non-group-expenses group with [friendId]: [knownId]
+  /// when the friends list already has it, otherwise get-or-create on the
+  /// server (POST /groups/direct). Throws [GroupsApiException] on failure.
+  Future<String> directGroupFor(String friendId, {String? knownId}) async {
+    if (knownId != null) return knownId;
+    return _ref.read(groupsRepositoryProvider).directGroupWith(friendId);
   }
 
   /// Pulls fresh balances and shared expenses.

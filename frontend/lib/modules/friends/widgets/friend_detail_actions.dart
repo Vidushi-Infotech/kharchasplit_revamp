@@ -8,14 +8,15 @@ import '../../../core/theme/app_colors.dart';
 import '../../../data/groups/groups_repository.dart';
 import '../state/friend_detail_provider.dart';
 import '../state/friends_provider.dart';
+import 'friend_add_expense_button.dart';
 import 'friend_group_picker_sheet.dart';
 
-/// Settle up (primary, when you owe them in some group) and Remind
-/// (secondary, when they owe you in some group). Multi-group balances ask
-/// which group first. With the `settleAll` flag, owing them overall across
-/// several groups makes "Settle all balances" the primary action and the
-/// per-group Settle up secondary. Renders nothing when everything is
-/// settled.
+/// Add expense (a non-group expense with this friend), Settle up (primary,
+/// when you owe them in some group) and Remind (secondary, when they owe
+/// you in some group). Multi-group balances ask which group first. With the
+/// `settleAll` flag, owing them overall across several groups makes "Settle
+/// all balances" the primary action and the per-group Settle up secondary.
+/// When everything is settled only Add expense shows.
 class FriendDetailActions extends ConsumerStatefulWidget {
   const FriendDetailActions({super.key, required this.friend});
 
@@ -35,9 +36,6 @@ class _FriendDetailActionsState extends ConsumerState<FriendDetailActions> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final settleGroups = widget.friend.groupsYouOwe;
     final remindGroups = widget.friend.groupsOwingYou;
-    if (settleGroups.isEmpty && remindGroups.isEmpty) {
-      return const SizedBox.shrink();
-    }
     final name = widget.friend.user.name;
     // "Settle all balances" (flag `settleAll`): one per currency you owe in
     // overall across 2+ groups. Per-group Settle up then becomes secondary.
@@ -46,7 +44,19 @@ class _FriendDetailActionsState extends ConsumerState<FriendDetailActions> {
         : const <String>[];
     final multiCurrency = widget.friend.netByCurrency.length > 1;
 
+    // Add expense is always offered; it's the main CTA unless there's a
+    // payment to make, where it sits beside Settle up (or under Settle all).
+    final hasPrimarySettle =
+        settleGroups.isNotEmpty || settleAllCurrencies.isNotEmpty;
+    final addExpense = FriendAddExpenseButton(
+      friend: widget.friend,
+      prominent: !hasPrimarySettle,
+    );
+    final plainSettleUp =
+        settleAllCurrencies.isEmpty && settleGroups.isNotEmpty;
+
     final buttons = <Widget>[
+      if (!hasPrimarySettle) addExpense,
       for (final currency in settleAllCurrencies)
         _primary(
           label: multiCurrency
@@ -58,21 +68,30 @@ class _FriendDetailActionsState extends ConsumerState<FriendDetailActions> {
             '/settle-all/${widget.friend.user.id}?currency=$currency',
           ),
         ),
-      if (settleGroups.isNotEmpty)
-        settleAllCurrencies.isEmpty
-            ? _primary(
+      if (plainSettleUp)
+        Row(
+          children: [
+            Expanded(
+              child: _primary(
                 label: AppStrings.settleUp,
                 semantics: '${AppStrings.settleUp} with $name',
                 icon: Icons.check_circle_outline_rounded,
                 onPressed: () => _settle(settleGroups),
-              )
-            : _secondary(
-                isDark,
-                label: AppStrings.settleUpOneGroup,
-                semantics: '${AppStrings.settleUpOneGroup} with $name',
-                icon: Icons.check_circle_outline_rounded,
-                onPressed: () => _settle(settleGroups),
               ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(child: addExpense),
+          ],
+        ),
+      if (settleAllCurrencies.isNotEmpty) addExpense,
+      if (settleGroups.isNotEmpty && settleAllCurrencies.isNotEmpty)
+        _secondary(
+          isDark,
+          label: AppStrings.settleUpOneGroup,
+          semantics: '${AppStrings.settleUpOneGroup} with $name',
+          icon: Icons.check_circle_outline_rounded,
+          onPressed: () => _settle(settleGroups),
+        ),
       if (remindGroups.isNotEmpty)
         _secondary(
           isDark,

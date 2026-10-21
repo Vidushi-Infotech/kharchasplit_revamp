@@ -58,6 +58,13 @@ class GroupModel extends Equatable {
   /// (GET /groups/:id `balances`). Only filled on the group detail fetch.
   final List<SimplifiedTransfer> simplifiedTransfers;
 
+  /// 'group', or 'direct' for the hidden two-person group that holds
+  /// non-group expenses with one friend (never in the groups list; can't be
+  /// renamed, archived, deleted, left or given members).
+  final String kind;
+
+  bool get isDirect => kind == 'direct';
+
   const GroupModel({
     required this.id,
     required this.name,
@@ -77,6 +84,7 @@ class GroupModel extends Equatable {
     this.completedAt,
     this.simplifyDebts = false,
     this.simplifiedTransfers = const [],
+    this.kind = 'group',
   });
 
   factory GroupModel.fromJson(Map<String, dynamic> json) {
@@ -124,6 +132,7 @@ class GroupModel extends Equatable {
           .whereType<Map<String, dynamic>>()
           .map(SimplifiedTransfer.fromJson)
           .toList(),
+      kind: (json['kind'] as String?) ?? 'group',
     );
   }
 
@@ -149,6 +158,7 @@ class GroupModel extends Equatable {
     DateTime? completedAt,
     bool? simplifyDebts,
     List<SimplifiedTransfer>? simplifiedTransfers,
+    String? kind,
   }) {
     return GroupModel(
       id: id ?? this.id,
@@ -169,6 +179,7 @@ class GroupModel extends Equatable {
       completedAt: completedAt ?? this.completedAt,
       simplifyDebts: simplifyDebts ?? this.simplifyDebts,
       simplifiedTransfers: simplifiedTransfers ?? this.simplifiedTransfers,
+      kind: kind ?? this.kind,
     );
   }
 
@@ -211,6 +222,7 @@ class GroupModel extends Equatable {
         completedAt,
         simplifyDebts,
         simplifiedTransfers,
+        kind,
       ];
 }
 

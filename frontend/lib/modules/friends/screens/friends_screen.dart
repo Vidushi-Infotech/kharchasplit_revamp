@@ -11,6 +11,7 @@ import '../../../core/responsive/content_width.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../state/friends_provider.dart';
+import '../widgets/add_friend_sheet.dart';
 import '../widgets/friend_list_tile.dart';
 import '../widgets/friends_summary_header.dart';
 
@@ -38,6 +39,13 @@ class FriendsScreen extends ConsumerWidget {
               title: const Text(AppStrings.friends),
               elevation: 0,
               backgroundColor: AppColors.surface(isDark),
+              actions: [
+                IconButton(
+                  tooltip: AppStrings.addFriend,
+                  icon: const Icon(Icons.person_add_alt_1_rounded),
+                  onPressed: () => showAddFriendSheet(context),
+                ),
+              ],
             ),
       body: friendsAsync.when(
         loading: () => Padding(
@@ -59,7 +67,7 @@ class FriendsScreen extends ConsumerWidget {
                   child: SizedBox(
                     height: c.maxHeight,
                     child: EmptyStateWidget.noFriends(
-                      onAddFriend: () => context.push('/home/create-group'),
+                      onAddFriend: () => showAddFriendSheet(context),
                     ),
                   ),
                 ),
@@ -87,6 +95,17 @@ class FriendsScreen extends ConsumerWidget {
                   subtitle: friends.length == 1
                       ? '1 person'
                       : '${friends.length} people',
+                  actions: [
+                    FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.brand,
+                        foregroundColor: Colors.white,
+                      ),
+                      onPressed: () => showAddFriendSheet(context),
+                      icon: const Icon(Icons.person_add_alt_1_rounded),
+                      label: const Text(AppStrings.addFriend),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 20),
                 Expanded(

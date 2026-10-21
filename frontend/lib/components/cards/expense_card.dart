@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../web/hoverable.dart';
+import '../../core/constants/app_strings.dart';
 import '../../core/services/haptic_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
@@ -20,6 +21,10 @@ class ExpenseCard extends ConsumerWidget {
   /// carries the group id, so the caller resolves the name.
   final String? groupName;
 
+  /// The expense is a non-group one (the hidden two-person group), shown
+  /// as "Non-group" instead of "In Non-group expenses".
+  final bool groupIsDirect;
+
   const ExpenseCard({
     super.key,
     required this.expense,
@@ -27,6 +32,7 @@ class ExpenseCard extends ConsumerWidget {
     this.onDelete,
     this.showGroup = false,
     this.groupName,
+    this.groupIsDirect = false,
   });
 
   // Per-user view of this expense:
@@ -149,6 +155,8 @@ class ExpenseCard extends ConsumerWidget {
                               child: Text(
                                 expense.groupId == null
                                     ? 'Personal'
+                                    : groupIsDirect
+                                    ? AppStrings.nonGroup
                                     : 'In ${groupName ?? 'a group'}',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,

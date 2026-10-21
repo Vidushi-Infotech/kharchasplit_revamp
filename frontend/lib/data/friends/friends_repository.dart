@@ -19,6 +19,7 @@ class FriendGroupBalance {
     required this.groupName,
     required this.currency,
     required this.net,
+    this.isDirect = false,
   });
 
   final String groupId;
@@ -30,12 +31,16 @@ class FriendGroupBalance {
   /// Positive = the friend owes you in this group; negative = you owe them.
   final double net;
 
+  /// The hidden group holding non-group expenses with this friend.
+  final bool isDirect;
+
   factory FriendGroupBalance.fromJson(Map<String, dynamic> json) =>
       FriendGroupBalance(
         groupId: json['groupId'] as String,
         groupName: (json['groupName'] as String?) ?? '',
         currency: (json['currency'] as String?) ?? 'INR',
         net: (json['net'] as num?)?.toDouble() ?? 0,
+        isDirect: json['isDirect'] == true,
       );
 }
 
@@ -46,6 +51,7 @@ class FriendBalance {
     required this.user,
     required this.net,
     required this.sharedGroupCount,
+    this.directGroupId,
     required this.groups,
   });
 
@@ -58,6 +64,10 @@ class FriendBalance {
   /// left a shared group but still has an open balance with you.
   final int sharedGroupCount;
 
+  /// The hidden group for non-group expenses with them; null until the
+  /// first one (create via GroupsRepository.directGroupWith).
+  final String? directGroupId;
+
   /// Groups with an open balance, largest first.
   final List<FriendGroupBalance> groups;
 
@@ -67,6 +77,7 @@ class FriendBalance {
         user: UserModel.fromJson(json),
         net: (json['net'] as num?)?.toDouble() ?? 0,
         sharedGroupCount: (json['sharedGroupCount'] as num?)?.toInt() ?? 0,
+        directGroupId: json['directGroupId'] as String?,
         groups: ((json['groups'] as List?) ?? const [])
             .whereType<Map<String, dynamic>>()
             .map(FriendGroupBalance.fromJson)

@@ -217,7 +217,7 @@ Widget buildGroupLargeLayout(
                     isAdmin,
                     bottomGap: 24,
                   ),
-                  buildGroupLargeHeader(context, isDark, detail),
+                  buildGroupLargeHeader(context, isDark, detail, myId),
                   const SizedBox(height: 32),
                   buildGroupMembersSection(
                     groupId,

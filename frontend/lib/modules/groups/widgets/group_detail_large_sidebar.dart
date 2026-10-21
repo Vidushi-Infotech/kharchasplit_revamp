@@ -6,7 +6,9 @@ import '../../../core/utils/currency_formatter.dart';
 import '../../../components/components.dart';
 import '../state/group_detail_provider.dart';
 import 'add_member_button.dart';
-import 'group_cover_thumb.dart';
+import '../../../core/constants/app_strings.dart';
+import '../state/group_display.dart';
+import 'group_detail_cover.dart';
 import 'group_member_actions.dart';
 import 'member_actions_sheet.dart';
 import 'remove_member_actions.dart';
@@ -16,16 +18,18 @@ Widget buildGroupLargeHeader(
   BuildContext context,
   bool isDark,
   GroupDetail detail,
+  String? myId,
 ) {
+  final isDirect = detail.group.isDirect;
   return Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       // Group title with large cover image (or emoji fallback)
       Row(
         children: [
-          GroupCoverThumb(
-            coverImageBase64: detail.group.coverImageBase64,
-            coverEmoji: detail.group.coverEmoji,
+          GroupDetailCover(
+            group: detail.group,
+            myId: myId,
             size: 64,
             borderRadius: 16,
             emojiFontSize: 42,
@@ -36,7 +40,15 @@ Widget buildGroupLargeHeader(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(detail.group.name, style: AppTextStyles.headline1(isDark)),
+                Text(
+                  detail.group.displayTitle(myId),
+                  style: AppTextStyles.headline1(isDark),
+                ),
+                if (isDirect)
+                  Text(
+                    AppStrings.nonGroupExpenses,
+                    style: AppTextStyles.caption(isDark),
+                  ),
               ],
             ),
           ),
@@ -52,15 +64,17 @@ Widget buildGroupLargeHeader(
         Icons.account_balance_wallet_rounded,
         AppColors.brand,
       ),
-      const SizedBox(height: 12),
-      _buildLargeStatisticCard(
-        context,
-        isDark,
-        'Total Members',
-        '${detail.members.length}',
-        Icons.people_rounded,
-        AppColors.brand,
-      ),
+      if (!isDirect) ...[
+        const SizedBox(height: 12),
+        _buildLargeStatisticCard(
+          context,
+          isDark,
+          'Total Members',
+          '${detail.members.length}',
+          Icons.people_rounded,
+          AppColors.brand,
+        ),
+      ],
       const SizedBox(height: 12),
       _buildLargeStatisticCard(
         context,
@@ -136,9 +150,10 @@ Widget buildGroupMembersSection(
               style: AppTextStyles.headline3(isDark),
             ),
           ),
-          AddMemberButton(
-            onTap: () => showGroupInviteDialog(groupId, context, ref),
-          ),
+          if (!detail.group.isDirect)
+            AddMemberButton(
+              onTap: () => showGroupInviteDialog(groupId, context, ref),
+            ),
         ],
       ),
       const SizedBox(height: 12),
@@ -163,6 +178,7 @@ Widget buildGroupMembersSection(
                   member: member,
                   isAdmin: isAdmin,
                   isSelf: isSelf,
+                  isDirect: detail.group.isDirect,
                 ),
                 child: Container(
                   padding: const EdgeInsets.all(12),

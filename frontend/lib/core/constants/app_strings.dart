@@ -57,6 +57,12 @@ abstract final class AppStrings {
   static const nonGroupExpenses = 'Non-group expenses';
   static String paidByAndSplit(String payer, String how) =>
       'Paid by $payer and split $how';
+  // Non-group ("direct") expenses with one friend (nonGroup is below).
+  static String youAndName(String name) => 'You and $name';
+  static String withName(String name) => 'With $name';
+  static String inGroupName(String group) => 'In $group';
+  static const notGroupMemberOnExpense =
+      'Everyone on an expense must be a member of the group';
 
   // ── Split methods ───────────────────────────────────────────────────
   static const splitEqually = 'Equally';
@@ -216,4 +222,37 @@ abstract final class AppStrings {
   static String upiPaidNotRecorded(String error) =>
       'Your UPI payment went through but could not be recorded ($error). '
       'Record it from the group with "Record payment".';
+
+  // ── Friends & non-group expenses ────────────────────────────────────
+  static const nonGroup = 'Non-group';
+  static String nonGroupYouOwe(String amount) =>
+      'Non-group expenses: you owe $amount';
+  static String nonGroupNameOwesYou(String name, String amount) =>
+      'Non-group expenses: $name owes you $amount';
+  static const addFriend = 'Add friend';
+  static const addFriendHint =
+      'Find them by phone number to split expenses without a group.';
+  static const pickFromContacts = 'Pick from contacts';
+  static const findFriend = 'Find';
+  static const enterTenDigitNumber = 'Enter a 10-digit mobile number';
+  static const thatIsYourNumber = "That's your own number";
+  static const notOnKharchaSplitYet = 'Not on KharchaSplit yet';
+  static const notOnKharchaSplitHint =
+      'Invite them. Once they sign up, you can add expenses together.';
+  static const invite = 'Invite';
+  static const inviteFriendMessage =
+      "Hey! I'm using KharchaSplit to split expenses. Join me so we can keep "
+      'track of who owes what.';
+  static const tooManySearches =
+      'Too many searches. Try again in a few minutes.';
+  static const lookupFailed =
+      'Lookup failed. Check your connection and try again.';
+  static const pickOnePerson =
+      'Pick one person. Splitting with more than one? Create a group.';
+  static const splitWithMoreCreateGroup =
+      'Splitting with more than one person? Create a group.';
+  static const pickGroupOrFriend = 'Pick a group or a friend';
+  static const searchGroupsOrFriends = 'Search groups or friends';
+  static String couldNotOpenNonGroup(String error) =>
+      'Could not start a non-group expense: $error';
 }

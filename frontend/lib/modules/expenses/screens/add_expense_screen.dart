@@ -14,8 +14,8 @@ import '../state/add_expense_form_helpers.dart';
 import '../state/add_expense_provider.dart';
 import '../state/add_expense_save_flow.dart';
 import '../state/add_expense_submit.dart';
-import '../widgets/add_expense_archived_notice.dart';
 import '../widgets/add_expense_form_cards.dart';
+import '../widgets/add_expense_group_context.dart';
 import '../widgets/add_expense_hero_card.dart';
 import '../widgets/add_expense_hydrate_view.dart';
 import '../widgets/add_expense_save_bar.dart';
@@ -224,7 +224,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (archived) AddExpenseArchivedNotice(isDark: isDark),
+        AddExpenseGroupContext(isDark: isDark, archived: archived),
         AddExpenseHeroCard(
           isDark: isDark,
           state: state,

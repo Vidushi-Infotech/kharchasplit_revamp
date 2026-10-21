@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/constants/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../state/friends_provider.dart';
@@ -41,10 +42,14 @@ Future<FriendGroupBalance?> showFriendGroupPicker(
                     final amount = formatFriendAmount(g.net, g.currency);
                     return ListTile(
                       leading: Icon(
-                        Icons.group_outlined,
+                        g.isDirect
+                            ? Icons.person_outline_rounded
+                            : Icons.group_outlined,
                         color: AppColors.textSecondary(isDark),
                       ),
-                      title: Text(g.groupName),
+                      title: Text(
+                        g.isDirect ? AppStrings.nonGroupExpenses : g.groupName,
+                      ),
                       trailing: Text(
                         amount,
                         style: AppTextStyles.body1(isDark).copyWith(

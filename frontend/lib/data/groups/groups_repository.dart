@@ -191,6 +191,20 @@ class GroupsRepository {
     ));
   }
 
+  /// The hidden group for non-group expenses with [friendId], created on
+  /// first use (POST /groups/direct). Returns its id.
+  Future<String> directGroupWith(String friendId) async {
+    final res = await _client.dio.post(
+      '/groups/direct',
+      data: {'friendId': friendId},
+    );
+    final id = _ensureSuccessMap(res)['groupId'];
+    if (id is! String) {
+      throw GroupsApiException('Malformed response — expected groupId');
+    }
+    return id;
+  }
+
   Future<void> delete(String groupId) async {
     final res = await _client.dio.delete('/groups/$groupId');
     _ensureSuccess(res);
