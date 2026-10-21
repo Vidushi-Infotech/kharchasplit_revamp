@@ -97,6 +97,13 @@ const getExpense = async (req, res, next) => {
  * can still be recorded so open balances can be settled. Returns true
  * when it has sent the 409.
  */
+/** 410: the expense was deleted (e.g. before a queued offline change arrived). */
+const goneResponse = (res) => res.status(410).json({
+  success: false,
+  code: 'EXPENSE_DELETED',
+  error: 'This expense was deleted.',
+});
+
 const rejectIfArchived = (group, res) => {
   if (!group?.is_archived) return false;
   res.status(409).json({
@@ -191,7 +198,10 @@ const createExpense = async (req, res, next) => {
       splitMeta: split.splitMeta,
       receiptBase64,
       notes,
-      expenseDate,
+      // A calendar day in India: apps send local date-times or UTC instants
+      // ("2026-10-20T18:30:00Z" is 21 Oct in India) — Postgres would keep
+      // only the date part of the string and file it a day early.
+      expenseDate: expenseDate === undefined ? undefined : toDateOnly(expenseDate),
     };
 
     // "Repeat": this expense is the first occurrence of a new recurring
@@ -303,6 +313,8 @@ const updateExpense = async (req, res, next) => {
     const existingExpense = await Expense.findById(id);
 
     if (!existingExpense) {
+      // An edit made offline can arrive after someone deleted the expense.
+      if (await Expense.wasDeleted(id)) return goneResponse(res);
       return res.status(404).json({
         success: false,
         error: 'Expense not found',
@@ -312,6 +324,22 @@ const updateExpense = async (req, res, next) => {
     // Verify user has access
     await GroupService.validateGroupAccess(existingExpense.group_id, req.user.id);
     if (rejectIfArchived(await Group.findById(existingExpense.group_id), res)) return;
+    // Offline edits send the updated_at they were made against: if someone
+    // changed the expense since, don't overwrite their edit blindly.
+    if (req.body.baseUpdatedAt !== undefined && existingExpense.updated_at) {
+      const base = new Date(req.body.baseUpdatedAt).getTime();
+      const current = new Date(existingExpense.updated_at).getTime();
+      // Same version → the same millisecond value it was sent as.
+      if (!Number.isFinite(base) || current > base) {
+        return res.status(409).json({
+          success: false,
+          code: 'EDIT_CONFLICT',
+          error: 'Someone changed this expense while you were offline. Check it and edit again.',
+          current: existingExpense,
+        });
+      }
+    }
+
     // Any payer of the expense may edit it (before multi-payer: the payer).
     const payerIds = (existingExpense.payers || []).map((p) => p.user_id);
     if (!payerIds.includes(req.user.id) && existingExpense.paid_by !== req.user.id) {
@@ -368,7 +396,7 @@ const updateExpense = async (req, res, next) => {
       category,
       receiptBase64,
       notes,
-      expenseDate,
+      expenseDate: expenseDate === undefined || expenseDate === null ? undefined : toDateOnly(expenseDate),
       paidById: newPayerId,
       splitType: split.splitType,
       splitMeta: split.splitMeta,
@@ -446,6 +474,7 @@ const deleteExpense = async (req, res, next) => {
     const expense = await Expense.findById(id);
 
     if (!expense) {
+      if (await Expense.wasDeleted(id)) return goneResponse(res);
       return res.status(404).json({
         success: false,
         error: 'Expense not found',

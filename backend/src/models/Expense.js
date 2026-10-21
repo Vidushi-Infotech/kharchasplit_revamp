@@ -202,7 +202,9 @@ class Expense {
              expense_date = COALESCE($7, expense_date),
              paid_by = COALESCE($8, paid_by),
              split_type = COALESCE($9, split_type),
-             split_meta = CASE WHEN $11::boolean THEN $12::jsonb ELSE split_meta END
+             split_meta = CASE WHEN $11::boolean THEN $12::jsonb ELSE split_meta END,
+             -- Offline edits compare against this (baseUpdatedAt).
+             updated_at = NOW()
          WHERE id = $10 AND deleted_at IS NULL
          RETURNING id, group_id, description, amount, currency, category,
                    paid_by, split_type, split_meta, notes, expense_date, created_at, updated_at`,
@@ -450,6 +452,16 @@ class Expense {
 
       return expense;
     });
+  }
+
+  /** True when the expense existed but was deleted (→ 410 for late edits). */
+  static async wasDeleted(id) {
+    if (!/^[0-9a-f-]{36}$/i.test(String(id))) return false;
+    const result = await query(
+      'SELECT 1 FROM expenses WHERE id = $1 AND deleted_at IS NOT NULL',
+      [id]
+    );
+    return result.rowCount > 0;
   }
 
   /**
