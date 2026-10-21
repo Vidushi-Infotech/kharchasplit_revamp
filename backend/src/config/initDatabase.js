@@ -312,6 +312,17 @@ CREATE TABLE IF NOT EXISTS idempotency_keys (
   created_at TIMESTAMP NOT NULL DEFAULT NOW(),
   PRIMARY KEY (user_id, key)
 );
+
+-- One hidden "direct" group per friend pair for non-group expenses
+-- (services/directGroupService.js). user_low < user_high.
+CREATE TABLE IF NOT EXISTS direct_pairs (
+  user_low UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_high UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  group_id UUID NOT NULL UNIQUE REFERENCES groups(id) ON DELETE CASCADE,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_low, user_high),
+  CHECK (user_low < user_high)
+);
 `;
 
 // =====================================================
@@ -345,6 +356,8 @@ const columnAdditions = [
   // "Simplify group debts" (services/ledger.js). Not the legacy
   // simplified_debts column, which defaults to TRUE and was never read.
   { table: 'groups', column: 'simplify_debts', type: 'BOOLEAN NOT NULL DEFAULT FALSE' },
+  // 'group' | 'direct' (hidden pair group for non-group expenses, migration 020).
+  { table: 'groups', column: 'kind', type: "VARCHAR(10) NOT NULL DEFAULT 'group'" },
 
   // Expenses table columns
   { table: 'expenses', column: 'deleted_at', type: 'TIMESTAMP' },

@@ -5,6 +5,7 @@ import GroupService from '../services/groupService.js';
 import ActivityService from '../services/activityService.js';
 import { NotificationService } from '../services/notificationService.js';
 import { cache } from '../services/cacheService.js';
+import { query } from '../config/database.js';
 
 /**
  * Get expenses for a group
@@ -103,6 +104,35 @@ const rejectIfArchived = (group, res) => {
   return true;
 };
 
+/**
+ * The payer and everyone in the split must be members of the group — a
+ * member must not be able to put a debt on someone outside it (and a
+ * non-group expense stays between its two friends). On an edit, people
+ * already on the expense may stay even if they have since left
+ * (`alreadyOn`). Returns true when it has sent the 400.
+ */
+const rejectNonMembers = async (groupId, userIds, res, alreadyOn = []) => {
+  const ids = [...new Set(userIds.filter(Boolean))].filter((id) => !alreadyOn.includes(id));
+  if (ids.length === 0) return false;
+  const reject = () => {
+    res.status(400).json({
+      success: false,
+      code: 'NOT_GROUP_MEMBER',
+      error: 'Everyone on an expense must be a member of the group',
+    });
+    return true;
+  };
+  if (!ids.every((id) => UUID_RE.test(String(id)))) return reject();
+  const { rows } = await query(
+    `SELECT user_id FROM group_members
+      WHERE group_id = $1 AND deleted_at IS NULL AND user_id = ANY($2::uuid[])`,
+    [groupId, ids],
+  );
+  return rows.length === ids.length ? false : reject();
+};
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const createExpense = async (req, res, next) => {
   try {
     const {
@@ -126,6 +156,11 @@ const createExpense = async (req, res, next) => {
     // Get group name for activity log
     const group = await Group.findById(groupId);
     if (rejectIfArchived(group, res)) return;
+    if (await rejectNonMembers(
+      groupId,
+      [paidById || req.user.id, ...(participants || []).map((p) => p?.userId)],
+      res,
+    )) return;
 
     const expense = await Expense.create(
       {
@@ -228,6 +263,12 @@ const updateExpense = async (req, res, next) => {
     // Verify user has access
     await GroupService.validateGroupAccess(existingExpense.group_id, req.user.id);
     if (rejectIfArchived(await Group.findById(existingExpense.group_id), res)) return;
+    if (await rejectNonMembers(
+      existingExpense.group_id,
+      [paidById, ...(Array.isArray(participants) ? participants : []).map((p) => p?.userId)],
+      res,
+      [existingExpense.paid_by, ...(existingExpense.participants || []).map((p) => p.user_id)],
+    )) return;
 
     // Only the *original* payer may edit. Payer can be reassigned via
     // `paidById` in the body, but the caller must currently be the payer.

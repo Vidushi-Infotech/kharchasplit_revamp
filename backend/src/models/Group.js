@@ -10,7 +10,7 @@ class Group {
     return cache.getOrSet(`group:${id}`, TTL.GROUP_DETAIL, async () => {
       const result = await query(
         `SELECT g.id, g.name, g.description, g.currency,
-                g.is_archived, g.archived_at, g.completed_at, g.simplify_debts, g.created_by, g.created_at, g.updated_at,
+                g.is_archived, g.archived_at, g.completed_at, g.simplify_debts, g.kind, g.created_by, g.created_at, g.updated_at,
                 (SELECT COUNT(*) FROM group_members gm
                  WHERE gm.group_id = g.id AND gm.deleted_at IS NULL) as member_count,
                 (SELECT COUNT(*) FROM expenses e
@@ -31,7 +31,7 @@ class Group {
   static async findByIdFull(id) {
     const result = await query(
       `SELECT g.id, g.name, g.description, g.cover_image_base64, g.currency,
-              g.is_archived, g.archived_at, g.completed_at, g.simplify_debts, g.created_by, g.created_at, g.updated_at,
+              g.is_archived, g.archived_at, g.completed_at, g.simplify_debts, g.kind, g.created_by, g.created_at, g.updated_at,
               (SELECT COUNT(*) FROM group_members gm
                WHERE gm.group_id = g.id AND gm.deleted_at IS NULL) as member_count,
               (SELECT COUNT(*) FROM expenses e
@@ -48,13 +48,13 @@ class Group {
   /**
    * Find groups by user ID
    */
-  static async findByUserId(userId, limit = 20, offset = 0) {
+  static async findByUserId(userId, limit = 20, offset = 0, { includeDirect = false } = {}) {
     // Uses subqueries instead of triple JOIN + GROUP BY for much better performance.
     // cover_image_base64 is included so the groups list / dashboard cards
     // render the actual photo (cover images are compressed to ~30-80KB).
     const result = await query(
       `SELECT g.id, g.name, g.description, g.created_by, g.created_at, g.updated_at,
-              g.currency, g.is_archived, g.archived_at, g.completed_at, g.simplify_debts, g.cover_image_base64,
+              g.currency, g.is_archived, g.archived_at, g.completed_at, g.simplify_debts, g.kind, g.cover_image_base64,
               (SELECT COUNT(*) FROM group_members gm2
                WHERE gm2.group_id = g.id AND gm2.deleted_at IS NULL) as member_count,
               (SELECT COUNT(*) FROM expenses e
@@ -64,9 +64,11 @@ class Group {
        FROM groups g
        INNER JOIN group_members gm ON g.id = gm.group_id AND gm.user_id = $1 AND gm.deleted_at IS NULL
        WHERE g.deleted_at IS NULL
+         -- Hidden pair groups for non-group expenses (Friends, not Groups).
+         AND ($4::boolean OR g.kind = 'group')
        ORDER BY g.updated_at DESC
        LIMIT $2 OFFSET $3`,
-      [userId, limit, offset]
+      [userId, limit, offset, includeDirect]
     );
     return result.rows;
   }

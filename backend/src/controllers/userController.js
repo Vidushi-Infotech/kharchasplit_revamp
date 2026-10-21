@@ -147,7 +147,7 @@ const updateUser = async (req, res, next) => {
     // Invalidate group member caches so updated name/avatar propagates
     // to all groups the user belongs to.
     try {
-      const groups = await Group.findByUserId(id, 200, 0);
+      const groups = await Group.findByUserId(id, 200, 0, { includeDirect: true });
       for (const g of groups) {
         Group.invalidateMembers(g.id, id);
       }
@@ -902,7 +902,7 @@ const getFriends = async (req, res, next) => {
     }
 
     const { rows: myGroups } = await query(
-      `SELECT g.id, g.name, g.currency
+      `SELECT g.id, g.name, g.currency, g.kind
          FROM groups g
          JOIN group_members gm ON gm.group_id = g.id
         WHERE gm.user_id = $1 AND gm.deleted_at IS NULL AND g.deleted_at IS NULL`,
@@ -913,10 +913,13 @@ const getFriends = async (req, res, next) => {
       ...r,
       group_name: groupById.get(r.group_id).name,
       currency: groupById.get(r.group_id).currency,
+      kind: groupById.get(r.group_id).kind,
     }));
 
     const { rows: shared } = await query(
-      `SELECT other.user_id, COUNT(DISTINCT other.group_id)::int AS shared_groups
+      `SELECT other.user_id,
+              (COUNT(DISTINCT other.group_id) FILTER (WHERE g.kind = 'group'))::int AS shared_groups,
+              MAX(g.id::text) FILTER (WHERE g.kind = 'direct') AS direct_group_id
          FROM group_members me
          JOIN groups g ON g.id = me.group_id AND g.deleted_at IS NULL
          JOIN group_members other ON other.group_id = me.group_id
@@ -930,11 +933,14 @@ const getFriends = async (req, res, next) => {
     const friends = new Map();
     const friend = (userId) => {
       if (!friends.has(userId)) {
-        friends.set(userId, { userId, netPaise: 0, sharedGroupCount: 0, groups: [] });
+        friends.set(userId, { userId, netPaise: 0, sharedGroupCount: 0, directGroupId: null, groups: [] });
       }
       return friends.get(userId);
     };
-    for (const r of shared) friend(r.user_id).sharedGroupCount = r.shared_groups;
+    for (const r of shared) {
+      friend(r.user_id).sharedGroupCount = r.shared_groups;
+      friend(r.user_id).directGroupId = r.direct_group_id;
+    }
     for (const r of netRows) {
       const paise = toPaise(r.net);
       if (paise === 0) continue;
@@ -944,6 +950,7 @@ const getFriends = async (req, res, next) => {
         groupId: r.group_id,
         groupName: r.group_name,
         currency: r.currency || 'INR',
+        isDirect: r.kind === 'direct',
         net: Number(fromPaise(paise)),
       });
     }
@@ -969,7 +976,11 @@ const getFriends = async (req, res, next) => {
           profileImageBase64: u.profile_image_base64 || null,
           isPlaceholder: !!u.is_placeholder,
           net: Number(fromPaise(f.netPaise)),
+          // Groups shared besides the hidden non-group one.
           sharedGroupCount: f.sharedGroupCount,
+          // Hidden group holding non-group expenses with them (null until
+          // the first one; create via POST /groups/direct).
+          directGroupId: f.directGroupId,
           groups: f.groups,
         };
       })

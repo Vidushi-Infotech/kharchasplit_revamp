@@ -14,6 +14,15 @@ const largeJson = express.json({ limit: '10mb' });
 router.get('/', authenticate, groupController.getGroups);
 router.get('/:id', authenticate, groupController.getGroup);
 
+// Non-group expenses with one friend (hidden "direct" group).
+router.post(
+  '/direct',
+  authenticate,
+  [body('friendId').isUUID()],
+  validate,
+  groupController.getDirectGroup
+);
+
 router.post(
   '/',
   largeJson,
@@ -24,14 +33,15 @@ router.post(
   groupController.createGroup
 );
 
-router.put('/:id', largeJson, authenticate, groupController.updateGroup);
-router.delete('/:id', authenticate, groupController.deleteGroup);
+router.put('/:id', largeJson, authenticate, groupController.rejectDirect, groupController.updateGroup);
+router.delete('/:id', authenticate, groupController.rejectDirect, groupController.deleteGroup);
 
 router.get('/:id/members', authenticate, groupController.getGroupMembers);
 
 router.post(
   '/:id/members',
   authenticate,
+  groupController.rejectDirect,
   [
     body('userId').notEmpty(),
     body('name').trim().isLength({ min: 2, max: 255 })
@@ -40,11 +50,12 @@ router.post(
   groupController.addGroupMember
 );
 
-router.delete('/:id/members/:userId', authenticate, groupController.removeGroupMember);
+router.delete('/:id/members/:userId', authenticate, groupController.rejectDirect, groupController.removeGroupMember);
 
 router.put(
   '/:id/members/:userId',
   authenticate,
+  groupController.rejectDirect,
   [body('role').isIn(['admin', 'member'])],
   validate,
   groupController.updateMemberRole
@@ -56,6 +67,7 @@ router.get('/:id/pending-members', authenticate, groupController.getPendingMembe
 router.post(
   '/:id/pending-members',
   authenticate,
+  groupController.rejectDirect,
   [
     body('name').trim().isLength({ min: 1, max: 255 }).withMessage('Name is required'),
     body('phoneNumber').notEmpty().withMessage('Phone number is required'),
@@ -64,7 +76,7 @@ router.post(
   groupController.addPendingMember
 );
 
-router.post('/:id/pending-members/:phoneNumber/resend', authenticate, groupController.resendPendingInvite);
+router.post('/:id/pending-members/:phoneNumber/resend', authenticate, groupController.rejectDirect, groupController.resendPendingInvite);
 router.delete('/:id/pending-members/:phoneNumber', authenticate, groupController.removePendingMember);
 
 // Email-invite fallback. Independent of WATI / Twilio — sends an SMTP invite
@@ -73,6 +85,7 @@ router.delete('/:id/pending-members/:phoneNumber', authenticate, groupController
 router.post(
   '/:id/invite-email',
   authenticate,
+  groupController.rejectDirect,
   [
     body('email').isEmail().withMessage('A valid email address is required'),
     body('name').optional().trim().isLength({ max: 255 }),
@@ -82,10 +95,10 @@ router.post(
 );
 
 // Archive/Unarchive routes
-router.put('/:id/archive', authenticate, groupController.archiveGroup);
-router.put('/:id/simplify', authenticate, groupController.setSimplifyDebts);
-router.put('/:id/unarchive', authenticate, groupController.unarchiveGroup);
-router.put('/:id/complete', authenticate, groupController.completeGroup);
+router.put('/:id/archive', authenticate, groupController.rejectDirect, groupController.archiveGroup);
+router.put('/:id/simplify', authenticate, groupController.rejectDirect, groupController.setSimplifyDebts);
+router.put('/:id/unarchive', authenticate, groupController.rejectDirect, groupController.unarchiveGroup);
+router.put('/:id/complete', authenticate, groupController.rejectDirect, groupController.completeGroup);
 
 // Send a "you owe me" push reminder to another member of the group.
 // Backend gates: caller is in group, target owes caller > 0, and 6-hour

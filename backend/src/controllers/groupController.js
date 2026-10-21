@@ -3,6 +3,7 @@ import ExcelJS from 'exceljs';
 
 import { query } from '../config/database.js';
 import { cache } from '../services/cacheService.js';
+import { getOrCreateDirectGroup, DirectGroupError } from '../services/directGroupService.js';
 import Group from '../models/Group.js';
 import Settlement from '../models/Settlement.js';
 import GroupService from '../services/groupService.js';
@@ -97,6 +98,7 @@ const getGroups = async (req, res, next) => {
         archivedAt: group.archived_at || null,
         completedAt: group.completed_at || null,
         simplifyDebts: !!group.simplify_debts,
+        kind: group.kind || 'group',
         memberCount: parseInt(group.member_count) || 0,
         expenseCount: parseInt(group.expense_count) || 0,
         totalExpenses: parseFloat(group.total_expenses) || 0,
@@ -176,6 +178,7 @@ const getGroup = async (req, res, next) => {
         archivedAt: group.archived_at || null,
         completedAt: group.completed_at || null,
         simplifyDebts: !!group.simplify_debts,
+        kind: group.kind || 'group',
         memberCount: parseInt(group.member_count) || 0,
         expenseCount: parseInt(group.expense_count) || 0,
         totalExpenses: parseFloat(group.total_expenses) || 0,
@@ -1051,6 +1054,43 @@ const setSimplifyDebts = async (req, res, next) => {
 };
 
 /**
+ * Get (or create on first use) the hidden group for non-group expenses
+ * with one friend.
+ * POST /api/v1/groups/direct  { friendId }  → { groupId, created }
+ */
+const getDirectGroup = async (req, res, next) => {
+  try {
+    const result = await getOrCreateDirectGroup(req.user.id, req.body.friendId);
+    res.status(result.created ? 201 : 200).json({ success: true, data: result });
+  } catch (error) {
+    if (error instanceof DirectGroupError) {
+      return res.status(error.status).json({ success: false, error: error.message });
+    }
+    next(error);
+  }
+};
+
+/**
+ * Route guard: actions that make no sense for a two-person non-group
+ * "group" (rename, members, archive, delete, leave…).
+ */
+const rejectDirect = async (req, res, next) => {
+  try {
+    const group = await Group.findById(req.params.id);
+    if (group?.kind === 'direct') {
+      return res.status(400).json({
+        success: false,
+        code: 'DIRECT_GROUP',
+        error: 'Not available for non-group expenses',
+      });
+    }
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * Archive group
  * PUT /api/v1/groups/:id/archive
  */
@@ -1734,6 +1774,8 @@ export default {
   removeGroupMember,
   updateMemberRole,
   archiveGroup,
+  getDirectGroup,
+  rejectDirect,
   setSimplifyDebts,
   unarchiveGroup,
   completeGroup,
