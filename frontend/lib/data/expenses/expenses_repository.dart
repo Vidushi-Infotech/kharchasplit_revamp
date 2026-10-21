@@ -5,9 +5,15 @@ import '../../core/network/api_client.dart';
 import '../../models/expense_model.dart';
 
 class ExpensesApiException implements Exception {
-  ExpensesApiException(this.message, {this.statusCode});
+  ExpensesApiException(this.message, {this.statusCode, this.code});
   final String message;
   final int? statusCode;
+
+  /// Machine-readable error tag from the server, e.g. `GROUP_ARCHIVED`
+  /// (409 when creating / editing / deleting in an archived group).
+  final String? code;
+
+  bool get isGroupArchived => code == 'GROUP_ARCHIVED';
 
   @override
   String toString() => message;
@@ -213,7 +219,11 @@ class ExpensesRepository {
     if (body is! Map || body['success'] != true) {
       final msg = (body is Map ? body['error'] : null)?.toString() ??
           'Request failed (status ${res.statusCode})';
-      throw ExpensesApiException(msg, statusCode: res.statusCode);
+      throw ExpensesApiException(
+        msg,
+        statusCode: res.statusCode,
+        code: body is Map ? body['code'] as String? : null,
+      );
     }
     return body.cast<String, dynamic>();
   }

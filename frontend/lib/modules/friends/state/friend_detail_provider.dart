@@ -3,103 +3,74 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/state/keep_alive_for.dart';
 import '../../../data/expenses/expenses_repository.dart';
+import '../../../data/groups/groups_repository.dart';
 import '../../../models/expense_model.dart';
-import '../../../models/user_model.dart';
 import '../../auth/state/auth_provider.dart';
 import '../../groups/state/groups_provider.dart';
+import 'friends_provider.dart';
 
-class FriendDetail {
-  const FriendDetail({
-    required this.friend,
-    required this.balanceYouOwe,
-    required this.sharedExpenses,
-  });
-
-  final UserModel friend;
-
-  /// Positive = you owe them; negative = they owe you.
-  final double balanceYouOwe;
-
-  final List<ExpenseModel> sharedExpenses;
-}
-
-final friendDetailProvider = FutureProvider.autoDispose
-    .family<FriendDetail, String>((ref, friendId) async {
+/// Expenses that involve both the signed-in user and [friendId], newest
+/// first. Display only — balances come from the server via
+/// [friendByIdProvider], never from summing these.
+final friendSharedExpensesProvider = FutureProvider.autoDispose
+    .family<List<ExpenseModel>, String>((ref, friendId) async {
   keepAliveFor(ref, const Duration(minutes: 5));
-  final me = ref.watch(authProvider).user;
-  final groups = ref.watch(groupsProvider).value ?? const [];
-
-  final sharedGroups =
-      groups.where((g) => g.members.any((m) => m.id == friendId)).toList();
-
-  if (sharedGroups.isEmpty || me == null) {
-    return FriendDetail(
-      friend: UserModel(
-        id: friendId,
-        name: 'Unknown',
-        email: '',
-        phone: '',
-        createdAt: DateTime.now(),
-      ),
-      balanceYouOwe: 0,
-      sharedExpenses: const [],
-    );
+  final myId = ref.watch(authProvider.select((s) => s.user?.id));
+  if (myId == null) return const [];
+  final groups = await ref.watch(groupsProvider.future);
+  var balanceGroups = const <FriendGroupBalance>[];
+  try {
+    final friends = await ref.watch(friendsProvider.future);
+    balanceGroups =
+        friends.firstWhereOrNull((f) => f.user.id == friendId)?.groups ??
+            const [];
+  } catch (_) {
+    // Balances failing shouldn't hide the expense history.
   }
 
-  // Fall back to a placeholder UserModel if the friend has been removed
-  // from every shared group between fetch and resolve — better an "Unknown"
-  // detail screen than a StateError crash.
-  final friend = sharedGroups
-          .expand((g) => g.members)
-          .firstWhereOrNull((m) => m.id == friendId) ??
-      UserModel(
-        id: friendId,
-        name: 'Unknown',
-        email: '',
-        phone: '',
-        createdAt: DateTime.now(),
-      );
+  // Current shared groups, plus groups that still carry a balance with the
+  // friend (they may have left, or the group may be archived).
+  final groupIds = <String>{
+    for (final g in groups)
+      if (g.members.any((m) => m.id == friendId)) g.id,
+    ...balanceGroups.map((g) => g.groupId),
+  };
+  if (groupIds.isEmpty) return const [];
 
-  // Fetch ALL expenses for every shared group in parallel — the balance
-  // below is summed client-side, so a truncated page would be wrong.
   final repo = ref.read(expensesRepositoryProvider);
-  final perGroup = await Future.wait(
-    sharedGroups.map((g) => repo.listAllForGroup(g.id)),
-  );
+  final perGroup = await Future.wait(groupIds.map(repo.listAllForGroup));
 
-  // Keep only expenses that involve both me and the friend.
-  // Compute net: positive split.owedShare for friend means I (payer) am owed
-  // by them; for me means I owe payer.
-  double balance = 0; // positive = I owe friend
-  final shared = <ExpenseModel>[];
-  for (final expenses in perGroup) {
-    for (final e in expenses) {
-      final friendInvolved =
-          e.paidBy.id == friendId || e.splits.any((s) => s.userId == friendId);
-      final meInvolved =
-          e.paidBy.id == me.id || e.splits.any((s) => s.userId == me.id);
-      if (!friendInvolved || !meInvolved) continue;
-      shared.add(e);
+  bool involves(ExpenseModel e, String id) =>
+      e.paidBy.id == id || e.splits.any((s) => s.userId == id);
 
-      if (e.paidBy.id == friendId) {
-        // Friend paid; I owe my share.
-        for (final s in e.splits) {
-          if (s.userId == me.id) balance += s.owedShare;
-        }
-      } else if (e.paidBy.id == me.id) {
-        // I paid; friend owes their share.
-        for (final s in e.splits) {
-          if (s.userId == friendId) balance -= s.owedShare;
-        }
-      }
-    }
+  final shared = [
+    for (final list in perGroup)
+      for (final e in list)
+        if (involves(e, friendId) && involves(e, myId)) e,
+  ]..sort((a, b) => b.date.compareTo(a.date));
+  return shared;
+});
+
+/// Friend-detail actions that hit the API.
+final friendActionsProvider = Provider<FriendActions>(FriendActions.new);
+
+class FriendActions {
+  FriendActions(this._ref);
+  final Ref _ref;
+
+  /// Sends a payment reminder to [friendId] for [groupId]. Throws
+  /// [GroupsApiException] with the server's message on failure (e.g. the
+  /// one-per-6h cooldown), so the UI can show it verbatim.
+  Future<void> remind({required String groupId, required String friendId}) {
+    return _ref
+        .read(groupsRepositoryProvider)
+        .sendReminder(groupId: groupId, userId: friendId);
   }
 
-  shared.sort((a, b) => b.date.compareTo(a.date));
-
-  return FriendDetail(
-    friend: friend,
-    balanceYouOwe: balance,
-    sharedExpenses: shared,
-  );
-});
+  /// Pulls fresh balances and shared expenses.
+  Future<void> refresh(String friendId) async {
+    _ref.invalidate(friendsProvider);
+    _ref.invalidate(friendSharedExpensesProvider(friendId));
+    await _ref.read(friendsProvider.future);
+  }
+}

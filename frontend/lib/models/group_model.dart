@@ -39,6 +39,17 @@ class GroupModel extends Equatable {
   final GroupCategory category;
   final String? createdBy;
 
+  /// Archived groups are read-only for expenses (backend returns 409
+  /// GROUP_ARCHIVED); payments can still be recorded.
+  final bool isArchived;
+  final DateTime? archivedAt;
+
+  /// Set when an admin marked the fully settled group complete. A
+  /// completed group is always archived too.
+  final DateTime? completedAt;
+
+  bool get isCompleted => completedAt != null;
+
   const GroupModel({
     required this.id,
     required this.name,
@@ -53,6 +64,9 @@ class GroupModel extends Equatable {
     required this.createdAt,
     this.category = GroupCategory.other,
     this.createdBy,
+    this.isArchived = false,
+    this.archivedAt,
+    this.completedAt,
   });
 
   factory GroupModel.fromJson(Map<String, dynamic> json) {
@@ -92,8 +106,14 @@ class GroupModel extends Equatable {
           created is String ? DateTime.parse(created) : DateTime.now(),
       category: GroupCategory.other,
       createdBy: (json['createdBy'] ?? json['created_by']) as String?,
+      isArchived: (json['isArchived'] ?? json['is_archived'] ?? false) == true,
+      archivedAt: _date(json['archivedAt'] ?? json['archived_at']),
+      completedAt: _date(json['completedAt'] ?? json['completed_at']),
     );
   }
+
+  static DateTime? _date(Object? v) =>
+      v is String ? DateTime.tryParse(v) : null;
 
   GroupModel copyWith({
     String? id,
@@ -109,6 +129,9 @@ class GroupModel extends Equatable {
     DateTime? createdAt,
     GroupCategory? category,
     String? createdBy,
+    bool? isArchived,
+    DateTime? archivedAt,
+    DateTime? completedAt,
   }) {
     return GroupModel(
       id: id ?? this.id,
@@ -124,6 +147,9 @@ class GroupModel extends Equatable {
       createdAt: createdAt ?? this.createdAt,
       category: category ?? this.category,
       createdBy: createdBy ?? this.createdBy,
+      isArchived: isArchived ?? this.isArchived,
+      archivedAt: archivedAt ?? this.archivedAt,
+      completedAt: completedAt ?? this.completedAt,
     );
   }
 
@@ -161,5 +187,8 @@ class GroupModel extends Equatable {
         createdAt,
         category,
         createdBy,
+        isArchived,
+        archivedAt,
+        completedAt,
       ];
 }

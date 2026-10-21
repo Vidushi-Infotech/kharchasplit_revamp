@@ -113,7 +113,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
       _showSnack(err, success: false);
       return;
     }
-    if (mounted) context.go('/home/dashboard');
+    if (mounted) context.go('/home/groups');
   }
 
   void _showSnack(String message, {required bool success}) {

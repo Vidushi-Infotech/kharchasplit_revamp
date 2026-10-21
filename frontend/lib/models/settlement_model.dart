@@ -2,12 +2,32 @@ import 'package:equatable/equatable.dart';
 import '../core/utils/currency_formatter.dart';
 import 'user_model.dart';
 
-/// Settlement method enum
+/// How a payment was made. Mirrors backend `settlements.method`
+/// (migration 018); [apiValue] is the wire value.
 enum SettlementMethod {
-  upi,
-  cash,
-  bankTransfer,
-  other,
+  upi('upi'),
+  cash('cash'),
+  bankTransfer('bank_transfer'),
+  other('other');
+
+  const SettlementMethod(this.apiValue);
+  final String apiValue;
+
+  String get label => switch (this) {
+        SettlementMethod.upi => 'UPI',
+        SettlementMethod.cash => 'Cash',
+        SettlementMethod.bankTransfer => 'Bank transfer',
+        SettlementMethod.other => 'Other',
+      };
+
+  /// Null for unknown / missing values (rows recorded before the column
+  /// existed, or by older app builds).
+  static SettlementMethod? fromApi(Object? value) {
+    for (final m in values) {
+      if (m.apiValue == value) return m;
+    }
+    return null;
+  }
 }
 
 /// Settlement status enum
@@ -24,7 +44,8 @@ class SettlementModel extends Equatable {
   final UserModel toUser;
   final double amount;
   final String currency;
-  final SettlementMethod method;
+  /// Null when the payer didn't record a method (older rows / app builds).
+  final SettlementMethod? method;
   final DateTime date;
   final String? note;
   final SettlementStatus status;
@@ -41,7 +62,7 @@ class SettlementModel extends Equatable {
     required this.toUser,
     required this.amount,
     this.currency = '₹',
-    this.method = SettlementMethod.cash,
+    this.method,
     required this.date,
     this.note,
     this.status = SettlementStatus.completed,
@@ -79,7 +100,7 @@ class SettlementModel extends Equatable {
           : double.tryParse(json['amount']?.toString() ?? '') ?? 0,
       currency: CurrencyFormatter.symbolFor(
           (json['currency'] as String?) ?? 'INR'),
-      method: SettlementMethod.cash,
+      method: SettlementMethod.fromApi(json['method']),
       date: settledAt is String ? DateTime.parse(settledAt) : DateTime.now(),
       note: json['notes'] as String?,
       status: statusRaw == 'pending'
@@ -121,19 +142,8 @@ class SettlementModel extends Equatable {
     );
   }
 
-  /// Get human-readable method name
-  String get methodName {
-    switch (method) {
-      case SettlementMethod.upi:
-        return 'UPI';
-      case SettlementMethod.cash:
-        return 'Cash';
-      case SettlementMethod.bankTransfer:
-        return 'Bank Transfer';
-      case SettlementMethod.other:
-        return 'Other';
-    }
-  }
+  /// Human-readable method name; null when no method was recorded.
+  String? get methodName => method?.label;
 
   /// Get human-readable status name
   String get statusName {

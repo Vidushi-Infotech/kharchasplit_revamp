@@ -6,16 +6,19 @@ import 'package:go_router/go_router.dart';
 
 import '../../../components/buttons/primary_button.dart';
 import '../../../components/inputs/app_text_field.dart';
+import '../../../core/constants/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../data/settlements/settlements_repository.dart';
 import '../../../models/group_model.dart';
+import '../../../models/settlement_model.dart';
 import '../../../models/user_model.dart';
 import '../../auth/state/auth_provider.dart';
 import '../../dashboard/state/dashboard_provider.dart';
 import '../../groups/state/group_detail_provider.dart';
 import '../state/pending_settlements_provider.dart';
 import '../../groups/state/groups_provider.dart';
+import '../widgets/payment_method_selector.dart';
 
 class SettleScreen extends ConsumerStatefulWidget {
   const SettleScreen({
@@ -47,6 +50,9 @@ class _SettleScreenState extends ConsumerState<SettleScreen> {
   GroupModel? _selectedGroup;
   bool _submitting = false;
   bool _initialGroupApplied = false;
+
+  /// Null until the user picks one — sent as null rather than a guess.
+  SettlementMethod? _method;
 
   @override
   void initState() {
@@ -89,9 +95,12 @@ class _SettleScreenState extends ConsumerState<SettleScreen> {
             notes: _notesController.text.trim().isEmpty
                 ? null
                 : _notesController.text.trim(),
+            method: _method,
           );
       ref.invalidate(dashboardProvider);
       ref.invalidate(groupDetailProvider(group.id));
+      // Group cards' balances; friendsProvider refetches off this too.
+      ref.invalidate(groupsProvider);
       // Settlements are final on creation; refresh the pending sections too
       // so any legacy pending entries stay in sync.
       ref.invalidate(pendingOutgoingSettlementsProvider(group.id));
@@ -102,14 +111,14 @@ class _SettleScreenState extends ConsumerState<SettleScreen> {
           ?.name;
       _toast(
         recipientName == null || recipientName.isEmpty
-            ? 'Settled up.'
-            : 'Settled up. $recipientName has been notified.',
+            ? '${AppStrings.paymentRecorded}.'
+            : '${AppStrings.paymentRecorded}. $recipientName has been notified.',
       );
       context.pop();
     } catch (e) {
       if (!mounted) return;
       setState(() => _submitting = false);
-      _toast('Could not settle: $e');
+      _toast('Could not record payment: $e');
     }
   }
 
@@ -145,7 +154,7 @@ class _SettleScreenState extends ConsumerState<SettleScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Settle Up'),
+        title: const Text(AppStrings.recordPayment),
         elevation: 0,
         backgroundColor: AppColors.surface(isDark),
       ),
@@ -161,7 +170,7 @@ class _SettleScreenState extends ConsumerState<SettleScreen> {
                 children: [
                   Text(
                     recipient == null
-                        ? 'Settle up'
+                        ? AppStrings.recordPayment
                         : 'You’re paying ${recipient.name}',
                     style: AppTextStyles.headline2(isDark),
                   ),
@@ -215,9 +224,14 @@ class _SettleScreenState extends ConsumerState<SettleScreen> {
                     },
                   ),
                   const SizedBox(height: 16),
+                  PaymentMethodSelector(
+                    selected: _method,
+                    onChanged: (m) => setState(() => _method = m),
+                  ),
+                  const SizedBox(height: 16),
                   AppTextField(
                     label: 'Notes (optional)',
-                    hint: 'e.g. Paid via UPI',
+                    hint: 'e.g. Dinner share',
                     controller: _notesController,
                     maxLines: 3,
                     minLines: 2,
@@ -226,7 +240,7 @@ class _SettleScreenState extends ConsumerState<SettleScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: PrimaryButton(
-                      label: 'Record Settlement',
+                      label: AppStrings.recordPayment,
                       onPressed: (_submitting || shared.isEmpty)
                           ? null
                           : _handleSubmit,

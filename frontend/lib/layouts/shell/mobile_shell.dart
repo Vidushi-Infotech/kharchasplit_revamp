@@ -2,12 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/constants/app_strings.dart';
 import '../../core/lifecycle/app_lifecycle_refresher.dart';
 import 'floating_bottom_bar.dart';
 import 'pick_group_for_expense_sheet.dart';
 import 'shell_state.dart';
+import 'whats_new_sheet.dart';
 
-/// Mobile shell with BottomNavigationBar
+/// Mobile shell with the floating bottom bar.
+///
+/// Tabs (Splitwise-style): Groups · Friends · ➕ · Activity · Account — see
+/// [ShellTab] for the index ↔ route mapping shared with the tablet rail.
 class MobileShell extends ConsumerWidget {
   final Widget child;
 
@@ -16,28 +21,12 @@ class MobileShell extends ConsumerWidget {
     required this.child,
   }) : super(key: key);
 
-  /// Map a route location to the index of the bottom-nav tab it belongs to.
-  /// Returns null when the location isn't owned by a tab (e.g. deep links
-  /// like /home/groups/:groupId) — in that case we keep the last-tapped
-  /// index.
-  int? _indexFromLocation(String location) {
-    if (location.startsWith('/home/dashboard')) return 0;
-    if (location.startsWith('/home/groups')) return 1;
-    if (location.startsWith('/home/create-group') ||
-        location.startsWith('/add-expense')) {
-      return 2;
-    }
-    if (location.startsWith('/home/personal')) return 3;
-    if (location.startsWith('/home/profile')) return 4;
-    return null;
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // Derive the active tab from the current route so it stays in sync
-    // when other widgets navigate (e.g. Home → "See all" → Groups).
+    // when other widgets navigate (e.g. a notification tap → Activity).
     final routerState = GoRouterState.of(context);
-    final routeIndex = _indexFromLocation(routerState.uri.path);
+    final routeIndex = ShellTab.fromLocation(routerState.uri.path);
     final stickyIndex = ref.watch(selectedNavIndexProvider);
     final selectedIndex = routeIndex ?? stickyIndex;
 
@@ -49,6 +38,9 @@ class MobileShell extends ConsumerWidget {
       });
     }
 
+    // One-time "A new look" intro to the new tab bar.
+    WhatsNewSheet.maybeShow(context);
+
     // Resume-after-long-background refresh lives here (not in main.dart)
     // because only a signed-in user inside the shell has data to refresh.
     return AppLifecycleRefresher(
@@ -59,9 +51,12 @@ class MobileShell extends ConsumerWidget {
           final router = GoRouter.of(context);
           if (router.canPop()) {
             router.pop();
-          } else if (selectedIndex != 0) {
-            ref.read(selectedNavIndexProvider.notifier).state = 0;
-            context.go('/home/dashboard');
+          } else if (selectedIndex != ShellTab.groups) {
+            // Back from any other tab returns to Groups (the home tab);
+            // back on Groups leaves the app.
+            ref.read(selectedNavIndexProvider.notifier).state =
+                ShellTab.groups;
+            context.go(ShellTab.locations[ShellTab.groups]!);
           } else {
             SystemNavigator.pop();
           }
@@ -71,31 +66,31 @@ class MobileShell extends ConsumerWidget {
           body: child,
           bottomNavigationBar: FloatingBottomBar(
             selectedIndex: selectedIndex,
-            fabIndex: 2,
+            fabIndex: ShellTab.create,
             onItemSelected: (index) {
               ref.read(selectedNavIndexProvider.notifier).state = index;
               _navigateToTab(context, index);
             },
-            items: [
-              const FloatingNavItem(
-                icon: Icons.home_rounded,
-                label: 'Home',
-              ),
-              const FloatingNavItem(
+            items: const [
+              FloatingNavItem(
                 icon: Icons.group_rounded,
-                label: 'Groups',
+                label: AppStrings.groups,
               ),
-              const FloatingNavItem(
+              FloatingNavItem(
+                icon: Icons.people_alt_rounded,
+                label: AppStrings.friends,
+              ),
+              FloatingNavItem(
                 icon: Icons.add_rounded,
-                label: 'Create',
+                label: AppStrings.addExpense,
               ),
-              const FloatingNavItem(
-                icon: Icons.account_balance_wallet_rounded,
-                label: 'Personal',
+              FloatingNavItem(
+                icon: Icons.timeline_rounded,
+                label: AppStrings.activity,
               ),
-              const FloatingNavItem(
+              FloatingNavItem(
                 icon: Icons.person_outline_rounded,
-                label: 'Profile',
+                label: AppStrings.account,
               ),
             ],
           ),
@@ -105,25 +100,14 @@ class MobileShell extends ConsumerWidget {
   }
 
   void _navigateToTab(BuildContext context, int index) {
-    switch (index) {
-      case 0:
-        context.go('/home/dashboard');
-        break;
-      case 1:
-        context.go('/home/groups');
-        break;
-      case 2:
-        // The + button now opens a group picker so the user can quickly
-        // add an expense to one of their groups. Creating a new group
-        // is offered as a secondary action inside the sheet.
-        PickGroupForExpenseSheet.show(context);
-        break;
-      case 3:
-        context.go('/home/personal');
-        break;
-      case 4:
-        context.go('/home/profile');
-        break;
+    if (index == ShellTab.create) {
+      // The + button opens a group picker so the user can quickly add an
+      // expense to one of their groups. Creating a new group is offered as
+      // a secondary action inside the sheet.
+      PickGroupForExpenseSheet.show(context);
+      return;
     }
+    final location = ShellTab.locations[index];
+    if (location != null) context.go(location);
   }
 }

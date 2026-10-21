@@ -4,6 +4,8 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../data/settlements/settlements_repository.dart';
+import '../../../models/settlement_model.dart';
+import '../../settlements/state/payment_method_format.dart';
 import '../../settlements/state/pending_settlements_provider.dart';
 import '../state/group_detail_provider.dart';
 
@@ -86,7 +88,7 @@ class _OutgoingSettlementTileState
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Cancel this pending settlement?'),
+        title: const Text('Cancel this pending payment?'),
         content: const Text(
           'The recipient will no longer see this payment as pending. '
           'You can record it again later.',
@@ -116,7 +118,7 @@ class _OutgoingSettlementTileState
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Settlement cancelled')));
+      ).showSnackBar(const SnackBar(content: Text('Payment cancelled')));
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);
@@ -138,7 +140,10 @@ class _OutgoingSettlementTileState
         children: [
           Expanded(
             child: Text(
-              'You sent $toName ${CurrencyFormatter.format(s.amount as double)}',
+              withPaymentMethod(
+                'You sent $toName ${CurrencyFormatter.format(s.amount as double)}',
+                s.method as SettlementMethod?,
+              ),
               style: AppTextStyles.body2(widget.isDark),
             ),
           ),

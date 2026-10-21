@@ -41,7 +41,7 @@ class SplashScreen extends ConsumerWidget {
             // On the web the user may have opened a URL directly; the router
             // parked it here so auth could resolve first. Hand them back to
             // it. Always null on mobile.
-            context.go(WebDeepLink.take() ?? '/home/dashboard');
+            context.go(WebDeepLink.take() ?? '/home/groups');
           });
           break;
         case SplashState.unauthenticated:

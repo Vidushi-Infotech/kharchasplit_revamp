@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/constants/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../models/models.dart';
@@ -40,9 +41,16 @@ class GroupGridCard extends StatelessWidget {
         ? 'Settled'
         : '${isPositive ? '+' : '-'}$formatted';
 
+    // Archived groups get a small status chip; "Completed" when the group
+    // was closed out fully settled, plain "Archived" otherwise.
+    final String? statusChip = group.isArchived
+        ? (group.isCompleted ? AppStrings.completed : AppStrings.archived)
+        : null;
+
     return Semantics(
       button: true,
-      label: 'Group ${group.name}, ${group.memberCount} members, $amountLabel',
+      label: 'Group ${group.name}, ${group.memberCount} members, $amountLabel'
+          '${statusChip == null ? '' : ', $statusChip'}',
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -70,7 +78,15 @@ class GroupGridCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _IconTile(group: group, isDark: isDark),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _IconTile(group: group, isDark: isDark),
+                      const Spacer(),
+                      if (statusChip != null)
+                        _StatusChip(label: statusChip, isDark: isDark),
+                    ],
+                  ),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
@@ -172,6 +188,31 @@ class _StatusDot extends StatelessWidget {
       decoration: BoxDecoration(
         color: color,
         shape: BoxShape.circle,
+      ),
+    );
+  }
+}
+
+class _StatusChip extends StatelessWidget {
+  const _StatusChip({required this.label, required this.isDark});
+  final String label;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: AppColors.textSecondary(isDark).withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        label,
+        style: AppTextStyles.caption(isDark).copyWith(
+          color: AppColors.textSecondary(isDark),
+          fontSize: 10.5,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }

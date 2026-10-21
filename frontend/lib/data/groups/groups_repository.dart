@@ -166,6 +166,23 @@ class GroupsRepository {
     return GroupModel.fromJson(data);
   }
 
+  /// Archive: hides the group from the main list and blocks new expenses.
+  /// Allowed with open balances (the UI warns first).
+  Future<void> archive(String groupId) async {
+    _ensureSuccess(await _client.dio.put('/groups/$groupId/archive'));
+  }
+
+  /// Unarchive (also clears "completed").
+  Future<void> unarchive(String groupId) async {
+    _ensureSuccess(await _client.dio.put('/groups/$groupId/unarchive'));
+  }
+
+  /// Mark complete. Throws [GroupsApiException] with code
+  /// `GROUP_NOT_SETTLED` (409, `data['openAmount']`) while balances are open.
+  Future<void> complete(String groupId) async {
+    _ensureSuccess(await _client.dio.put('/groups/$groupId/complete'));
+  }
+
   Future<void> delete(String groupId) async {
     final res = await _client.dio.delete('/groups/$groupId');
     _ensureSuccess(res);
@@ -338,7 +355,12 @@ class GroupsRepository {
     if (body is! Map || body['success'] != true) {
       final msg = (body is Map ? body['error'] : null)?.toString() ??
           'Request failed (status ${res.statusCode})';
-      throw GroupsApiException(msg, statusCode: res.statusCode);
+      throw GroupsApiException(
+        msg,
+        statusCode: res.statusCode,
+        code: body is Map ? body['code'] as String? : null,
+        data: body is Map ? body.cast<String, dynamic>() : null,
+      );
     }
     return body.cast<String, dynamic>();
   }

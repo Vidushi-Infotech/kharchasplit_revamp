@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 
 import '../../../components/avatar/avatar_widget.dart';
 import '../../../components/buttons/donate_heart_button.dart';
+import '../../../core/constants/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/currency_formatter.dart';
@@ -13,6 +14,7 @@ import '../../../models/settlement_model.dart';
 import '../../../models/user_model.dart';
 import '../../auth/state/auth_provider.dart';
 import '../../groups/state/group_detail_provider.dart';
+import '../state/payment_method_format.dart';
 
 /// History of settlements between the current user and one other member,
 /// scoped to a single group. Lists every transfer (pending, completed,
@@ -251,7 +253,7 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
               const SizedBox(width: 14),
               Expanded(
                 child: Text(
-                  'Settlement history',
+                  AppStrings.payments,
                   style: AppTextStyles.body1(isDark).copyWith(
                     fontWeight: FontWeight.w700,
                     fontSize: 17,
@@ -389,7 +391,7 @@ class _Hero extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Text(
-                '${settlements.length} ${settlements.length == 1 ? 'settlement' : 'settlements'}',
+                '${settlements.length} ${settlements.length == 1 ? 'payment' : 'payments'}',
                 style: AppTextStyles.caption(isDark).copyWith(
                   color: AppColors.textSecondary(isDark),
                   fontWeight: FontWeight.w600,
@@ -922,10 +924,14 @@ class _SettlementRow extends StatelessWidget {
                       color: AppColors.textSecondary(isDark),
                     ),
                     const SizedBox(width: 4),
+                    // "· UPI" only when a method was recorded.
                     Text(
-                      DateFormat(
-                        'MMM d, yyyy · h:mm a',
-                      ).format(settlement.date),
+                      withPaymentMethod(
+                        DateFormat(
+                          'MMM d, yyyy · h:mm a',
+                        ).format(settlement.date),
+                        settlement.method,
+                      ),
                       style: AppTextStyles.caption(isDark).copyWith(
                         color: AppColors.textSecondary(isDark),
                         fontSize: 11.5,
@@ -1061,7 +1067,7 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            'No settlements yet',
+            'No payments yet',
             style: AppTextStyles.body1(
               isDark,
             ).copyWith(fontWeight: FontWeight.w700, fontSize: 16),
@@ -1140,7 +1146,7 @@ class _ErrorState extends StatelessWidget {
             ),
             const SizedBox(height: 14),
             Text(
-              "Couldn't load settlement history",
+              "Couldn't load payments",
               textAlign: TextAlign.center,
               style: AppTextStyles.body1(
                 isDark,

@@ -19,6 +19,7 @@ import '../../auth/state/auth_provider.dart';
 import '../../dashboard/state/dashboard_provider.dart';
 import '../../groups/state/group_detail_provider.dart';
 import '../state/expense_detail_provider.dart';
+import '../state/expense_error_message.dart';
 
 String _splitTypeLabel(SplitType t) {
   switch (t) {
@@ -296,7 +297,11 @@ class ExpenseDetailScreen extends ConsumerWidget {
       if (!context.mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Could not delete: $e')));
+      ).showSnackBar(
+        SnackBar(
+          content: Text(expenseErrorMessage(e, fallback: 'Could not delete')),
+        ),
+      );
     }
   }
 }
@@ -826,7 +831,7 @@ class _SplitsCardState extends State<_SplitsCard> {
                     toSettlePayer > 0.01) {
                   // Someone else paid and I still net-owe them (beyond what's
                   // already pending) → settle the remaining amount.
-                  actionLabel = 'Settle Up';
+                  actionLabel = 'Settle up';
                   actionIcon = Icons.check_circle_outline_rounded;
                   actionColor = AppColors.tealDark;
                   onAction = () => widget.onSettle!(toSettlePayer);

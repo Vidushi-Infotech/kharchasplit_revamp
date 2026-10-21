@@ -15,7 +15,7 @@ import '../state/auth_provider.dart';
 ///
 /// Step 1 — user enters their email; backend emails a 6-digit OTP.
 /// Step 2 — user enters the OTP + a new password. On success the backend
-/// auto-logs in and we route to the dashboard.
+/// auto-logs in and we route to the Groups tab.
 class ForgotPasswordScreen extends ConsumerStatefulWidget {
   const ForgotPasswordScreen({super.key});
 
@@ -124,7 +124,7 @@ class _ForgotPasswordScreenState
     // Backend auto-logged us in. Route based on whether profile is complete.
     final auth = ref.read(authProvider);
     context.go(
-        auth.needsProfileSetup ? '/profile-setup' : '/home/dashboard');
+        auth.needsProfileSetup ? '/profile-setup' : '/home/groups');
   }
 
   @override

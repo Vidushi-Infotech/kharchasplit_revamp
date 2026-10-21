@@ -4,6 +4,8 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../data/settlements/settlements_repository.dart';
+import '../../../models/settlement_model.dart';
+import '../../settlements/state/payment_method_format.dart';
 import '../../settlements/state/pending_settlements_provider.dart';
 import '../state/group_detail_provider.dart';
 
@@ -94,7 +96,7 @@ class _PendingSettlementTileState
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Settlement confirmed')));
+      ).showSnackBar(const SnackBar(content: Text('Payment confirmed')));
     } catch (e) {
       // "Settlement already confirmed / not found" means our intent already
       // succeeded — usually a duplicate tap that slipped past the rebuild.
@@ -127,7 +129,10 @@ class _PendingSettlementTileState
         children: [
           Expanded(
             child: Text(
-              '$fromName paid you ${CurrencyFormatter.format(s.amount as double)}',
+              withPaymentMethod(
+                '$fromName paid you ${CurrencyFormatter.format(s.amount as double)}',
+                s.method as SettlementMethod?,
+              ),
               style: AppTextStyles.body2(widget.isDark),
             ),
           ),

@@ -1,10 +1,10 @@
 import 'dart:async';
 
+import '../../../core/constants/app_strings.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/responsive/content_width.dart';
 import '../../../components/components.dart';
 import '../../../components/buttons/donate_heart_button.dart';
 import '../../../components/web/responsive_grid.dart';
@@ -13,8 +13,14 @@ import '../../../core/responsive/breakpoints.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../models/group_model.dart';
+import '../../dashboard/state/dashboard_provider.dart';
+import '../../profile/widgets/email_verify_strip.dart';
 import '../state/groups_provider.dart';
 import '../widgets/group_grid_card.dart';
+import '../widgets/groups_archived_section.dart';
+import '../widgets/groups_list_states.dart';
+import '../widgets/groups_notifications_button.dart';
+import '../widgets/overall_balance_card.dart';
 
 enum _BalanceFilter { all, owed, owe, settled }
 
@@ -31,6 +37,7 @@ class _GroupsScreenState extends ConsumerState<GroupsScreen> {
   _BalanceFilter _filter = _BalanceFilter.all;
   String _query = '';
   bool _isSearching = false;
+  bool _showArchived = false;
   Timer? _searchDebounce;
 
   @override
@@ -97,14 +104,27 @@ class _GroupsScreenState extends ConsumerState<GroupsScreen> {
             padding: EdgeInsets.fromLTRB(16, 16, 16, 16),
             child: ShimmerList(type: ShimmerListType.group, itemCount: 6),
           ),
-          error: (err, _) => _ErrorState(
+          error: (err, _) => GroupsErrorState(
             message: err.toString(),
             onRetry: () => ref.read(groupsProvider.notifier).refresh(),
           ),
           data: (allGroups) {
-            final visible = _applyFilters(allGroups);
+            // Archived groups sit in a collapsed section at the end; the
+            // filters and search apply to both halves.
+            final active = allGroups.where((g) => !g.isArchived).toList();
+            final visible = _applyFilters(active);
+            final visibleArchived =
+                _applyFilters(allGroups.where((g) => g.isArchived).toList());
+            final hasArchived = visibleArchived.isNotEmpty;
+            // A search reaches into archived groups, so open the section
+            // while there is a query.
+            final archivedOpen = _showArchived || _query.isNotEmpty;
+            final gridPad = _gridPadding(context);
+            final side = gridPad.left;
             return RefreshIndicator(
-              onRefresh: () => ref.read(groupsProvider.notifier).refresh(),
+              // Dashboard refresh reloads the groups list first, so one call
+              // refreshes both the overall card and the grid.
+              onRefresh: () => ref.read(dashboardProvider.notifier).refresh(),
               child: WebContentColumn(
                 child: CustomScrollView(
                   slivers: [
@@ -112,7 +132,7 @@ class _GroupsScreenState extends ConsumerState<GroupsScreen> {
                       pinned: true,
                       delegate: _CollapsibleHeader(
                         isDark: isDark,
-                        totalCount: allGroups.length,
+                        totalCount: active.length,
                         filter: _filter,
                         onFilter: (f) => setState(() => _filter = f),
                         onCreate: () => context.push('/home/create-group'),
@@ -125,6 +145,17 @@ class _GroupsScreenState extends ConsumerState<GroupsScreen> {
                         onSearchChanged: _onSearchChanged,
                       ),
                     ),
+                    SliverPadding(
+                      padding: EdgeInsets.fromLTRB(side, 12, side, 0),
+                      sliver: const SliverToBoxAdapter(
+                        child: Column(
+                          children: [
+                            EmailVerifyStrip(bottomSpacing: 12),
+                            OverallBalanceCard(),
+                          ],
+                        ),
+                      ),
+                    ),
                     if (allGroups.isEmpty)
                       SliverFillRemaining(
                         hasScrollBody: false,
@@ -133,32 +164,78 @@ class _GroupsScreenState extends ConsumerState<GroupsScreen> {
                               context.push('/home/create-group'),
                         ),
                       )
-                    else if (visible.isEmpty)
-                      SliverToBoxAdapter(
-                        child: _EmptyResultsCard(isDark: isDark, query: _query),
-                      )
-                    else
+                    else if (active.isEmpty)
                       SliverPadding(
-                        padding: _gridPadding(context),
-                        sliver: SliverGrid.builder(
-                          gridDelegate: _gridDelegate(context),
-                          itemCount: visible.length,
-                          itemBuilder: (context, index) {
-                            final group = visible[index];
-                            return GroupGridCard(
-                              group: group,
-                              onTap: () =>
-                                  context.push('/home/groups/${group.id}'),
-                            );
-                          },
+                        padding: EdgeInsets.fromLTRB(side, 16, side, 8),
+                        sliver: SliverToBoxAdapter(
+                          child: NoActiveGroupsCard(
+                            onCreate: () => context.push('/home/create-group'),
+                          ),
+                        ),
+                      )
+                    else if (visible.isEmpty && !hasArchived)
+                      SliverToBoxAdapter(
+                        child: GroupsEmptyResultsCard(
+                          isDark: isDark,
+                          query: _query,
                         ),
                       ),
+                    if (visible.isNotEmpty)
+                      _gridSliver(
+                        context,
+                        visible,
+                        hasArchived ? gridPad.copyWith(bottom: 4) : gridPad,
+                      ),
+                    if (hasArchived) ...[
+                      SliverPadding(
+                        padding: EdgeInsets.fromLTRB(side, 8, side, 0),
+                        sliver: SliverToBoxAdapter(
+                          child: ArchivedGroupsToggle(
+                            count: visibleArchived.length,
+                            expanded: archivedOpen,
+                            onTap: () =>
+                                setState(() => _showArchived = !archivedOpen),
+                          ),
+                        ),
+                      ),
+                      if (archivedOpen)
+                        _gridSliver(
+                          context,
+                          visibleArchived,
+                          gridPad.copyWith(top: 4),
+                        )
+                      else
+                        SliverToBoxAdapter(
+                          child: SizedBox(height: gridPad.bottom),
+                        ),
+                    ],
                   ],
                 ),
               ),
             );
           },
         ),
+      ),
+    );
+  }
+
+  Widget _gridSliver(
+    BuildContext context,
+    List<GroupModel> groups,
+    EdgeInsets padding,
+  ) {
+    return SliverPadding(
+      padding: padding,
+      sliver: SliverGrid.builder(
+        gridDelegate: _gridDelegate(context),
+        itemCount: groups.length,
+        itemBuilder: (context, index) {
+          final group = groups[index];
+          return GroupGridCard(
+            group: group,
+            onTap: () => context.push('/home/groups/${group.id}'),
+          );
+        },
       ),
     );
   }
@@ -405,6 +482,8 @@ class _ExpandedTitle extends StatelessWidget {
                 ),
               ),
             ),
+            const GroupsNotificationsButton(),
+            const SizedBox(width: 4),
             const DonateHeartButton(size: 38, iconSize: 18),
             const SizedBox(width: 4),
             _IconAction(
@@ -425,7 +504,7 @@ class _ExpandedTitle extends StatelessWidget {
         const SizedBox(height: 2),
         Text(
           totalCount == 0
-              ? 'No groups yet'
+              ? AppStrings.noActiveGroups
               : '$totalCount ${totalCount == 1 ? 'group' : 'groups'}',
           style: AppTextStyles.headline2(isDark).copyWith(
             fontWeight: FontWeight.w700,
@@ -703,95 +782,6 @@ class _FilterButton extends StatelessWidget {
                 color: AppColors.tealDark,
                 borderRadius: BorderRadius.circular(2),
               ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _EmptyResultsCard extends StatelessWidget {
-  const _EmptyResultsCard({required this.isDark, required this.query});
-
-  final bool isDark;
-  final String query;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        20,
-        32,
-        20,
-        bottomNavReserve(context.widthTier),
-      ),
-      child: Column(
-        children: [
-          Icon(
-            Icons.search_off_rounded,
-            size: 36,
-            color: AppColors.textSecondary(isDark),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            query.isEmpty
-                ? 'No groups match this filter'
-                : 'No groups match "$query"',
-            style: AppTextStyles.body1(
-              isDark,
-            ).copyWith(fontWeight: FontWeight.w600),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Try a different filter or search term',
-            style: AppTextStyles.caption(
-              isDark,
-            ).copyWith(color: AppColors.textSecondary(isDark)),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ErrorState extends StatelessWidget {
-  const _ErrorState({required this.message, required this.onRetry});
-  final String message;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.error_outline_rounded,
-              size: 48,
-              color: AppColors.errorText(isDark),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              "Couldn't load groups",
-              style: AppTextStyles.headline3(isDark),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              message,
-              style: AppTextStyles.body2(isDark),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: onRetry,
-              icon: const Icon(Icons.refresh_rounded),
-              label: const Text('Retry'),
             ),
           ],
         ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/constants/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../components/web/web_page.dart';
 import '../../../core/responsive/content_width.dart';
@@ -12,10 +13,22 @@ import 'group_balances_tab.dart';
 import 'group_detail_headers.dart';
 import 'group_detail_large_sidebar.dart';
 import 'group_detail_tabs.dart';
+import 'group_archived_banner.dart';
 import 'group_expenses_list.dart';
+import 'group_lifecycle_actions.dart';
 import 'group_sticky_tab_bar_delegate.dart';
 
-void navigateToAddGroupExpense(String groupId, BuildContext context) {
+/// Opens Add expense for the group. When [archived], explains why instead —
+/// the backend would reject the save with 409 GROUP_ARCHIVED anyway.
+void navigateToAddGroupExpense(
+  String groupId,
+  BuildContext context, {
+  bool archived = false,
+}) {
+  if (archived) {
+    showGroupArchivedNotice(context);
+    return;
+  }
   context.pushNamed(
     'add-expense-to-group',
     pathParameters: {'groupId': groupId},
@@ -197,6 +210,13 @@ Widget buildGroupLargeLayout(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  buildGroupArchivedBanner(
+                    context,
+                    ref,
+                    detail,
+                    isAdmin,
+                    bottomGap: 24,
+                  ),
                   buildGroupLargeHeader(context, isDark, detail),
                   const SizedBox(height: 32),
                   buildGroupMembersSection(
@@ -232,16 +252,27 @@ Widget buildGroupLargeLayout(
                     ),
                     // The mobile FAB has no desktop equivalent, so the create
                     // action lives on the pane it belongs to.
+                    // Archived: greyed out, but the tap still explains why.
                     if (tab == GroupTab.expenses)
                       Padding(
                         padding: const EdgeInsets.only(right: 16),
                         child: FilledButton.icon(
-                          onPressed: () =>
-                              navigateToAddGroupExpense(groupId, context),
-                          icon: const Icon(Icons.add_rounded, size: 18),
-                          label: const Text('Add expense'),
+                          onPressed: () => navigateToAddGroupExpense(
+                            groupId,
+                            context,
+                            archived: detail.group.isArchived,
+                          ),
+                          icon: Icon(
+                            detail.group.isArchived
+                                ? Icons.lock_outline_rounded
+                                : Icons.add_rounded,
+                            size: 18,
+                          ),
+                          label: const Text(AppStrings.addExpense),
                           style: FilledButton.styleFrom(
-                            backgroundColor: AppColors.brand,
+                            backgroundColor: detail.group.isArchived
+                                ? AppColors.textSecondary(isDark)
+                                : AppColors.brand,
                           ),
                         ),
                       ),

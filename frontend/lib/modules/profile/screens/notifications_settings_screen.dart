@@ -122,7 +122,7 @@ class NotificationsSettingsScreen extends ConsumerWidget {
                     ),
                     _ToggleItem(
                       icon: Icons.alarm_rounded,
-                      title: 'Settlement reminders',
+                      title: 'Payment reminders',
                       subtitle: 'Gentle nudge when balances stay open',
                       value: prefs.settlementReminder,
                       onChanged: (v) => notifier

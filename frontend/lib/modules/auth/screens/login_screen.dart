@@ -94,7 +94,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (auth.needsProfileSetup) {
       context.go('/profile-setup');
     } else {
-      context.go('/home/dashboard');
+      context.go('/home/groups');
     }
   }
 

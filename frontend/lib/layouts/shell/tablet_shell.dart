@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/constants/app_strings.dart';
 import '../../core/theme/app_colors.dart';
 import 'shell_state.dart';
+import 'whats_new_sheet.dart';
 
-/// Tablet shell with NavigationRail
+/// Tablet shell with NavigationRail.
+///
+/// Same tab order as the mobile bottom bar (see [ShellTab]):
+/// Groups · Friends · ➕ · Activity · Account.
 class TabletShell extends ConsumerWidget {
   final Widget child;
 
@@ -16,7 +21,15 @@ class TabletShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final selectedIndex = ref.watch(selectedNavIndexProvider);
+    // Route first, last-tapped index as the fallback — mirrors the mobile
+    // shell so a deep link or notification tap highlights the right tab.
+    final routeIndex =
+        ShellTab.fromLocation(GoRouterState.of(context).uri.path);
+    final selectedIndex =
+        routeIndex ?? ref.watch(selectedNavIndexProvider);
+
+    // One-time "A new look" intro to the new tab bar.
+    WhatsNewSheet.maybeShow(context);
 
     return Scaffold(
       body: Row(
@@ -46,14 +59,14 @@ class TabletShell extends ConsumerWidget {
             ),
             destinations: [
               const NavigationRailDestination(
-                icon: Icon(Icons.home_rounded),
-                selectedIcon: Icon(Icons.home_rounded),
-                label: Text('Home'),
-              ),
-              const NavigationRailDestination(
                 icon: Icon(Icons.group_rounded),
                 selectedIcon: Icon(Icons.group_rounded),
-                label: Text('Groups'),
+                label: Text(AppStrings.groups),
+              ),
+              const NavigationRailDestination(
+                icon: Icon(Icons.people_alt_rounded),
+                selectedIcon: Icon(Icons.people_alt_rounded),
+                label: Text(AppStrings.friends),
               ),
               NavigationRailDestination(
                 icon: Container(
@@ -78,17 +91,17 @@ class TabletShell extends ConsumerWidget {
                   ),
                   child: const Icon(Icons.add_rounded, color: Colors.white),
                 ),
-                label: Text('Create'),
+                label: const Text(AppStrings.addExpense),
               ),
               const NavigationRailDestination(
-                icon: Icon(Icons.account_balance_wallet_rounded),
-                selectedIcon: Icon(Icons.account_balance_wallet_rounded),
-                label: Text('Personal'),
+                icon: Icon(Icons.timeline_rounded),
+                selectedIcon: Icon(Icons.timeline_rounded),
+                label: Text(AppStrings.activity),
               ),
               const NavigationRailDestination(
                 icon: Icon(Icons.person_outline_rounded),
                 selectedIcon: Icon(Icons.person_rounded),
-                label: Text('Profile'),
+                label: Text(AppStrings.account),
               ),
             ],
           ),
@@ -100,22 +113,11 @@ class TabletShell extends ConsumerWidget {
   }
 
   void _navigateToTab(BuildContext context, int index) {
-    switch (index) {
-      case 0:
-        context.go('/home/dashboard');
-        break;
-      case 1:
-        context.go('/home/groups');
-        break;
-      case 2:
-        context.go('/add-expense');
-        break;
-      case 3:
-        context.go('/home/personal');
-        break;
-      case 4:
-        context.go('/home/profile');
-        break;
+    if (index == ShellTab.create) {
+      context.go('/add-expense');
+      return;
     }
+    final location = ShellTab.locations[index];
+    if (location != null) context.go(location);
   }
 }

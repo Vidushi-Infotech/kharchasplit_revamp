@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/constants/app_strings.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
-import 'shell_state.dart';
+import '../../modules/notifications/state/notifications_inbox_provider.dart';
 
 /// A destination in the web sidebar.
 class _NavDest {
@@ -27,40 +28,49 @@ class _NavDest {
       matches.any((m) => path == m || path.startsWith('$m/'));
 }
 
+/// Primary destinations, in the same order as the mobile tab bar
+/// (Groups · Friends · Activity; the ➕ is the "Add expense" button above).
 const _primaryNav = <_NavDest>[
   _NavDest(
-    icon: Icons.home_rounded,
-    label: 'Home',
-    location: '/home/dashboard',
-    matches: ['/home/dashboard', '/home/owed-to-me', '/home/i-owe'],
-  ),
-  _NavDest(
     icon: Icons.group_rounded,
-    label: 'Groups',
+    label: AppStrings.groups,
     location: '/home/groups',
-    matches: ['/home/groups', '/home/create-group'],
-  ),
-  _NavDest(
-    icon: Icons.account_balance_wallet_rounded,
-    label: 'Personal',
-    location: '/home/personal',
-    matches: ['/home/personal'],
+    // Groups is the home tab now, so the old dashboard URL and the balance
+    // drill-downs from its "Overall" card keep it lit.
+    matches: [
+      '/home/groups',
+      '/home/create-group',
+      '/home/dashboard',
+      '/home/owed-to-me',
+      '/home/i-owe',
+    ],
   ),
   _NavDest(
     icon: Icons.people_alt_rounded,
-    label: 'Friends',
+    label: AppStrings.friends,
     location: '/home/friends',
     matches: ['/home/friends'],
   ),
   _NavDest(
     icon: Icons.notifications_rounded,
-    label: 'Activity',
+    label: AppStrings.activity,
     location: '/home/activity',
     matches: ['/home/activity', '/home/notifications'],
   ),
+];
+
+/// Secondary tools. On mobile these live under Account; desktop has room to
+/// keep them one click away below a divider.
+const _secondaryNav = <_NavDest>[
+  _NavDest(
+    icon: Icons.account_balance_wallet_rounded,
+    label: AppStrings.personalExpenses,
+    location: '/home/personal',
+    matches: ['/home/personal'],
+  ),
   _NavDest(
     icon: Icons.bar_chart_rounded,
-    label: 'Reports',
+    label: AppStrings.reports,
     location: '/reports',
     matches: ['/reports'],
   ),
@@ -68,7 +78,7 @@ const _primaryNav = <_NavDest>[
 
 const _profileDest = _NavDest(
   icon: Icons.person_rounded,
-  label: 'Profile',
+  label: AppStrings.account,
   location: '/home/profile',
   matches: ['/home/profile'],
 );
@@ -76,7 +86,7 @@ const _profileDest = _NavDest(
 /// Sidebar shell for the web layout.
 ///
 /// Active state is derived from the current route rather than from the shared
-/// [selectedNavIndexProvider]: that provider is also written by the mobile and
+/// `selectedNavIndexProvider`: that provider is also written by the mobile and
 /// tablet shells, which map different destinations onto the same integers, so
 /// resizing the window across the shell breakpoint used to leave the wrong
 /// item highlighted. Deriving from the route also keeps the highlight correct
@@ -96,7 +106,8 @@ class WebShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final unreadCount = ref.watch(unreadActivityCountProvider);
+    // Real unread inbox count — Activity owns /home/notifications here.
+    final unreadCount = ref.watch(unreadNotificationsCountProvider);
     final path = GoRouterState.of(context).uri.path;
     final collapsed = MediaQuery.sizeOf(context).width < _railBreakpoint;
 
@@ -157,9 +168,24 @@ class _Sidebar extends StatelessWidget {
                       isDark: isDark,
                       collapsed: collapsed,
                       isSelected: dest.isActive(path),
-                      badge: dest.label == 'Activity' && unreadCount > 0
-                          ? '$unreadCount'
+                      badge: dest.label == AppStrings.activity &&
+                              unreadCount > 0
+                          ? (unreadCount > 99 ? '99+' : '$unreadCount')
                           : null,
+                    ),
+                  Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: collapsed ? 18 : 16,
+                      vertical: 8,
+                    ),
+                    child: Divider(color: AppColors.divider(isDark), height: 1),
+                  ),
+                  for (final dest in _secondaryNav)
+                    _NavItem(
+                      dest: dest,
+                      isDark: isDark,
+                      collapsed: collapsed,
+                      isSelected: dest.isActive(path),
                     ),
                 ],
               ),
@@ -246,7 +272,7 @@ class _AddExpenseButton extends StatelessWidget {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 14),
         child: Tooltip(
-          message: 'Add expense',
+          message: AppStrings.addExpense,
           child: SizedBox(
             height: 44,
             child: FilledButton(
@@ -273,7 +299,7 @@ class _AddExpenseButton extends StatelessWidget {
         child: FilledButton.icon(
           onPressed: go,
           icon: const Icon(Icons.add_rounded, size: 20),
-          label: const Text('Add expense'),
+          label: const Text(AppStrings.addExpense),
           style: FilledButton.styleFrom(
             backgroundColor: AppColors.brand,
             textStyle: const TextStyle(

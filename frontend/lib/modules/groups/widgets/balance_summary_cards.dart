@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../components/avatar/avatar_widget.dart';
+import '../../../core/constants/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/currency_formatter.dart';
@@ -166,10 +167,11 @@ class _BalancePersonCard extends StatelessWidget {
       if (data.iOweThem) {
         if (data.settleAmount > 0.01) {
           actionWidget = _CardAction(
-            label: 'Settle Up',
+            label: AppStrings.settleUp,
             icon: Icons.check_circle_outline_rounded,
             color: AppColors.tealDark,
             onTap: onSettle,
+            primary: true,
           );
         } else if (data.pendingAmount > 0.01) {
           actionWidget = const _CardStatus(
@@ -179,8 +181,9 @@ class _BalancePersonCard extends StatelessWidget {
           );
         }
       } else {
+        // Remind is the secondary action — outlined, never the solid button.
         actionWidget = _CardAction(
-          label: 'Remind',
+          label: AppStrings.remind,
           icon: Icons.notifications_active_rounded,
           color: AppColors.brand,
           onTap: onRemind,
@@ -319,24 +322,33 @@ class _CardStatus extends StatelessWidget {
 }
 
 /// Compact, full-width action button used at the bottom of a balance card.
+/// [primary] (Settle up) is solid; otherwise (Remind) it's an outline.
 class _CardAction extends StatelessWidget {
   const _CardAction({
     required this.label,
     required this.icon,
     required this.color,
     required this.onTap,
+    this.primary = false,
   });
 
   final String label;
   final IconData icon;
   final Color color;
   final VoidCallback onTap;
+  final bool primary;
 
   @override
   Widget build(BuildContext context) {
+    final fg = primary ? Colors.white : color;
     return Material(
-      color: color.withValues(alpha: 0.12),
-      borderRadius: BorderRadius.circular(8),
+      color: primary ? color : Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: primary
+            ? BorderSide.none
+            : BorderSide(color: color.withValues(alpha: 0.45)),
+      ),
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
         onTap: onTap,
@@ -346,7 +358,7 @@ class _CardAction extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 12, color: color),
+              Icon(icon, size: 12, color: fg),
               const SizedBox(width: 4),
               Flexible(
                 child: Text(
@@ -354,8 +366,8 @@ class _CardAction extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: color,
-                    fontWeight: FontWeight.w700,
+                    color: fg,
+                    fontWeight: primary ? FontWeight.w700 : FontWeight.w600,
                     fontSize: 11,
                   ),
                 ),

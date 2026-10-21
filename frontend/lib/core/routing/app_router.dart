@@ -6,7 +6,6 @@ import '../../modules/auth/screens/login_screen.dart';
 import '../../modules/auth/screens/register_screen.dart';
 import '../../modules/auth/screens/profile_setup_screen.dart';
 import '../../modules/auth/screens/forgot_password_screen.dart';
-import '../../modules/dashboard/screens/dashboard_screen.dart';
 import '../../modules/dashboard/screens/owed_to_me_screen.dart';
 import '../../modules/dashboard/screens/i_owe_screen.dart';
 import '../../modules/groups/screens/groups_screen.dart';
@@ -36,8 +35,8 @@ import '../responsive/breakpoints.dart';
 import 'route_error_screen.dart';
 import 'web_deep_link.dart';
 
-/// Shell for the five primary tab destinations — bottom bar, rail or sidebar
-/// depending on width. Unchanged from the original inline builder.
+/// Shell for the primary tab destinations — bottom bar, rail or sidebar
+/// depending on width. Tabs: Groups · Friends · ➕ · Activity · Account.
 Widget _tabShell(BuildContext context, Widget child) {
   final screenWidth = MediaQuery.sizeOf(context).width;
   if (screenWidth < Breakpoints.shellTablet) {
@@ -102,25 +101,22 @@ final appRouter = GoRouter(
       name: 'forgot-password',
       builder: (context, state) => const ForgotPasswordScreen(),
     ),
+    // The old Home tab. Groups is the home tab now (its "Overall" card took
+    // over the dashboard summary), but notification taps, saved web
+    // bookmarks and older app builds still point here — never 404 them.
+    GoRoute(
+      path: '/home/dashboard',
+      name: 'dashboard',
+      redirect: (context, state) => '/home/groups',
+    ),
     ShellRoute(
       builder: (context, state, child) => _tabShell(context, child),
       routes: [
-        GoRoute(
-          path: '/home/dashboard',
-          name: 'dashboard',
-          builder: (context, state) => const DashboardScreen(),
-        ),
         GoRoute(
           path: '/home/groups',
           name: 'groups',
           builder: (context, state) => const GroupsScreen(),
         ),
-        GoRoute(
-          path: '/home/personal',
-          name: 'personal',
-          builder: (context, state) => const PersonalExpensesScreen(),
-        ),
-        // Friends route kept for deep links from group/expense screens.
         GoRoute(
           path: '/home/friends',
           name: 'friends',
@@ -176,6 +172,13 @@ final appRouter = GoRouter(
             final friendId = state.pathParameters['friendId']!;
             return FriendDetailScreen(friendId: friendId);
           },
+        ),
+        // Personal expenses moved from a tab to a page pushed from Account
+        // (and a secondary sidebar entry on web).
+        GoRoute(
+          path: '/home/personal',
+          name: 'personal',
+          builder: (context, state) => const PersonalExpensesScreen(),
         ),
         GoRoute(
           path: '/home/personal/new',

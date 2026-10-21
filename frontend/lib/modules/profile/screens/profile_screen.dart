@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/constants/app_strings.dart';
 import '../../../core/responsive/content_width.dart';
 import '../../../core/responsive/breakpoints.dart';
 import '../../../components/avatar/avatar_widget.dart';
@@ -16,6 +17,7 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/theme/theme_provider.dart';
 import '../../../models/user_model.dart';
 import '../../auth/state/auth_provider.dart';
+import '../widgets/account_shortcuts_section.dart';
 import '../widgets/email_verify_sheet.dart';
 
 /// Default-currency preference row on the profile screen. See the
@@ -94,6 +96,8 @@ class _Body extends ConsumerWidget {
                     ),
           ),
           const SizedBox(height: 24),
+          AccountShortcutsSection(isDark: isDark),
+          const SizedBox(height: 20),
           _SectionLabel(label: 'ACCOUNT', isDark: isDark),
           const SizedBox(height: 8),
           _MenuGroup(
@@ -103,11 +107,6 @@ class _Body extends ConsumerWidget {
                 icon: Icons.person_outline_rounded,
                 label: 'Edit profile',
                 onTap: () => context.pushNamed('edit-profile'),
-              ),
-              _MenuItemData(
-                icon: Icons.timeline_rounded,
-                label: 'Activity',
-                onTap: () => context.pushNamed('activity'),
               ),
               _MenuItemData(
                 icon: Icons.notifications_none_rounded,
@@ -375,7 +374,7 @@ class _Header extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'PROFILE',
+                AppStrings.account.toUpperCase(),
                 style: AppTextStyles.caption(isDark).copyWith(
                   color: AppColors.textSecondary(isDark),
                   fontWeight: FontWeight.w600,

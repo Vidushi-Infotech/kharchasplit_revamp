@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../../components/avatar/avatar_widget.dart';
+import '../../../core/constants/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/currency_formatter.dart';
@@ -195,15 +196,17 @@ class SplitLogRow extends StatelessWidget {
                   if (showSettle) ...[
                     const SizedBox(height: 6),
                     _LogAction(
-                      label: 'Settle Up',
+                      label: AppStrings.settleUp,
                       icon: Icons.check_circle_outline_rounded,
                       color: AppColors.tealDark,
                       onTap: onSettle!,
+                      primary: true,
                     ),
                   ] else if (showRemind) ...[
                     const SizedBox(height: 6),
+                    // Secondary: a plain text-style chip, not a filled one.
                     _LogAction(
-                      label: 'Remind',
+                      label: AppStrings.remind,
                       icon: Icons.notifications_active_rounded,
                       color: AppColors.brand,
                       onTap: onRemind!,
@@ -219,25 +222,34 @@ class SplitLogRow extends StatelessWidget {
   }
 }
 
-/// Compact Settle Up / Remind chip used on a log row.
+/// Compact Settle up / Remind chip used on a log row. [primary] (Settle up)
+/// is solid; Remind is a lighter outline so it reads as secondary.
 class _LogAction extends StatelessWidget {
   const _LogAction({
     required this.label,
     required this.icon,
     required this.color,
     required this.onTap,
+    this.primary = false,
   });
 
   final String label;
   final IconData icon;
   final Color color;
   final VoidCallback onTap;
+  final bool primary;
 
   @override
   Widget build(BuildContext context) {
+    final fg = primary ? Colors.white : color;
     return Material(
-      color: color.withValues(alpha: 0.12),
-      borderRadius: BorderRadius.circular(8),
+      color: primary ? color : Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: primary
+            ? BorderSide.none
+            : BorderSide(color: color.withValues(alpha: 0.4)),
+      ),
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
         onTap: onTap,
@@ -246,14 +258,14 @@ class _LogAction extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 12, color: color),
+              Icon(icon, size: primary ? 12 : 11, color: fg),
               const SizedBox(width: 4),
               Text(
                 label,
                 style: TextStyle(
-                  color: color,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 11.5,
+                  color: fg,
+                  fontWeight: primary ? FontWeight.w700 : FontWeight.w600,
+                  fontSize: primary ? 11.5 : 11,
                 ),
               ),
             ],

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../../components/web/web_page.dart';
 import '../../../components/web/web_page_header.dart';
@@ -30,6 +31,16 @@ class ReportsScreen extends ConsumerWidget {
       appBar: isWeb
           ? null
           : AppBar(
+              // Reports is pushed from Account inside the content shell's
+              // own navigator, where the implied back button never shows —
+              // ask go_router instead.
+              leading: context.canPop()
+                  ? IconButton(
+                      icon: const Icon(Icons.arrow_back_rounded),
+                      tooltip: 'Back',
+                      onPressed: () => context.pop(),
+                    )
+                  : null,
               title: const Text('Reports'),
               elevation: 0,
               backgroundColor: AppColors.surface(isDark),
@@ -262,7 +273,7 @@ class ReportsScreen extends ConsumerWidget {
                 child: _buildStatCard(
                   context,
                   isDark,
-                  'You Owe',
+                  'You owe',
                   report.totalYouOwe,
                   AppColors.warning,
                 ),

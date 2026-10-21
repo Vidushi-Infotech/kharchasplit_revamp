@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../constants/app_strings.dart';
 import '../theme/app_colors.dart';
 
 /// Shown when a URL does not match any route.
@@ -54,9 +55,9 @@ class RouteErrorScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 28),
                 FilledButton.icon(
-                  onPressed: () => context.go('/home/dashboard'),
-                  icon: const Icon(Icons.home_rounded, size: 18),
-                  label: const Text('Go to dashboard'),
+                  onPressed: () => context.go('/home/groups'),
+                  icon: const Icon(Icons.group_rounded, size: 18),
+                  label: const Text(AppStrings.goToGroups),
                 ),
               ],
             ),

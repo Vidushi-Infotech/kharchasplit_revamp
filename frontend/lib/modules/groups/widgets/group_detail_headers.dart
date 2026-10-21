@@ -7,6 +7,7 @@ import '../state/group_detail_provider.dart';
 import 'add_member_button.dart';
 import 'group_cover_thumb.dart';
 import 'group_hero_card.dart';
+import 'group_lifecycle_actions.dart';
 import 'group_member_actions.dart';
 import 'group_members_strip.dart';
 
@@ -25,6 +26,7 @@ Widget buildGroupCompactHeader(
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        buildGroupArchivedBanner(context, ref, detail, isAdmin),
         GroupHeroCard(detail: detail),
         const SizedBox(height: 18),
         Padding(
@@ -83,6 +85,7 @@ Widget buildGroupStandardHeader(
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        buildGroupArchivedBanner(context, ref, detail, isAdmin, bottomGap: 20),
         // Group title with cover image (or emoji fallback)
         Row(
           children: [

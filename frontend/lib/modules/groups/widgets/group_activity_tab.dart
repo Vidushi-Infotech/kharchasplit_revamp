@@ -367,7 +367,7 @@ class _Toolbar extends ConsumerWidget {
       case FeedFilter.expenses:
         return 'Expenses';
       case FeedFilter.settlements:
-        return 'Settlements';
+        return 'Payments';
     }
   }
 }
@@ -1072,7 +1072,7 @@ class _FeedEmpty extends StatelessWidget {
             Text(
               showingFilter
                   ? 'Try a different filter or clear the search.'
-                  : 'Expenses and settlements added in this group will appear here.',
+                  : 'Expenses and payments added in this group will appear here.',
               textAlign: TextAlign.center,
               style: AppTextStyles.body2(isDark).copyWith(
                 color: AppColors.textSecondary(isDark),

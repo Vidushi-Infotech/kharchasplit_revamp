@@ -15,6 +15,8 @@ class GroupDetailTopBar extends StatelessWidget implements PreferredSizeWidget {
     required this.onExportGroup,
     required this.isAdmin,
     required this.canManage,
+    this.lifecycleItems = const [],
+    this.onLifecycleAction,
   });
 
   final bool isDark;
@@ -37,6 +39,12 @@ class GroupDetailTopBar extends StatelessWidget implements PreferredSizeWidget {
   /// False while the group detail is still loading — hides Leave/Delete to
   /// avoid acting on stale state.
   final bool canManage;
+
+  /// Admin-only archive / complete entries (see group_lifecycle_actions.dart),
+  /// shown after "Edit group". Values not handled below go to
+  /// [onLifecycleAction].
+  final List<PopupMenuEntry<String>> lifecycleItems;
+  final ValueChanged<String>? onLifecycleAction;
 
   @override
   Size get preferredSize => const Size.fromHeight(56);
@@ -103,6 +111,8 @@ class GroupDetailTopBar extends StatelessWidget implements PreferredSizeWidget {
                         case 'delete':
                           onDeleteGroup();
                           break;
+                        default:
+                          onLifecycleAction?.call(value);
                       }
                     },
                     icon: Container(
@@ -137,6 +147,7 @@ class GroupDetailTopBar extends StatelessWidget implements PreferredSizeWidget {
                             ],
                           ),
                         ),
+                      if (canManage && isAdmin) ...lifecycleItems,
                       // Add member: also exposed as a "+ Add" pill next to the
                       // MEMBERS header — kept here for discoverability.
                       PopupMenuItem(

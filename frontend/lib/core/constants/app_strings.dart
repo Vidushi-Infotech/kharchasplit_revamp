@@ -28,6 +28,18 @@ abstract final class AppStrings {
       '$name owes you $amount';
   static String settledUpWith(String name) =>
       'You are all settled up with $name';
+  static const youAreAllSettledUp = 'You are all settled up';
+  // Lower-case variants for the trailing balance on list rows.
+  static const youOweLower = 'you owe';
+  static const settledUpLower = 'settled up';
+  static String inGroupNameOwesYou(String group, String name, String amount) =>
+      'In $group: $name owes you $amount';
+  static String inGroupYouOwe(String group, String amount) =>
+      'In $group: you owe $amount';
+  static const hideSettledUpFriends = 'Hide settled-up friends';
+  static const chooseGroupToSettle = 'Which group do you want to settle?';
+  static const chooseGroupToRemind = 'Which group do you want to remind about?';
+  static String reminderSent(String name) => 'Reminder sent to $name';
 
   // ── Expenses ────────────────────────────────────────────────────────
   static const addExpense = 'Add expense';
@@ -63,6 +75,8 @@ abstract final class AppStrings {
   static const remind = 'Remind';
   static String paidName(String from, String to, String amount) =>
       '$from paid $to $amount';
+  static const paymentMethod = 'Paid with';
+  static const paymentRecorded = 'Payment recorded';
 
   // ── Groups & people ─────────────────────────────────────────────────
   static const groups = 'Groups';
@@ -75,4 +89,43 @@ abstract final class AppStrings {
   static const balances = 'Balances';
   static const totals = 'Totals';
   static const expenses = 'Expenses';
+
+  // ── Group lifecycle (archive / complete) ────────────────────────────
+  static const archiveGroup = 'Archive group';
+  static const unarchiveGroup = 'Unarchive group';
+  static const unarchive = 'Unarchive';
+  static const markComplete = 'Mark as complete';
+  static const groupArchived = 'This group is archived';
+  static const groupCompleted = 'Completed — all settled up';
+  static const unarchiveToAddExpenses = 'Unarchive to add expenses';
+  static const settleUpFirst = 'Settle up first';
+  static const groupArchivedExpenseBlocked =
+      'This group is archived. Unarchive it to add or change expenses.';
+  static String archiveWithOpenBalance(String amount) =>
+      '$amount is still unsettled in this group. Archiving hides the group '
+      'and stops new expenses, but balances stay open and payments can '
+      'still be recorded.';
+  static String completeNeedsSettle(String amount) =>
+      '$amount is still unsettled in this group. Everyone needs to be '
+      'settled up before it can be marked complete.';
+
+  // ── Navigation (tab bar, Account, Groups list) ─────────────────────
+  static const personalExpenses = 'Personal expenses';
+  static const reports = 'Reports';
+  static const notifications = 'Notifications';
+  static const goToGroups = 'Go to groups';
+  static const archived = 'Archived';
+  static const completed = 'Completed';
+  static String archivedGroupsCount(int n) => 'Archived groups ($n)';
+  static const noActiveGroups = 'No active groups';
+  static const noActiveGroupsHint =
+      'Your archived groups are below. Start a new group any time.';
+  static const whatsNewTitle = 'A new look';
+  static const whatsNewGroups =
+      'Groups is your new home — your overall balance is at the top';
+  static const whatsNewFriends =
+      'Friends shows what each person owes you across groups';
+  static const whatsNewAccount =
+      'Personal expenses and Reports are under Account';
+  static const gotIt = 'Got it';
 }

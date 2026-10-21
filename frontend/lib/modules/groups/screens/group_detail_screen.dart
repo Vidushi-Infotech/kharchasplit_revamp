@@ -10,6 +10,7 @@ import '../state/group_detail_provider.dart';
 import '../widgets/group_admin_actions.dart';
 import '../widgets/group_detail_layouts.dart';
 import '../widgets/group_detail_top_bar.dart';
+import '../widgets/group_lifecycle_actions.dart';
 import '../widgets/group_member_actions.dart';
 
 class GroupDetailScreen extends ConsumerWidget {
@@ -58,6 +59,17 @@ class GroupDetailScreen extends ConsumerWidget {
         onExportGroup: loadedDetail == null
             ? null
             : () => exportGroup(groupId, context, ref, loadedDetail.group),
+        lifecycleItems: loadedDetail == null
+            ? const []
+            : buildGroupLifecycleMenuItems(isDark, loadedDetail.group),
+        onLifecycleAction: loadedDetail == null
+            ? null
+            : (value) => handleGroupLifecycleAction(
+                value,
+                context,
+                ref,
+                loadedDetail,
+              ),
       ),
       body: detailAsync.when(
         loading: () => const ShimmerList(type: ShimmerListType.group),
@@ -118,14 +130,26 @@ class GroupDetailScreen extends ConsumerWidget {
           // On web the create action sits in the content pane header instead;
           // a floating circle over a desktop layout reads as a phone app.
           if (context.widthTier.isWebTier) return const SizedBox.shrink();
+          // Archived groups take no new expenses: the FAB stays visible but
+          // greyed out, and tapping it explains why.
+          final archived = loadedDetail?.group.isArchived ?? false;
+          void onAdd() =>
+              navigateToAddGroupExpense(groupId, context, archived: archived);
           return Semantics(
             button: true,
-            label: 'Add expense button',
-            onTap: () => navigateToAddGroupExpense(groupId, context),
+            label: archived
+                ? 'Add expense unavailable, group archived'
+                : 'Add expense button',
+            onTap: onAdd,
             child: FloatingActionButton(
-              onPressed: () => navigateToAddGroupExpense(groupId, context),
-              backgroundColor: AppColors.brand,
-              child: const Icon(Icons.add_rounded, color: Colors.white),
+              onPressed: onAdd,
+              backgroundColor: archived
+                  ? AppColors.textSecondary(isDark)
+                  : AppColors.brand,
+              child: Icon(
+                archived ? Icons.lock_outline_rounded : Icons.add_rounded,
+                color: Colors.white,
+              ),
             ),
           );
         },

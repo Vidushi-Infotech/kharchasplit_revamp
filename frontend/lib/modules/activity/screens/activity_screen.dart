@@ -25,7 +25,8 @@ class ActivityScreen extends ConsumerWidget {
       backgroundColor: AppColors.background(isDark),
       appBar: _TopBar(
         isDark: isDark,
-        onBack: () => context.pop(),
+        // Activity is a bottom tab now: only show back when pushed.
+        onBack: context.canPop() ? () => context.pop() : null,
         unreadCount: unreadCount,
         onMarkAllRead: () =>
             ref.read(activityFeedProvider.notifier).markAllAsRead(),
@@ -112,13 +113,13 @@ class ActivityScreen extends ConsumerWidget {
 class _TopBar extends StatelessWidget implements PreferredSizeWidget {
   const _TopBar({
     required this.isDark,
-    required this.onBack,
+    this.onBack,
     required this.unreadCount,
     required this.onMarkAllRead,
   });
 
   final bool isDark;
-  final VoidCallback onBack;
+  final VoidCallback? onBack;
   final int unreadCount;
   final VoidCallback onMarkAllRead;
 
@@ -138,35 +139,38 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
           child: Row(
             children: [
               const SizedBox(width: 8),
-              Semantics(
-                button: true,
-                label: 'Back',
-                child: Material(
-                  color: Colors.transparent,
-                  shape: const CircleBorder(),
-                  clipBehavior: Clip.antiAlias,
-                  child: InkWell(
-                    onTap: onBack,
-                    customBorder: const CircleBorder(),
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: AppColors.cardBg(isDark),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: AppColors.divider(isDark)),
-                      ),
-                      child: Icon(
-                        Icons.arrow_back_rounded,
-                        size: 18,
-                        color: AppColors.textPrimary(isDark),
+              if (onBack != null) ...[
+                Semantics(
+                  button: true,
+                  label: 'Back',
+                  child: Material(
+                    color: Colors.transparent,
+                    shape: const CircleBorder(),
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      onTap: onBack,
+                      customBorder: const CircleBorder(),
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: AppColors.cardBg(isDark),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: AppColors.divider(isDark)),
+                        ),
+                        child: Icon(
+                          Icons.arrow_back_rounded,
+                          size: 18,
+                          color: AppColors.textPrimary(isDark),
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 14),
+                const SizedBox(width: 14),
+              ] else
+                const SizedBox(width: 8),
               Expanded(
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -777,7 +781,7 @@ class _EmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              'Expenses, settlements and group events will appear here.',
+              'Expenses, payments and group events will appear here.',
               textAlign: TextAlign.center,
               style: AppTextStyles.body2(
                 isDark,

@@ -1,280 +1,135 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_text_styles.dart';
-import '../../../core/utils/currency_formatter.dart';
-import '../../../core/utils/date_formatter.dart';
-import '../../../components/components.dart';
-import '../state/friend_detail_provider.dart';
 
+import '../../../components/components.dart';
+import '../../../core/theme/app_colors.dart';
+import '../state/friend_detail_provider.dart';
+import '../state/friends_provider.dart';
+import '../widgets/friend_detail_actions.dart';
+import '../widgets/friend_detail_header.dart';
+import '../widgets/friend_group_balances.dart';
+import '../widgets/friend_shared_expenses.dart';
+
+/// One friend: overall balance (server ledger), per-group breakdown,
+/// Settle up / Remind, and the expenses you share.
 class FriendDetailScreen extends ConsumerWidget {
   final String friendId;
 
-  const FriendDetailScreen({
-    Key? key,
-    required this.friendId,
-  }) : super(key: key);
+  const FriendDetailScreen({super.key, required this.friendId});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final screenWidth = MediaQuery.sizeOf(context).width;
-    final detailAsync = ref.watch(friendDetailProvider(friendId));
+    final width = MediaQuery.sizeOf(context).width;
+    final friendAsync = ref.watch(friendByIdProvider(friendId));
 
     return Scaffold(
       backgroundColor: AppColors.background(isDark),
       appBar: AppBar(
-        title: const Text('Friend Details'),
+        title: Text(friendAsync.value?.user.name ?? 'Friend'),
         elevation: 0,
         backgroundColor: AppColors.surface(isDark),
       ),
-      body: detailAsync.when(
-        loading: () => const ShimmerList(type: ShimmerListType.friend),
-        error: (err, stack) => ErrorStateWidget(
-          title: 'Failed to load friend details',
-          message: 'Unable to fetch friend information. Please try again.',
-          onRetry: () {
-            // Trigger refresh
-          },
+      body: friendAsync.when(
+        loading: () => const Padding(
+          padding: EdgeInsets.all(16),
+          child: ShimmerList(type: ShimmerListType.friend, itemCount: 4),
         ),
-        data: (detail) {
-          final body = screenWidth < 600
-              ? _buildCompactLayout(context, isDark, detail)
-              : screenWidth < 1100
-                  ? _buildStandardLayout(context, isDark, detail)
-                  : _buildLargeLayout(context, isDark, detail);
+        error: (err, _) => ErrorStateWidget(
+          title: 'Failed to load friend details',
+          message: err.toString(),
+          onRetry: () => ref.invalidate(friendsProvider),
+        ),
+        data: (friend) {
+          if (friend == null) {
+            // Stale deep link, or nobody you share a group / balance with.
+            return EmptyStateWidget(
+              icon: '🔍',
+              title: 'Friend not found',
+              subtitle: "You don't share any groups or balances with "
+                  'this person.',
+              actionLabel: 'Back to friends',
+              onActionPressed: () => context.go('/home/friends'),
+            );
+          }
+          Future<void> refresh() =>
+              ref.read(friendActionsProvider).refresh(friendId);
+          // Compact < 600 and standard 600–1100 stack everything in one
+          // capped column; large > 1100 puts balances beside expenses.
+          if (width >= 1100) {
+            return _LargeLayout(friend: friend, onRefresh: refresh);
+          }
           return RefreshIndicator(
-            onRefresh: () async {
-              ref.invalidate(friendDetailProvider(friendId));
-              await ref.read(friendDetailProvider(friendId).future);
-            },
-            child: body,
+            onRefresh: refresh,
+            child: _Capped(
+              maxWidth: width < 600 ? double.infinity : 720,
+              child: CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                slivers: [
+                  ..._summarySlivers(friend),
+                  FriendSharedExpensesSlivers(friendId: friendId),
+                ],
+              ),
+            ),
           );
         },
       ),
     );
   }
+}
 
-  Widget _buildCompactLayout(BuildContext context, bool isDark, FriendDetail detail) {
-    return SingleChildScrollView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      child: Column(
-        children: [
-          _buildHeader(context, isDark, detail),
-          _buildBalanceCard(context, isDark, detail),
-          _buildSettleButton(context, isDark, detail),
-          _buildSharedExpensesList(context, isDark, detail),
-        ],
-      ),
-    );
-  }
+List<Widget> _summarySlivers(FriendBalance friend) => [
+      SliverToBoxAdapter(child: FriendDetailHeader(friend: friend)),
+      SliverToBoxAdapter(child: FriendDetailActions(friend: friend)),
+      FriendGroupBalancesSliver(friend: friend),
+    ];
 
-  Widget _buildStandardLayout(BuildContext context, bool isDark, FriendDetail detail) {
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          _buildHeader(context, isDark, detail),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: _buildBalanceCard(context, isDark, detail),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _buildSettleButton(context, isDark, detail),
-                ),
-              ],
-            ),
-          ),
-          _buildSharedExpensesList(context, isDark, detail),
-        ],
-      ),
-    );
-  }
+class _LargeLayout extends StatelessWidget {
+  const _LargeLayout({required this.friend, required this.onRefresh});
 
-  Widget _buildLargeLayout(BuildContext context, bool isDark, FriendDetail detail) {
-    return Row(
-      children: [
-        Expanded(
-          flex: 2,
-          child: SingleChildScrollView(
-            child: Column(
-              children: [
-                _buildHeader(context, isDark, detail),
-                _buildBalanceCard(context, isDark, detail),
-                _buildSettleButton(context, isDark, detail),
-              ],
-            ),
-          ),
-        ),
-        Expanded(
-          flex: 3,
-          child: _buildSharedExpensesList(context, isDark, detail),
-        ),
-      ],
-    );
-  }
+  final FriendBalance friend;
+  final Future<void> Function() onRefresh;
 
-  Widget _buildHeader(BuildContext context, bool isDark, FriendDetail detail) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: AppColors.surface(isDark),
-        border: Border(
-          bottom: BorderSide(
-            color: AppColors.divider(isDark),
-            width: 1,
-          ),
-        ),
-      ),
-      child: Center(
-        child: Column(
-          children: [
-            AvatarWidget(
-              imageUrl: detail.friend.avatarUrl,
-              name: detail.friend.name,
-              radius: 40,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              detail.friend.name,
-              style: AppTextStyles.headline3(isDark),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              detail.friend.email,
-              style: AppTextStyles.caption(isDark),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBalanceCard(BuildContext context, bool isDark, FriendDetail detail) {
-    final owesYou = detail.balanceYouOwe < 0;
-    final amount = detail.balanceYouOwe.abs();
-    final bgColor = owesYou
-        ? const Color(0xFFE8F5E9)
-        : const Color(0xFFFFF3E0);
-    final textColor = owesYou ? Colors.green : Colors.orange;
-
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: textColor.withValues(alpha: 0.3),
-          width: 1,
-        ),
-      ),
-      child: Column(
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 32),
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            owesYou ? '${detail.friend.name} owes you' : 'You owe ${detail.friend.name}',
-            style: AppTextStyles.body2(isDark).copyWith(
-              color: textColor,
-              fontWeight: FontWeight.w500,
-            ),
+          Expanded(
+            flex: 2,
+            child: CustomScrollView(slivers: _summarySlivers(friend)),
           ),
-          const SizedBox(height: 8),
-          CurrencyText(
-            amount,
-            textStyle: AppTextStyles.headline2(isDark).copyWith(
-              color: textColor,
-            ),
-            overrideColor: textColor,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSettleButton(BuildContext context, bool isDark, FriendDetail detail) {
-    return Semantics(
-      button: true,
-      enabled: detail.balanceYouOwe != 0,
-      label: detail.balanceYouOwe == 0
-          ? 'All settled with ${detail.friend.name}'
-          : 'Settle up button - pay ${detail.friend.name}',
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.brand,
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            onPressed: detail.balanceYouOwe != 0
-                ? () {
-                    context.go('/settle/${detail.friend.id}');
-                  }
-                : null,
-            child: Text(
-              detail.balanceYouOwe == 0 ? 'All settled' : 'Settle Up',
-              style: AppTextStyles.button(isDark).copyWith(
-                color: detail.balanceYouOwe == 0
-                    ? AppColors.textSecondary(isDark)
-                    : Colors.white,
+          const SizedBox(width: 32),
+          Expanded(
+            flex: 3,
+            child: RefreshIndicator(
+              onRefresh: onRefresh,
+              child: CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                slivers: [FriendSharedExpensesSlivers(friendId: friend.user.id)],
               ),
             ),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSharedExpensesList(BuildContext context, bool isDark, FriendDetail detail) {
-    return Container(
-      decoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(
-            color: AppColors.divider(isDark),
-            width: 1,
-          ),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Text(
-              'Shared Expenses (${detail.sharedExpenses.length})',
-              style: AppTextStyles.headline3(isDark).copyWith(fontSize: 18),
-            ),
-          ),
-          ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: detail.sharedExpenses.length,
-            itemBuilder: (context, index) {
-              final expense = detail.sharedExpenses[index];
-              return Semantics(
-                button: true,
-                label: 'Expense - ${expense.title} for ₹${expense.amount} on ${DateFormatter.display(expense.date)}',
-                child: ExpenseCard(
-                  expense: expense,
-                  onTap: () {
-                    context.push('/expense/${expense.id}');
-                  },
-                ),
-              );
-            },
-          ),
         ],
       ),
     );
   }
+}
+
+class _Capped extends StatelessWidget {
+  const _Capped({required this.maxWidth, required this.child});
+  final double maxWidth;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxWidth),
+          child: child,
+        ),
+      );
 }

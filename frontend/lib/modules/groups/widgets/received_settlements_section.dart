@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import '../../../core/constants/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../models/settlement_model.dart';
+import '../../settlements/state/payment_method_format.dart';
 
-/// Settlements other members have made to the current user. Settlements are
+/// Payments other members have made to the current user. Settlements are
 /// final on creation (no confirm step), so this is how the recipient sees who
 /// has settled — the balance cards above show who still owes.
 class ReceivedSettlementsSection extends StatelessWidget {
@@ -48,7 +50,7 @@ class ReceivedSettlementsSection extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: Text(
-              'SETTLED WITH YOU',
+              'PAID TO YOU',
               style: AppTextStyles.caption(isDark).copyWith(
                 color: AppColors.textSecondary(isDark),
                 fontWeight: FontWeight.w700,
@@ -87,8 +89,19 @@ class ReceivedSettlementsSection extends StatelessWidget {
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
-                              '${s.fromUser.name.isEmpty ? 'Someone' : s.fromUser.name} '
-                              'settled ${CurrencyFormatter.format(s.amount, currency: s.currency)}',
+                              withPaymentMethod(
+                                AppStrings.paidName(
+                                  s.fromUser.name.isEmpty
+                                      ? 'Someone'
+                                      : s.fromUser.name,
+                                  'you',
+                                  CurrencyFormatter.format(
+                                    s.amount,
+                                    currency: s.currency,
+                                  ),
+                                ),
+                                s.method,
+                              ),
                               style: AppTextStyles.body2(isDark),
                             ),
                           ),

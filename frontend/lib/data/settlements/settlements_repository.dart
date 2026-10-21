@@ -90,6 +90,7 @@ class SettlementsRepository {
     required double amount,
     required String currency,
     String? notes,
+    SettlementMethod? method,
   }) async {
     final res = await _client.dio.post(
       '/settlements',
@@ -100,6 +101,7 @@ class SettlementsRepository {
         'amount': amount,
         'currency': currency,
         if (notes != null && notes.isNotEmpty) 'notes': notes,
+        if (method != null) 'method': method.apiValue,
       },
     );
     final data = _ensureMap(res);

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/constants/app_strings.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../components/web/web_form_row.dart';
 import '../../../data/expenses/expenses_repository.dart';
@@ -13,6 +14,7 @@ import '../state/add_expense_form_helpers.dart';
 import '../state/add_expense_provider.dart';
 import '../state/add_expense_save_flow.dart';
 import '../state/add_expense_submit.dart';
+import '../widgets/add_expense_archived_notice.dart';
 import '../widgets/add_expense_form_cards.dart';
 import '../widgets/add_expense_hero_card.dart';
 import '../widgets/add_expense_hydrate_view.dart';
@@ -156,6 +158,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen>
         ? ref.watch(groupDetailProvider(expenseState.groupId!))
         : null;
     final List<UserModel> groupMembers = groupAsync?.value?.members ?? [];
+    // Archived groups reject expense writes (409 GROUP_ARCHIVED): say so up
+    // front and keep Save disabled.
+    final archived = groupAsync?.value?.group.isArchived ?? false;
 
     // Equal-split write-back — see [listenEqualSplitWriteBack].
     listenEqualSplitWriteBack(
@@ -184,19 +189,22 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen>
       onClose: closeScreen,
       horizontalPad: horizontalPad,
       maxFormWidth: maxFormWidth,
-      form: _buildFormBody(isDark, expenseState, groupMembers),
+      form: _buildFormBody(isDark, expenseState, groupMembers, archived),
       saveBar: AddExpenseSaveBar(
         isDark: isDark,
-        enabled: expenseState.isValid && !expenseState.isLoading,
+        enabled: !archived && expenseState.isValid && !expenseState.isLoading,
         loading: expenseState.isLoading,
         horizontalPad: horizontalPad,
         maxFormWidth: maxFormWidth,
         label: widget.isEditing ? 'Save changes' : 'Save expense',
-        disabledHint: addExpenseMissingFieldHint(expenseState),
+        disabledHint: archived
+            ? AppStrings.groupArchived
+            : addExpenseMissingFieldHint(expenseState),
         onTap: handleSave,
         // Tapping the bar while it's disabled reveals which fields are
         // wrong (red highlights) instead of doing nothing.
         onDisabledTap: () {
+          if (archived) return blockArchivedSave();
           HapticService.instance.error();
           if (!_showValidation) {
             setState(() => _showValidation = true);
@@ -210,11 +218,13 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen>
     bool isDark,
     AddExpenseState state,
     List<UserModel> groupMembers,
+    bool archived,
   ) {
     final me = ref.watch(authProvider).user;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (archived) AddExpenseArchivedNotice(isDark: isDark),
         AddExpenseHeroCard(
           isDark: isDark,
           state: state,

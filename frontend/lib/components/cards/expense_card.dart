@@ -16,12 +16,17 @@ class ExpenseCard extends ConsumerWidget {
   final VoidCallback? onDelete;
   final bool showGroup;
 
+  /// Shown as "In [groupName]" when [showGroup] is set. ExpenseModel only
+  /// carries the group id, so the caller resolves the name.
+  final String? groupName;
+
   const ExpenseCard({
     super.key,
     required this.expense,
     this.onTap,
     this.onDelete,
     this.showGroup = false,
+    this.groupName,
   });
 
   // Per-user view of this expense:
@@ -140,10 +145,16 @@ class ExpenseCard extends ConsumerWidget {
                               ),
                             ),
                             const SizedBox(width: 8),
-                            Text(
-                              'In ${expense.groupId ?? 'personal'}',
-                              style: AppTextStyles.caption(isDark).copyWith(
-                                color: AppColors.textSecondary(isDark),
+                            Flexible(
+                              child: Text(
+                                expense.groupId == null
+                                    ? 'Personal'
+                                    : 'In ${groupName ?? 'a group'}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTextStyles.caption(isDark).copyWith(
+                                  color: AppColors.textSecondary(isDark),
+                                ),
                               ),
                             ),
                           ],

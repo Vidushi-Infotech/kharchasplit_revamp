@@ -225,7 +225,12 @@ class _PickGroupForExpenseSheetState
                     onRetry: () =>
                         ref.read(groupsProvider.notifier).refresh(),
                   ),
-                  data: (groups) {
+                  data: (allGroups) {
+                    // Archived groups reject new expenses (409
+                    // GROUP_ARCHIVED), so they're not offered here.
+                    final groups = allGroups
+                        .where((g) => !g.isArchived)
+                        .toList();
                     final visible = _filter(groups);
                     if (groups.isEmpty) {
                       return _EmptyState(

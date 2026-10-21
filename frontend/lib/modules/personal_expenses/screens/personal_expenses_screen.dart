@@ -467,6 +467,17 @@ class _Header extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
+          // Personal expenses is a page pushed from Account now (it used to
+          // be a root tab), so offer a way back whenever there is one.
+          if (context.canPop()) ...[
+            _IconButton(
+              isDark: isDark,
+              icon: Icons.arrow_back_rounded,
+              onTap: () => context.pop(),
+              label: 'Back',
+            ),
+            const SizedBox(width: 12),
+          ],
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
