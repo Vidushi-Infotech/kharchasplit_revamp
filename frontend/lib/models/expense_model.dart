@@ -37,6 +37,9 @@ class ExpenseModel extends Equatable {
   /// `{mode: adjustment, adjustments: {userId: 150}}`. Null for the rest.
   final Map<String, dynamic>? splitMeta;
 
+  /// The recurring rule this expense was created from (null = one-off).
+  final String? recurringRuleId;
+
   const ExpenseModel({
     required this.id,
     required this.title,
@@ -54,7 +57,10 @@ class ExpenseModel extends Equatable {
     required this.createdAt,
     this.payers = const [],
     this.splitMeta,
+    this.recurringRuleId,
   });
+
+  bool get isRecurring => recurringRuleId != null;
 
   bool get hasMultiplePayers => payers.length > 1;
 
@@ -118,6 +124,8 @@ class ExpenseModel extends Equatable {
     final meta = json['split_meta'] ?? json['splitMeta'];
 
     return ExpenseModel(
+      recurringRuleId:
+          (json['recurring_rule_id'] ?? json['recurringRuleId']) as String?,
       payers: payers,
       splitMeta: meta is Map<String, dynamic> ? meta : null,
       id: json['id'] as String,
@@ -179,6 +187,7 @@ class ExpenseModel extends Equatable {
     DateTime? createdAt,
     List<ExpensePayer>? payers,
     Map<String, dynamic>? splitMeta,
+    String? recurringRuleId,
   }) {
     return ExpenseModel(
       id: id ?? this.id,
@@ -197,6 +206,7 @@ class ExpenseModel extends Equatable {
       createdAt: createdAt ?? this.createdAt,
       payers: payers ?? this.payers,
       splitMeta: splitMeta ?? this.splitMeta,
+      recurringRuleId: recurringRuleId ?? this.recurringRuleId,
     );
   }
 
@@ -224,6 +234,7 @@ class ExpenseModel extends Equatable {
         createdAt,
         payers,
         splitMeta,
+        recurringRuleId,
       ];
 }
 

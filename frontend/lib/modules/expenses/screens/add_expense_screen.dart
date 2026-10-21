@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/app_strings.dart';
 import '../../../core/services/haptic_service.dart';
-import '../../../core/state/feature_flags_provider.dart';
 import '../../../components/web/web_form_row.dart';
 import '../../../data/expenses/expenses_repository.dart';
 import '../../../models/models.dart';
@@ -255,8 +254,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen>
                 isDark: isDark,
                 state: state,
                 groupMembers: groupMembers,
-                allowMultiple:
-                    ref.read(featureFlagsProvider).value?.contains('multiPayer') ?? false,
+                allowMultiple: multiPayerEnabled,
               ),
               onSplitTap: () => showSplitSheet(
                 context,
@@ -265,6 +263,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen>
                 groupMembers: groupMembers,
               ),
               onDateTap: () => pickExpenseDate(context, ref, state),
+              onRepeatTap: repeatTapHandler(isDark),
               onCategoryTap: () =>
                   showCategorySheet(context, ref, isDark: isDark, state: state),
             ),

@@ -11,6 +11,7 @@ import '../../modules/dashboard/screens/i_owe_screen.dart';
 import '../../modules/groups/screens/groups_screen.dart';
 import '../../modules/groups/screens/group_detail_screen.dart';
 import '../../modules/groups/screens/create_group_screen.dart';
+import '../../modules/groups/screens/recurring_expenses_screen.dart';
 import '../../modules/friends/screens/friends_screen.dart';
 import '../../modules/friends/screens/friend_detail_screen.dart';
 import '../../modules/activity/screens/activity_screen.dart';
@@ -160,6 +161,14 @@ final appRouter = GoRouter(
             final groupId = state.pathParameters['groupId']!;
             return GroupDetailScreen(groupId: groupId);
           },
+        ),
+        // The group's recurring expenses (⋮ menu, RECURRING_PAUSED push).
+        GoRoute(
+          path: '/home/groups/:groupId/recurring',
+          name: 'group-recurring',
+          builder: (context, state) => RecurringExpensesScreen(
+            groupId: state.pathParameters['groupId']!,
+          ),
         ),
         GoRoute(
           path: '/home/create-group',

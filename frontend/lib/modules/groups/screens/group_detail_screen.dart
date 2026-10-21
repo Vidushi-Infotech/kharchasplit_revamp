@@ -70,6 +70,9 @@ class GroupDetailScreen extends ConsumerWidget {
         onDefaultSplit: loadedDetail == null || isDirect
             ? null
             : () => showGroupDefaultSplitSheet(context, loadedDetail.group),
+        onRecurring: loadedDetail == null || !watchFeature(ref, 'recurring')
+            ? null
+            : () => context.push('/home/groups/$groupId/recurring'),
         lifecycleItems: loadedDetail == null
             ? const []
             : [

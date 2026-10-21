@@ -56,11 +56,30 @@ class ExpenseParticipant {
 }
 
 /// Request body for `payers` (userId → paise) — paise so the amounts sent
-/// are exactly what the client checked against the total.
-List<Map<String, dynamic>> _payersJson(Map<String, int> payersPaise) => [
+/// are exactly what the client checked against the total. Also the
+/// `payers` of a recurring rule's template.
+List<Map<String, dynamic>> expensePayersJson(Map<String, int> payersPaise) => [
   for (final e in payersPaise.entries)
     {'userId': e.key, 'amount': e.value / 100},
 ];
+
+/// Backend stores currency as a 3-letter code (e.g. INR). The Flutter
+/// state often holds the symbol — normalise back to a code so the DB
+/// constraint passes.
+String normalizeCurrencyCode(String input) {
+  switch (input) {
+    case '₹':
+      return 'INR';
+    case '\$':
+      return 'USD';
+    case '€':
+      return 'EUR';
+    case '£':
+      return 'GBP';
+    default:
+      return input.length == 3 ? input.toUpperCase() : 'INR';
+  }
+}
 
 class ExpensesRepository {
   ExpensesRepository(this._client);
@@ -150,6 +169,7 @@ class ExpensesRepository {
     required List<ExpenseParticipant> participants,
     Map<String, int>? payersPaise,
     Map<String, dynamic>? splitMeta,
+    Map<String, dynamic>? repeat,
   }) async {
     final res = await _client.dio.post(
       '/expenses',
@@ -157,7 +177,7 @@ class ExpensesRepository {
         'groupId': groupId,
         'description': description,
         'amount': amount,
-        'currency': _normalizeCurrency(currency),
+        'currency': normalizeCurrencyCode(currency),
         if (category != null) 'category': category,
         'paidById': paidById,
         'paidByName': paidByName,
@@ -166,8 +186,11 @@ class ExpensesRepository {
         if (expenseDate != null) 'expenseDate': expenseDate.toIso8601String(),
         if (receiptBase64 != null) 'receiptBase64': receiptBase64,
         'participants': participants.map((p) => p.toJson()).toList(),
-        if (payersPaise != null) 'payers': _payersJson(payersPaise),
+        if (payersPaise != null) 'payers': expensePayersJson(payersPaise),
         'splitMeta': ?splitMeta,
+        // {frequency, endDate?}: this expense becomes the first occurrence
+        // of a new recurring rule (same transaction on the server).
+        'repeat': ?repeat,
       },
     );
     final data = _ensureMap(res);
@@ -194,7 +217,7 @@ class ExpensesRepository {
       data: {
         if (description != null) 'description': description,
         if (amount != null) 'amount': amount,
-        if (currency != null) 'currency': _normalizeCurrency(currency),
+        if (currency != null) 'currency': normalizeCurrencyCode(currency),
         if (category != null) 'category': category,
         if (notes != null) 'notes': notes,
         if (expenseDate != null) 'expenseDate': expenseDate.toIso8601String(),
@@ -203,7 +226,7 @@ class ExpensesRepository {
         if (splitType != null) 'splitType': splitType,
         if (participants != null)
           'participants': participants.map((p) => p.toJson()).toList(),
-        if (payersPaise != null) 'payers': _payersJson(payersPaise),
+        if (payersPaise != null) 'payers': expensePayersJson(payersPaise),
         'splitMeta': ?splitMeta,
       },
     );
@@ -229,24 +252,6 @@ class ExpensesRepository {
   Future<void> delete(String expenseId) async {
     final res = await _client.dio.delete('/expenses/$expenseId');
     _ensureSuccess(res);
-  }
-
-  /// Backend stores currency as a 3-letter code (e.g. INR). The Flutter
-  /// state often holds the symbol — normalise back to a code so the DB
-  /// constraint passes.
-  String _normalizeCurrency(String input) {
-    switch (input) {
-      case '₹':
-        return 'INR';
-      case '\$':
-        return 'USD';
-      case '€':
-        return 'EUR';
-      case '£':
-        return 'GBP';
-      default:
-        return input.length == 3 ? input.toUpperCase() : 'INR';
-    }
   }
 
   Map<String, dynamic> _ensureSuccess(Response res) {

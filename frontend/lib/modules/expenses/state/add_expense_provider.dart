@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import '../../../models/models.dart';
 import '../../groups/state/group_detail_provider.dart';
+import 'add_expense_repeat.dart';
 
 class AddExpenseState {
   final String? title;
@@ -48,6 +49,13 @@ class AddExpenseState {
   /// soon as the user picks another split method.
   final bool usingGroupDefaultSplit;
 
+  /// "Repeat" of a new expense (recurring flag; never set when editing).
+  final AddExpenseRepeat repeat;
+
+  /// Edit mode: the recurring rule the expense came from, or null. Saving
+  /// then asks "just this one" or "this and future".
+  final String? recurringRuleId;
+
   const AddExpenseState({
     this.title,
     this.amount = 0,
@@ -72,6 +80,8 @@ class AddExpenseState {
     this.adjustments = const {},
     this.categoryTouched = false,
     this.usingGroupDefaultSplit = false,
+    this.repeat = AddExpenseRepeat.never,
+    this.recurringRuleId,
   });
 
   AddExpenseState copyWith({
@@ -98,6 +108,7 @@ class AddExpenseState {
     Map<String, double>? adjustments,
     bool? categoryTouched,
     bool? usingGroupDefaultSplit,
+    AddExpenseRepeat? repeat,
   }) {
     return AddExpenseState(
       title: title ?? this.title,
@@ -124,6 +135,8 @@ class AddExpenseState {
       categoryTouched: categoryTouched ?? this.categoryTouched,
       usingGroupDefaultSplit:
           usingGroupDefaultSplit ?? this.usingGroupDefaultSplit,
+      repeat: repeat ?? this.repeat,
+      recurringRuleId: recurringRuleId,
     );
   }
 

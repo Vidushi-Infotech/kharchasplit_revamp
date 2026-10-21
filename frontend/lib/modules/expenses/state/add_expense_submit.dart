@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/utils/split_calculator.dart';
 import '../../../data/expenses/expenses_repository.dart';
+import '../../../data/recurring/recurring_repository.dart';
 import '../../../models/models.dart';
 import '../../../modules/dashboard/state/dashboard_provider.dart';
 import '../../../modules/groups/state/group_detail_provider.dart';
@@ -12,6 +13,8 @@ import '../../../modules/groups/state/groups_provider.dart';
 import 'add_expense_provider.dart';
 import 'add_expense_split_math.dart';
 import 'expense_detail_provider.dart';
+import 'expense_error_message.dart';
+import 'recurring_rule_provider.dart';
 
 /// Non-UI pieces of the Add/Edit expense save flow: payer resolution,
 /// split math / request payload, the create-or-update API call, and the
@@ -106,7 +109,9 @@ String backendSplitType(SplitType t) {
   }
 }
 
-/// PUTs to /expenses/:id when [expenseId] is non-null, else POSTs a new one.
+/// PUTs to /expenses/:id when [expenseId] is non-null, else POSTs a new one
+/// (with the form's `repeat`, if any — the new expense is then the first
+/// occurrence of a recurring rule).
 Future<void> submitExpense(
   ExpensesRepository repo, {
   required String? expenseId,
@@ -152,7 +157,46 @@ Future<void> submitExpense(
       participants: participants,
       payersPaise: payersPaise,
       splitMeta: splitMeta,
+      repeat: state.repeat.toJson(),
     );
+  }
+}
+
+/// Template for PUT /recurring/:id ("this and future"): exactly the expense
+/// edit's payload — same payers and split, so it passes the same
+/// exact-to-the-paisa checks (SPLIT_MISMATCH / PAYERS_MISMATCH).
+Map<String, dynamic> buildRecurringTemplate({
+  required AddExpenseState state,
+  required UserModel paidBy,
+  required List<ExpenseParticipant> participants,
+}) {
+  final notes = state.notes?.trim() ?? '';
+  return {
+    'description': (state.title ?? '').trim(),
+    'amount': state.amount,
+    'currency': normalizeCurrencyCode(state.currency),
+    'category': (state.category ?? CategoryModel.other).id,
+    'notes': notes.isEmpty ? null : notes,
+    'splitType': backendSplitTypeFor(state),
+    'splitMeta': backendSplitMeta(state, participants),
+    'payers': expensePayersJson(addExpensePayersPaise(state, paidBy.id)),
+    'participants': [for (final p in participants) p.toJson()],
+  };
+}
+
+/// "This and future": the rule creates [template] from now on (expenses
+/// already created stay as they are). Returns null on success, else what
+/// to tell the user — the expense edit itself is already saved by then.
+Future<String?> updateRecurringFuture(
+  RecurringRepository repo, {
+  required String ruleId,
+  required Map<String, dynamic> template,
+}) async {
+  try {
+    await repo.update(ruleId, template: template);
+    return null;
+  } catch (e) {
+    return recurringFutureErrorMessage(e);
   }
 }
 
@@ -171,6 +215,10 @@ void invalidateAfterExpenseSave(
   if (expenseId != null) {
     ref.invalidate(expenseDetailProvider(expenseId));
   }
+  // A new repeat or a "this and future" edit changes the rules shown on
+  // the expense detail and the group's Recurring expenses list.
+  ref.invalidate(recurringRuleProvider);
+  ref.invalidate(groupRecurringRulesProvider(groupId));
 }
 
 /// Equal-split write-back. The derivation lives in

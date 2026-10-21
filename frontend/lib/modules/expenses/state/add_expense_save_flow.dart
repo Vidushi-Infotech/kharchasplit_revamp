@@ -5,13 +5,16 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_strings.dart';
 import '../../../core/services/haptic_service.dart';
+import '../../../core/state/feature_flags_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../data/expenses/expenses_repository.dart';
+import '../../../data/recurring/recurring_repository.dart';
 import '../../../models/models.dart';
 import '../../../modules/auth/state/auth_provider.dart';
 import '../../../modules/groups/state/group_detail_provider.dart';
 import '../../../modules/groups/state/groups_provider.dart';
 import '../screens/add_expense_screen.dart';
+import '../widgets/repeat_edit_scope_sheet.dart';
 import 'add_expense_provider.dart';
 import 'add_expense_submit.dart';
 import 'expense_error_message.dart';
@@ -59,6 +62,20 @@ mixin AddExpenseSaveFlow on ConsumerState<AddExpenseScreen> {
     final paidBy = resolveExpensePayer(state, members, currentUser);
     final participants = buildExpenseParticipants(state, members, paidBy);
 
+    // Editing a recurring expense: just this one, or this and future ones?
+    final ruleId = widget.isEditing ? state.recurringRuleId : null;
+    var scope = RepeatEditScope.justThisOne;
+    if (ruleId != null &&
+        (ref.read(featureFlagsProvider).value?.contains('recurring') ??
+            false)) {
+      final picked = await askRepeatEditScope(
+        context,
+        isDark: Theme.of(context).brightness == Brightness.dark,
+      );
+      if (picked == null || !mounted) return; // Cancel: nothing saved.
+      scope = picked;
+    }
+
     ref.read(addExpenseProvider.notifier).state = state.copyWith(
       isLoading: true,
       error: null,
@@ -91,6 +108,21 @@ mixin AddExpenseSaveFlow on ConsumerState<AddExpenseScreen> {
       return;
     }
 
+    // The expense is saved; a failed rule update only warns (403: not the
+    // person who set up the repeat, nor an admin).
+    String? futureWarning;
+    if (scope == RepeatEditScope.thisAndFuture) {
+      futureWarning = await updateRecurringFuture(
+        ref.read(recurringRepositoryProvider),
+        ruleId: ruleId!,
+        template: buildRecurringTemplate(
+          state: state,
+          paidBy: paidBy,
+          participants: participants,
+        ),
+      );
+    }
+
     invalidateAfterExpenseSave(
       ref,
       groupId: groupId,
@@ -102,13 +134,18 @@ mixin AddExpenseSaveFlow on ConsumerState<AddExpenseScreen> {
     ref.read(addExpenseProvider.notifier).state = AddExpenseState(
       date: DateTime.now(),
     );
+    final saved = scope == RepeatEditScope.thisAndFuture
+        ? '✓ ${AppStrings.repeatFutureUpdated}'
+        : widget.isEditing
+        ? '✓ Expense updated'
+        : '✓ Expense saved';
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          widget.isEditing ? '✓ Expense updated' : '✓ Expense saved',
-        ),
-        backgroundColor: AppColors.success,
-        duration: const Duration(seconds: 2),
+        content: Text(futureWarning ?? saved),
+        backgroundColor: futureWarning == null
+            ? AppColors.success
+            : AppColors.warning,
+        duration: Duration(seconds: futureWarning == null ? 2 : 5),
       ),
     );
     closeScreen();

@@ -19,6 +19,7 @@ import '../../../models/expense_model.dart';
 import '../../../models/settlement_model.dart';
 import '../../../models/split_model.dart';
 import '../../auth/state/auth_provider.dart';
+import '../../expenses/widgets/recurring_badge.dart';
 import '../state/group_activity_provider.dart';
 import '../state/group_detail_provider.dart';
 
@@ -547,6 +548,10 @@ class _ExpenseCard extends StatelessWidget {
                         fontSize: 11,
                       ),
                     ),
+                    if (expense.isRecurring) ...[
+                      const SizedBox(width: 4),
+                      RecurringBadge(isDark: isDark, compact: true),
+                    ],
                     Text(
                       ' · ${DateFormat.jm().format(expense.date)}',
                       style: AppTextStyles.caption(isDark).copyWith(

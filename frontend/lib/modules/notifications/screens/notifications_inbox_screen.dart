@@ -321,6 +321,10 @@ class _NotificationCard extends StatelessWidget {
         return Icons.receipt_long_rounded;
       case 'EXPENSE_COMMENT':
         return Icons.chat_bubble_outline_rounded;
+      case 'RECURRING_EXPENSE_ADDED':
+        return Icons.repeat_rounded;
+      case 'RECURRING_PAUSED':
+        return Icons.pause_circle_outline_rounded;
       case 'SETTLEMENT_CREATED':
       case 'SETTLEMENT_CONFIRMED':
         return Icons.payments_rounded;
@@ -365,6 +369,7 @@ class _NotificationCard extends StatelessWidget {
         return AppColors.success;
       case 'SETTLEMENT_REMINDER':
       case 'PAYMENT_NOT_RECEIVED':
+      case 'RECURRING_PAUSED':
         return AppColors.warning;
       case 'GROUP_INVITE':
       case 'MEMBER_ADDED':

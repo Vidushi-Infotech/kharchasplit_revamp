@@ -355,4 +355,72 @@ abstract final class AppStrings {
   static const defaultSplitCleared =
       'Default split cleared — expenses split equally';
   static const equallyByDefault = 'Equally (no default)';
+
+  // ── Recurring expenses: add / edit expense form ─────────────────────
+  static const repeatRowLabel = 'Repeat';
+  static const repeatNever = 'Never';
+  static String repeatUntil(String date) => 'until $date';
+  static const repeatEndsLabel = 'Ends';
+  static const repeatNeverEnds = 'Never ends';
+  static String repeatEndsOn(String date) => 'On $date';
+  static const repeatPickEndDate = 'Pick the last date';
+  static const repeatEndBeforeDate =
+      'The end date must be on or after the expense date';
+  static const repeatFirstIsThis =
+      'This expense is the first one. The next ones are added '
+      'automatically and everyone is told.';
+  static const repeatPastDatesNote =
+      'Past dates will be added automatically (up to 3).';
+  static const repeatDone = 'Done';
+  static const repeatEditScopeTitle =
+      'Change just this expense, or this and future ones?';
+  static const repeatEditScopeHint =
+      'Expenses already added are not changed.';
+  static const repeatJustThisOne = 'Just this one';
+  static const repeatThisAndFuture = 'This and future';
+  static const repeatFutureUpdated = 'Expense and future repeats updated';
+  static const repeatFutureForbidden =
+      'Saved this expense. Only the person who set up the repeat can '
+      'change future ones.';
+  static String repeatFutureFailed(String reason) =>
+      'Saved this expense, but future ones were not changed: $reason';
+
+  // ── Recurring expenses: manage (detail card, group list) ────────────
+  static const recurringExpenses = 'Recurring expenses';
+  static const recurringBadge = 'Recurring';
+  static String recurringRepeats(String everyX) => 'Repeats $everyX';
+  static String recurringNextOn(String date) => 'Next on $date';
+  static String recurringEndsOn(String date) => 'Ends $date';
+  static const recurringPaused = 'Paused';
+  static String recurringPausedBecause(String reason) => 'Paused — $reason';
+  static const recurringEnded = 'Ended';
+  static const recurringStopped = 'Stopped';
+  static const recurringStoppedHint =
+      'This no longer repeats. Expenses already added stay.';
+  static const recurringLoadFailed = 'Could not load the repeat details';
+  static const recurringManage = 'Manage';
+  static const recurringPause = 'Pause';
+  static const recurringResume = 'Resume';
+  static const recurringChange = 'Change frequency or end date';
+  static const recurringStop = 'Stop repeating';
+  static const recurringStopTitle = 'Stop repeating?';
+  static const recurringStopBody =
+      "Future expenses won't be added. Expenses already added stay.";
+  static const recurringPausedDone = 'Paused. No new expenses will be added.';
+  static const recurringResumedDone = 'Resumed';
+  static const recurringStoppedDone = 'Stopped repeating';
+  static const recurringUpdatedDone = 'Repeat updated';
+  static const recurringActionFailed =
+      'Could not update. Check your connection and try again.';
+  static const recurringHowOften = 'How often';
+  static const recurringEndDate = 'End date';
+  static const recurringNoEndDate = 'No end date';
+  static const recurringPickEndDate = 'Pick end date';
+  static const recurringClearEndDate = 'Remove end date';
+  static const recurringNone = 'No recurring expenses';
+  static const recurringNoneHint = 'Choose Repeat when adding an expense.';
+  static const recurringListLoadFailed = 'Could not load recurring expenses';
+  static String recurringPaidBy(String names) => 'Paid by $names';
+  static const recurringOnlyCreatorOrAdmin =
+      'Only the person who set it up or a group admin can change it.';
 }

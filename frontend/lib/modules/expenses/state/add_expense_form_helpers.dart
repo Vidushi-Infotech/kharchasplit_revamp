@@ -64,6 +64,7 @@ AddExpenseState addExpenseStateFromExpense(ExpenseModel expense) {
     adjustments: adjustments,
     // Editing never auto-changes the category.
     categoryTouched: true,
+    recurringRuleId: expense.recurringRuleId,
   );
 }
 
@@ -143,6 +144,7 @@ String? addExpenseMissingFieldHint(AddExpenseState state) {
   if (!hasTitle) return 'Enter title';
   if (state.groupId == null) return 'Pick a group';
   if (!state.isSplitValid) return 'Fix the split';
+  if (state.repeatError != null) return 'Fix the repeat end date';
   if (!state.isPayersValid) return 'Fix who paid';
   return 'Complete required fields';
 }

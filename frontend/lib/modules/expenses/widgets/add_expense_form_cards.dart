@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/constants/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../models/models.dart';
 import '../state/add_expense_form_helpers.dart';
 import '../state/add_expense_provider.dart';
+import '../state/add_expense_repeat.dart';
 import '../state/add_expense_validation.dart';
 import 'add_expense_quick_row.dart';
 
-/// Paid by / Split / When / Category card of the Add/Edit expense form.
+/// Paid by / Split / When / (Repeat) / Category card of the Add/Edit
+/// expense form.
 /// Every tap is forwarded to the screen, which opens the matching sheet.
 class AddExpenseQuickRowsCard extends StatelessWidget {
   const AddExpenseQuickRowsCard({
@@ -21,6 +24,7 @@ class AddExpenseQuickRowsCard extends StatelessWidget {
     required this.onSplitTap,
     required this.onDateTap,
     required this.onCategoryTap,
+    this.onRepeatTap,
   });
 
   final bool isDark;
@@ -34,6 +38,9 @@ class AddExpenseQuickRowsCard extends StatelessWidget {
   final VoidCallback onSplitTap;
   final VoidCallback onDateTap;
   final VoidCallback onCategoryTap;
+
+  /// Shows the Repeat row under When (new expenses, `recurring` flag).
+  final VoidCallback? onRepeatTap;
 
   @override
   Widget build(BuildContext context) {
@@ -81,6 +88,20 @@ class AddExpenseQuickRowsCard extends StatelessWidget {
             onTap: () => onDateTap(),
           ),
           AddExpenseRowDivider(isDark: isDark),
+          if (onRepeatTap != null) ...[
+            AddExpenseQuickRow(
+              icon: Icons.event_repeat_rounded,
+              iconColor: AppColors.tealDark,
+              label: AppStrings.repeatRowLabel,
+              value: repeatSummary(state.repeat),
+              valueIsMuted: !state.repeat.isOn,
+              isDark: isDark,
+              // Shown straight away: the date may have moved past the end.
+              errorText: state.repeatError,
+              onTap: onRepeatTap!,
+            ),
+            AddExpenseRowDivider(isDark: isDark),
+          ],
           AddExpenseQuickRow(
             icon: state.category?.icon ?? Icons.local_offer_outlined,
             iconColor:

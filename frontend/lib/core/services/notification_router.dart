@@ -23,6 +23,9 @@ import 'package:go_router/go_router.dart';
 ///                          (→ Edit profile, where the UPI ID is added)
 ///   PAYMENT_NOT_RECEIVED → { type, groupId }  (receiver rejected a payment)
 ///   SETTLE_ALL_RECEIVED  → { type, batchId }  (spans groups → Friends tab)
+///   RECURRING_EXPENSE_ADDED → { type, groupId, expenseId }  (→ the expense)
+///   RECURRING_PAUSED     → { type, groupId, description, reason }
+///                          (→ the group's recurring expenses list)
 class NotificationRouter {
   NotificationRouter._();
 
@@ -47,6 +50,7 @@ class NotificationRouter {
       case 'EXPENSE_ADDED':
       case 'EXPENSE_UPDATED':
       case 'EXPENSE_COMMENT':
+      case 'RECURRING_EXPENSE_ADDED':
         if (expenseId != null && expenseId.isNotEmpty) {
           router.push('/expense/$expenseId');
           return;
@@ -71,6 +75,12 @@ class NotificationRouter {
       case 'PAYMENT_NOT_RECEIVED':
         if (groupId != null && groupId.isNotEmpty) {
           router.push('/home/groups/$groupId');
+        }
+        return;
+
+      case 'RECURRING_PAUSED':
+        if (groupId != null && groupId.isNotEmpty) {
+          router.push('/home/groups/$groupId/recurring');
         }
         return;
 

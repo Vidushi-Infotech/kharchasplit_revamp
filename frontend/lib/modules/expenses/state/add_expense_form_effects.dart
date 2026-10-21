@@ -1,17 +1,19 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/state/feature_flags_provider.dart';
 import '../../../data/expenses/expenses_repository.dart';
 import '../../../models/models.dart';
 import '../../groups/state/group_detail_provider.dart';
 import '../screens/add_expense_screen.dart';
+import '../widgets/repeat_sheet.dart';
 import 'add_expense_category_suggest.dart';
 import 'add_expense_provider.dart';
 import 'add_expense_split_math.dart';
 
 /// Things the Add expense form does on its own while the user fills it in:
-/// suggest a category from the description, and start a new expense from
-/// the group's default split. A mixin on the screen's `ConsumerState` (like
+/// suggest a category from the description, start a new expense from the
+/// group's default split, and which optional rows (feature flags) it shows. A mixin on the screen's `ConsumerState` (like
 /// AddExpenseSaveFlow) so it shares the screen's `ref` / `mounted`; the
 /// decisions themselves are the pure functions it calls.
 mixin AddExpenseFormEffects on ConsumerState<AddExpenseScreen> {
@@ -62,6 +64,18 @@ mixin AddExpenseFormEffects on ConsumerState<AddExpenseScreen> {
       );
       if (next != null) ref.read(addExpenseProvider.notifier).state = next;
     });
+  }
+
+  /// The `multiPayer` flag: "Multiple people" in the Paid by sheet.
+  bool get multiPayerEnabled =>
+      ref.read(featureFlagsProvider).value?.contains('multiPayer') ?? false;
+
+  /// Opens the Repeat sheet. null (no Repeat row) when editing — a recurring
+  /// expense's repeat is managed from its detail screen — or while the
+  /// `recurring` flag is off. Call from `build` (it watches the flags).
+  VoidCallback? repeatTapHandler(bool isDark) {
+    if (widget.isEditing || !watchFeature(ref, 'recurring')) return null;
+    return () => showRepeatSheet(context, ref, isDark: isDark);
   }
 
   void disposeFormEffects() => _categorySuggester?.dispose();

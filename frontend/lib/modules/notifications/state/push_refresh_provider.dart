@@ -7,6 +7,7 @@ import '../../dashboard/state/dashboard_provider.dart';
 import '../../expenses/state/expense_comments_provider.dart';
 import '../../expenses/state/expense_detail_provider.dart';
 import '../../expenses/state/expense_history_provider.dart';
+import '../../expenses/state/recurring_rule_provider.dart';
 import '../../groups/state/group_detail_provider.dart';
 import '../../groups/state/groups_provider.dart';
 import '../../settlements/state/pending_settlements_provider.dart';
@@ -17,6 +18,8 @@ import '../../settlements/state/pending_settlements_provider.dart';
 /// (e.g. the receiver sees "Settled" the moment the payer settles).
 const _balanceTypes = <String>{
   'EXPENSE_ADDED',
+  // A recurring rule added this occurrence — same as an expense added.
+  'RECURRING_EXPENSE_ADDED',
   'EXPENSE_UPDATED',
   'EXPENSE_DELETED',
   'SETTLEMENT_CREATED',
@@ -65,6 +68,11 @@ final pushRefreshProvider = Provider<void>((ref) {
         ref.invalidate(expenseDetailProvider(expenseId));
         ref.invalidate(expenseHistoryProvider(expenseId));
       }
+    }
+    // A rule moved on (next date) or was paused: refresh the group's list.
+    if ((type == 'RECURRING_EXPENSE_ADDED' || type == 'RECURRING_PAUSED') &&
+        groupId.isNotEmpty) {
+      ref.invalidate(groupRecurringRulesProvider(groupId));
     }
     final touchesBalances = _balanceTypes.contains(type);
     final touchesGroups = _groupListTypes.contains(type);

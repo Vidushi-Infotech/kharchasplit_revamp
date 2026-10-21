@@ -23,11 +23,13 @@ import '../../groups/state/group_detail_provider.dart';
 import '../state/expense_comments_provider.dart';
 import '../state/expense_detail_provider.dart';
 import '../state/expense_error_message.dart';
+import '../state/recurring_rule_provider.dart';
 import '../widgets/expense_comments_input.dart';
 import '../widgets/expense_comments_section.dart';
 import '../widgets/expense_detail_history_row.dart';
 import '../widgets/expense_detail_paid_by.dart';
 import '../widgets/expense_detail_splits_card.dart';
+import '../widgets/recurring_info_card.dart';
 
 String _splitTypeLabel(ExpenseModel e) {
   if (e.isAdjustmentSplit) return AppStrings.splitAdjustment;
@@ -141,6 +143,10 @@ class ExpenseDetailScreen extends ConsumerWidget {
 
             final details = <Widget>[
               _Hero(expense: expense, isDark: isDark),
+              if (expense.isRecurring) ...[
+                const SizedBox(height: 12),
+                RecurringInfoCard(expense: expense, isDark: isDark),
+              ],
               const SizedBox(height: 22),
               _SectionLabel(label: 'PAID BY', isDark: isDark),
               const SizedBox(height: 8),
@@ -209,6 +215,10 @@ class ExpenseDetailScreen extends ConsumerWidget {
                     onRefresh: () async {
                       ref.invalidate(expenseDetailProvider(expenseId));
                       ref.invalidate(expenseCommentsProvider(expenseId));
+                      final ruleId = expense.recurringRuleId;
+                      if (ruleId != null) {
+                        ref.invalidate(recurringRuleProvider(ruleId));
+                      }
                       await ref.read(expenseDetailProvider(expenseId).future);
                     },
                     child: Center(

@@ -20,6 +20,7 @@ class GroupDetailTopBar extends StatelessWidget implements PreferredSizeWidget {
     this.lifecycleItems = const [],
     this.onLifecycleAction,
     this.onDefaultSplit,
+    this.onRecurring,
   });
 
   final bool isDark;
@@ -56,6 +57,10 @@ class GroupDetailTopBar extends StatelessWidget implements PreferredSizeWidget {
   /// Opens the admin-only "Default split" editor. Null hides the entry
   /// (still loading, or a direct group).
   final VoidCallback? onDefaultSplit;
+
+  /// Opens the group's "Recurring expenses" list (every member). Null hides
+  /// the entry (still loading, or the `recurring` flag is off).
+  final VoidCallback? onRecurring;
 
   @override
   Size get preferredSize => const Size.fromHeight(56);
@@ -117,6 +122,9 @@ class GroupDetailTopBar extends StatelessWidget implements PreferredSizeWidget {
                             break;
                           case 'default_split':
                             onDefaultSplit?.call();
+                            break;
+                          case 'recurring':
+                            onRecurring?.call();
                             break;
                           case 'export':
                             onExportGroup?.call();
@@ -183,6 +191,21 @@ class GroupDetailTopBar extends StatelessWidget implements PreferredSizeWidget {
                             ),
                           ),
                         if (canManage && isAdmin) ...lifecycleItems,
+                        if (onRecurring != null)
+                          PopupMenuItem(
+                            value: 'recurring',
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.repeat_rounded,
+                                  size: 18,
+                                  color: AppColors.textPrimary(isDark),
+                                ),
+                                const SizedBox(width: 10),
+                                const Text(AppStrings.recurringExpenses),
+                              ],
+                            ),
+                          ),
                         // Add member: also exposed as a "+ Add" pill next to the
                         // MEMBERS header — kept here for discoverability.
                         if (!isDirect)

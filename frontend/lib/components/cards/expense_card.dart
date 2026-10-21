@@ -9,6 +9,7 @@ import '../../core/utils/date_formatter.dart';
 import '../../models/models.dart';
 import '../../modules/auth/state/auth_provider.dart';
 import '../../modules/expenses/state/expense_detail_settle.dart';
+import '../../modules/expenses/widgets/recurring_badge.dart';
 import '../text/currency_text.dart';
 
 /// Card widget for displaying a single expense
@@ -150,6 +151,10 @@ class ExpenseCard extends ConsumerWidget {
                               color: AppColors.textSecondary(isDark),
                             ),
                           ),
+                          if (expense.isRecurring) ...[
+                            const SizedBox(width: 6),
+                            RecurringBadge(isDark: isDark),
+                          ],
                           if (showGroup) ...[
                             const SizedBox(width: 8),
                             Text(

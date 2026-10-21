@@ -3,6 +3,7 @@ import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/split_calculator.dart';
 import '../../../models/models.dart';
 import 'add_expense_provider.dart';
+import 'add_expense_repeat.dart';
 import 'add_expense_split_math.dart';
 
 /// Whether the Add/Edit expense form can be saved, and why not. Money checks
@@ -14,8 +15,12 @@ extension AddExpenseValidation on AddExpenseState {
     // show a meaningful label. We require ≥1 non-whitespace character.
     if (title == null || title!.trim().isEmpty) return false;
     if (amount <= 0) return false;
-    return isSplitValid && isPayersValid;
+    return isSplitValid && isPayersValid && repeatError == null;
   }
+
+  /// The repeat's end date is before the expense date (the date was moved
+  /// after the end date was picked), or null.
+  String? get repeatError => repeatEndDateError(repeat, date);
 
   /// Whether the split breakdown itself is valid for the current split type,
   /// independent of title/amount. Equal split (and the no-group case) is
