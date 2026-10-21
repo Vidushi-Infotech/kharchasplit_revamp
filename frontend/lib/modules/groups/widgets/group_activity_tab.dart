@@ -10,6 +10,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../components/avatar/avatar_widget.dart';
+import '../../../core/constants/app_strings.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../core/services/push_service.dart';
 import '../../../core/theme/app_colors.dart';
@@ -435,7 +436,8 @@ class _ExpenseCard extends StatelessWidget {
   final bool isExpanded;
   final VoidCallback onTap;
 
-  bool get _ownedByMe => myId != null && expense.paidBy.id == myId;
+  /// Any payer can edit the expense (server rule).
+  bool get _ownedByMe => myId != null && expense.isPayer(myId!);
 
   @override
   Widget build(BuildContext context) {
@@ -477,7 +479,13 @@ class _ExpenseCard extends StatelessWidget {
   }
 
   Widget _collapsedHeader(Color categoryColor) {
-    final actor = _ownedByMe ? 'You' : expense.paidBy.name;
+    // Several payers: "2 people paid for Dinner" instead of one name.
+    final multi = expense.hasMultiplePayers;
+    final actor = multi
+        ? AppStrings.peoplePaid(expense.payers.length)
+        : _ownedByMe
+        ? 'You'
+        : expense.paidBy.name;
     return Padding(
       padding: const EdgeInsets.all(12),
       child: Row(
@@ -504,7 +512,7 @@ class _ExpenseCard extends StatelessWidget {
                         ),
                       ),
                       TextSpan(
-                        text: ' added ',
+                        text: multi ? ' for ' : ' added ',
                         style: AppTextStyles.body2(isDark).copyWith(
                           color: AppColors.textSecondary(isDark),
                           fontSize: 13.5,
@@ -666,19 +674,48 @@ class _ExpenseCard extends StatelessWidget {
   }
 
   Widget _paidByRow() {
-    final isSelf = _ownedByMe;
+    if (expense.hasMultiplePayers) {
+      return Column(
+        children: [
+          for (final p in expense.payers)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: _payerLine(
+                name: p.name,
+                imageUrl: null,
+                label: AppStrings.namePaidAmount(
+                  p.userId == myId ? '${p.name} (Me)' : p.name,
+                  _money(p.amount, expense.currency),
+                ),
+                amount: p.amount,
+              ),
+            ),
+        ],
+      );
+    }
+    final isSelf = myId != null && expense.paidBy.id == myId;
     final name = isSelf ? '${expense.paidBy.name} (Me)' : expense.paidBy.name;
+    return _payerLine(
+      name: expense.paidBy.name,
+      imageUrl: expense.paidBy.avatarUrl,
+      label: '$name paid the full amount',
+      amount: expense.amount,
+    );
+  }
+
+  Widget _payerLine({
+    required String name,
+    required String? imageUrl,
+    required String label,
+    required double amount,
+  }) {
     return Row(
       children: [
-        AvatarWidget(
-          name: expense.paidBy.name,
-          imageUrl: expense.paidBy.avatarUrl,
-          radius: 14,
-        ),
+        AvatarWidget(name: name, imageUrl: imageUrl, radius: 14),
         const SizedBox(width: 10),
         Expanded(
           child: Text(
-            '$name paid the full amount',
+            label,
             style: AppTextStyles.body2(isDark).copyWith(
               fontSize: 13,
               fontWeight: FontWeight.w600,
@@ -688,7 +725,7 @@ class _ExpenseCard extends StatelessWidget {
           ),
         ),
         Text(
-          '+${_money(expense.amount, expense.currency)}',
+          '+${_money(amount, expense.currency)}',
           style: AppTextStyles.body2(isDark).copyWith(
             color: AppColors.success,
             fontWeight: FontWeight.w700,

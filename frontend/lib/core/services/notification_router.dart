@@ -14,6 +14,7 @@ import 'package:go_router/go_router.dart';
 ///   GROUP_INVITE         → { type, groupId }
 ///   MEMBER_ADDED/LEFT/.. → { type, groupId }
 ///   EXPENSE_UPDATED/DEL  → { type, groupId, expenseId? }
+///   EXPENSE_COMMENT      → { type, groupId, expenseId }  (→ the expense)
 ///   GROUP_DELETED        → { type, groupId }  (group is gone → groups list)
 ///   REMOVED_FROM_GROUP   → { type, groupId }  (no access any more → groups list)
 ///   BALANCE_WRITTEN_OFF  → { type, groupId }
@@ -45,6 +46,7 @@ class NotificationRouter {
     switch (type) {
       case 'EXPENSE_ADDED':
       case 'EXPENSE_UPDATED':
+      case 'EXPENSE_COMMENT':
         if (expenseId != null && expenseId.isNotEmpty) {
           router.push('/expense/$expenseId');
           return;

@@ -56,8 +56,9 @@ void showCategorySheet(
                   return InkWell(
                     onTap: () {
                       HapticService.instance.selection();
+                      // A hand-picked category is never auto-replaced.
                       ref.read(addExpenseProvider.notifier).state = state
-                          .copyWith(category: c);
+                          .copyWith(category: c, categoryTouched: true);
                       Navigator.pop(ctx);
                     },
                     borderRadius: BorderRadius.circular(14),

@@ -4,6 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/services/push_service.dart';
 import '../../dashboard/state/dashboard_provider.dart';
+import '../../expenses/state/expense_comments_provider.dart';
+import '../../expenses/state/expense_detail_provider.dart';
+import '../../expenses/state/expense_history_provider.dart';
 import '../../groups/state/group_detail_provider.dart';
 import '../../groups/state/groups_provider.dart';
 import '../../settlements/state/pending_settlements_provider.dart';
@@ -47,6 +50,22 @@ final pushRefreshProvider = Provider<void>((ref) {
       PushService.instance.onForegroundMessage.listen((message) {
     final type = (message.data['type'] ?? '').toString();
     final groupId = (message.data['groupId'] ?? '').toString();
+    // A new comment only changes that expense's thread (if it's open).
+    if (type == 'EXPENSE_COMMENT') {
+      final expenseId = (message.data['expenseId'] ?? '').toString();
+      if (expenseId.isNotEmpty) {
+        ref.invalidate(expenseCommentsProvider(expenseId));
+      }
+      return;
+    }
+    // An edited / deleted expense: refresh its detail + history if open.
+    if (type == 'EXPENSE_UPDATED' || type == 'EXPENSE_DELETED') {
+      final expenseId = (message.data['expenseId'] ?? '').toString();
+      if (expenseId.isNotEmpty) {
+        ref.invalidate(expenseDetailProvider(expenseId));
+        ref.invalidate(expenseHistoryProvider(expenseId));
+      }
+    }
     final touchesBalances = _balanceTypes.contains(type);
     final touchesGroups = _groupListTypes.contains(type);
     if (!touchesBalances && !touchesGroups) return;

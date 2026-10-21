@@ -1,10 +1,10 @@
-import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../models/models.dart';
 import '../state/add_expense_form_helpers.dart';
 import '../state/add_expense_provider.dart';
+import '../state/add_expense_validation.dart';
 import 'add_expense_quick_row.dart';
 
 /// Paid by / Split / When / Category card of the Add/Edit expense form.
@@ -37,14 +37,7 @@ class AddExpenseQuickRowsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final me = this.me;
-    final UserModel? payer =
-        state.paidBy ??
-        (me == null
-            ? null
-            : groupMembers.firstWhereOrNull((m) => m.id == me.id));
-    final isMe = me != null && payer != null && payer.id == me.id;
-    final paidByText = payer == null ? 'You' : (isMe ? 'You' : payer.name);
+    final paidByText = addExpensePaidBySummary(state, groupMembers, me?.id);
 
     return Container(
       decoration: BoxDecoration(
@@ -60,6 +53,10 @@ class AddExpenseQuickRowsCard extends StatelessWidget {
             label: 'Paid by',
             value: paidByText,
             isDark: isDark,
+            // Shown straight away, not only after a Save attempt: the
+            // amount changed after the payers were entered and we never
+            // rescale them silently.
+            errorText: state.payersError,
             onTap: () => onPaidByTap(),
           ),
           AddExpenseRowDivider(isDark: isDark),

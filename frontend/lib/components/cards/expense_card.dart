@@ -8,6 +8,7 @@ import '../../core/theme/app_text_styles.dart';
 import '../../core/utils/date_formatter.dart';
 import '../../models/models.dart';
 import '../../modules/auth/state/auth_provider.dart';
+import '../../modules/expenses/state/expense_detail_settle.dart';
 import '../text/currency_text.dart';
 
 /// Card widget for displaying a single expense
@@ -36,14 +37,16 @@ class ExpenseCard extends ConsumerWidget {
   });
 
   // Per-user view of this expense:
-  //   iPaid       : current user is the payer
+  //   iPaid       : current user is one of the payers
   //   myShare     : amount the current user owes for this expense (0 if not in splits)
-  //   othersOwe   : amount others owe the current user (only if iPaid)
+  //   othersOwe   : my net on this expense — what I paid minus my share.
+  //                 > 0: others owe me that much; < 0 (I paid part of a
+  //                 multi-payer expense but less than my share): I owe.
   ({bool iPaid, double myShare, double othersOwe}) _myView(String? meId) {
     if (meId == null || meId.isEmpty) {
       return (iPaid: false, myShare: 0, othersOwe: 0);
     }
-    final iPaid = expense.paidBy.id == meId;
+    final iPaid = expense.isPayer(meId);
     double myShare = 0;
     for (final s in expense.splits) {
       if (s.userId == meId) {
@@ -51,7 +54,7 @@ class ExpenseCard extends ConsumerWidget {
         break;
       }
     }
-    final othersOwe = iPaid ? (expense.amount - myShare) : 0.0;
+    final othersOwe = iPaid ? myNetOnExpense(expense, meId) : 0.0;
     return (iPaid: iPaid, myShare: myShare, othersOwe: othersOwe);
   }
 
@@ -74,6 +77,11 @@ class ExpenseCard extends ConsumerWidget {
       badgeText = 'You are owed';
       badgeColor = AppColors.success;
       headlineAmount = view.othersOwe;
+    } else if (view.iPaid && view.othersOwe < -0.005) {
+      // Paid part of a multi-payer expense, but less than my share.
+      badgeText = 'You owe';
+      badgeColor = AppColors.warningOrange;
+      headlineAmount = -view.othersOwe;
     } else if (view.iPaid) {
       // Paid but everything is for me, or all splits are 0 → no debt either way.
       badgeText = 'You paid';
@@ -90,7 +98,7 @@ class ExpenseCard extends ConsumerWidget {
       headlineAmount = expense.amount;
     }
 
-    // Only the person who added (paid for) the expense can swipe to delete it.
+    // Only a payer of the expense can swipe to delete it (server rule).
     final canDelete = view.iPaid && onDelete != null;
 
     final card = RepaintBoundary(

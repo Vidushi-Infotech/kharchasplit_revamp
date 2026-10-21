@@ -3,12 +3,14 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/utils/split_calculator.dart';
 import '../../../data/expenses/expenses_repository.dart';
 import '../../../models/models.dart';
 import '../../../modules/dashboard/state/dashboard_provider.dart';
 import '../../../modules/groups/state/group_detail_provider.dart';
 import '../../../modules/groups/state/groups_provider.dart';
 import 'add_expense_provider.dart';
+import 'add_expense_split_math.dart';
 import 'expense_detail_provider.dart';
 
 /// Non-UI pieces of the Add/Edit expense save flow: payer resolution,
@@ -36,60 +38,59 @@ UserModel resolveExpensePayer(
 }
 
 /// Per-participant amounts (and percentage / shares) for the request.
+/// Amounts come from [addExpenseOwedPaise], so for every split mode they add
+/// up to the amount exactly — the server rejects a split off by one paisa.
 List<ExpenseParticipant> buildExpenseParticipants(
   AddExpenseState state,
   List<UserModel> members,
   UserModel paidBy,
 ) {
   final memberById = {for (final m in members) m.id: m};
-  final includedIds = state.includedMemberIds.isNotEmpty
-      ? state.includedMemberIds.toList()
-      : members.map((m) => m.id).toList();
-
-  double shareFor(String id) {
-    final raw = state.splits[id] ?? 0;
-    switch (state.splitType) {
-      case SplitType.equal:
-        if (includedIds.isEmpty) return state.amount;
-        return state.amount / includedIds.length;
-      case SplitType.exact:
-        return raw;
-      case SplitType.percentage:
-        return state.amount * raw / 100;
-      case SplitType.shares:
-        final totalShares = includedIds.fold<double>(
-          0,
-          (sum, mid) => sum + (state.splits[mid] ?? 0),
-        );
-        if (totalShares <= 0) return 0;
-        return state.amount * raw / totalShares;
-    }
+  final owed = addExpenseOwedPaise(state, members.map((m) => m.id));
+  if (owed.isEmpty) {
+    return [
+      ExpenseParticipant(
+        userId: paidBy.id,
+        name: paidBy.name,
+        amount: state.amount,
+      ),
+    ];
   }
+  final isPercentage =
+      !state.adjustmentMode && state.splitType == SplitType.percentage;
+  final isShares = !state.adjustmentMode && state.splitType == SplitType.shares;
+  return [
+    for (final e in owed.entries)
+      ExpenseParticipant(
+        userId: e.key,
+        name: memberById[e.key]?.name ?? e.key,
+        amount: e.value / 100,
+        percentage: isPercentage ? (state.splits[e.key] ?? 0) : null,
+        shares: isShares ? (state.splits[e.key] ?? 0).round() : null,
+      ),
+  ];
+}
 
-  double? percentageFor(String id) =>
-      state.splitType == SplitType.percentage ? (state.splits[id] ?? 0) : null;
-  int? sharesFor(String id) => state.splitType == SplitType.shares
-      ? (state.splits[id] ?? 0).round()
-      : null;
+/// `splitType` for the request. "By adjustment" goes as 'adjustment' (with
+/// [backendSplitMeta]); the server stores it as exact amounts.
+String backendSplitTypeFor(AddExpenseState state) =>
+    state.adjustmentMode ? 'adjustment' : backendSplitType(state.splitType);
 
-  return includedIds.isEmpty
-      ? [
-          ExpenseParticipant(
-            userId: paidBy.id,
-            name: paidBy.name,
-            amount: state.amount,
-          ),
-        ]
-      : includedIds.map((id) {
-          final member = memberById[id];
-          return ExpenseParticipant(
-            userId: id,
-            name: member?.name ?? id,
-            amount: shareFor(id),
-            percentage: percentageFor(id),
-            shares: sharesFor(id),
-          );
-        }).toList();
+/// `splitMeta` for the request: the adjustments of an "By adjustment" split
+/// (only for people in the split), else null.
+Map<String, dynamic>? backendSplitMeta(
+  AddExpenseState state,
+  List<ExpenseParticipant> participants,
+) {
+  if (!state.adjustmentMode) return null;
+  return {
+    'adjustments': {
+      for (final p in participants)
+        p.userId: SplitCalculator.roundToPaisa(
+          state.adjustments[p.userId] ?? 0,
+        ),
+    },
+  };
 }
 
 String backendSplitType(SplitType t) {
@@ -114,6 +115,11 @@ Future<void> submitExpense(
   required UserModel paidBy,
   required List<ExpenseParticipant> participants,
 }) async {
+  // Always send payers (built from the single payer when there's one): an
+  // edit of a multi-payer expense without them is refused (UPDATE_APP).
+  final payersPaise = addExpensePayersPaise(state, paidBy.id);
+  final splitType = backendSplitTypeFor(state);
+  final splitMeta = backendSplitMeta(state, participants);
   if (expenseId != null) {
     await repo.update(
       expenseId,
@@ -125,8 +131,10 @@ Future<void> submitExpense(
       expenseDate: state.date,
       receiptBase64: state.receiptBase64,
       paidById: paidBy.id,
-      splitType: backendSplitType(state.splitType),
+      splitType: splitType,
       participants: participants,
+      payersPaise: payersPaise,
+      splitMeta: splitMeta,
     );
   } else {
     await repo.create(
@@ -137,11 +145,13 @@ Future<void> submitExpense(
       category: (state.category ?? CategoryModel.other).id,
       paidById: paidBy.id,
       paidByName: paidBy.name,
-      splitType: backendSplitType(state.splitType),
+      splitType: splitType,
       notes: state.notes,
       expenseDate: state.date,
       receiptBase64: state.receiptBase64,
       participants: participants,
+      payersPaise: payersPaise,
+      splitMeta: splitMeta,
     );
   }
 }
@@ -193,6 +203,11 @@ void listenEqualSplitWriteBack(
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!isMounted()) return;
       final current = ref.read(addExpenseProvider);
+      // Stale fire: the split moved off "equally" (e.g. the group's default
+      // split was applied) after this write was scheduled.
+      if (current.splitType != SplitType.equal || current.adjustmentMode) {
+        return;
+      }
       if (mapEquals(current.splits, next.splits) &&
           setEquals(current.includedMemberIds, next.includedMemberIds)) {
         return;

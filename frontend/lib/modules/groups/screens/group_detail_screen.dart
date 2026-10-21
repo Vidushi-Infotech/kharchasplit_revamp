@@ -10,6 +10,7 @@ import '../../auth/state/auth_provider.dart';
 import '../state/group_detail_provider.dart';
 import '../widgets/group_admin_actions.dart';
 import '../widgets/group_detail_layouts.dart';
+import '../widgets/group_default_split_sheet.dart';
 import '../widgets/group_detail_top_bar.dart';
 import '../widgets/group_lifecycle_actions.dart';
 import '../widgets/group_member_actions.dart';
@@ -66,6 +67,9 @@ class GroupDetailScreen extends ConsumerWidget {
         onExportGroup: loadedDetail == null
             ? null
             : () => exportGroup(groupId, context, ref, loadedDetail.group),
+        onDefaultSplit: loadedDetail == null || isDirect
+            ? null
+            : () => showGroupDefaultSplitSheet(context, loadedDetail.group),
         lifecycleItems: loadedDetail == null
             ? const []
             : [

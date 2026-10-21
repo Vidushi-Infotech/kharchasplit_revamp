@@ -12,6 +12,7 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../models/group_model.dart';
 import '../state/groups_provider.dart';
 import 'group_cover_thumb.dart';
+import 'group_default_split_row.dart';
 
 /// Bottom sheet for editing a group's name, description, and cover photo.
 /// Admin-only — the caller is responsible for showing it only when the
@@ -231,6 +232,10 @@ class _EditGroupSheetState extends ConsumerState<EditGroupSheet> {
                       ),
                       if (_nameError != null)
                         _FieldError(text: _nameError!, isDark: isDark),
+                      if (!widget.group.isDirect) ...[
+                        const SizedBox(height: 16),
+                        GroupDefaultSplitRow(group: widget.group),
+                      ],
                       const SizedBox(height: 24),
                       Row(
                         children: [

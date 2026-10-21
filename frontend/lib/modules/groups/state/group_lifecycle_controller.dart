@@ -14,10 +14,17 @@ double groupOpenAmount(GroupDetail detail) {
   void add(String id, double v) => net[id] = (net[id] ?? 0) + v;
 
   for (final e in detail.expenses) {
-    for (final s in e.splits) {
-      if (s.userId == e.paidBy.id) continue;
-      add(e.paidBy.id, s.owedShare);
-      add(s.userId, -s.owedShare);
+    // Same flows as the ledger: each split user owes every payer their
+    // share of the split, in proportion to what that payer paid.
+    final paid = e.payers.fold<double>(0, (t, p) => t + p.amount);
+    if (paid <= 0) continue;
+    for (final p in e.payers) {
+      for (final s in e.splits) {
+        if (s.userId == p.userId) continue;
+        final v = s.owedShare * p.amount / paid;
+        add(p.userId, v);
+        add(s.userId, -v);
+      }
     }
   }
   for (final s in detail.settlements) {

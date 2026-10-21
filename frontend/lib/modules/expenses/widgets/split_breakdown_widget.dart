@@ -1,9 +1,12 @@
 import 'package:collection/collection.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../../components/avatar/avatar_widget.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/constants/app_strings.dart';
 import '../../../models/models.dart';
+import 'split_breakdown_footer.dart';
 
 class SplitBreakdownWidget extends StatefulWidget {
   final SplitType splitType;
@@ -65,6 +68,13 @@ class _SplitBreakdownWidgetState extends State<SplitBreakdownWidget> {
   @override
   void didUpdateWidget(covariant SplitBreakdownWidget old) {
     super.didUpdateWidget(old);
+    // Who's in can also change from outside (e.g. "Split equally" on the
+    // group-default hint) — follow it before re-seeding the inputs.
+    if (!setEquals(old.includedMemberIds, widget.includedMemberIds)) {
+      _localIncludedMembers = widget.includedMemberIds.isEmpty
+          ? Set<String>.from(widget.members.map((m) => m.id))
+          : Set<String>.from(widget.includedMemberIds);
+    }
     // When the user switches split method, the per-member inputs must not
     // carry the previous method's numbers (e.g. the equal-split ₹ amounts
     // showing up as "666%" after switching to percentage).
@@ -84,8 +94,7 @@ class _SplitBreakdownWidgetState extends State<SplitBreakdownWidget> {
   /// for the remaining 8).
   void _applyEqualShares() {
     final included = _localIncludedMembers;
-    final share =
-        included.isEmpty ? 0.0 : widget.totalAmount / included.length;
+    final share = included.isEmpty ? 0.0 : widget.totalAmount / included.length;
     for (final member in widget.members) {
       final c = _controllers[member.id];
       if (c == null) continue;
@@ -442,130 +451,13 @@ class _SplitBreakdownWidgetState extends State<SplitBreakdownWidget> {
             ),
             const Divider(height: 1),
             // Footer with total + (Unequally only) remaining + helper hint
-            _buildFooter(isDark),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFooter(bool isDark) {
-    final total = _getTotalIncluded();
-
-    String totalLabel;
-    String totalValue;
-    switch (widget.splitType) {
-      case SplitType.percentage:
-        totalLabel = 'Total assigned';
-        totalValue = '${total.toStringAsFixed(1)}% / 100%';
-        break;
-      case SplitType.shares:
-        totalLabel = 'Total shares';
-        totalValue = '${total.toStringAsFixed(0)} shares';
-        break;
-      case SplitType.exact:
-        final pct = widget.totalAmount > 0
-            ? (total / widget.totalAmount * 100)
-            : 0.0;
-        totalLabel = 'Total assigned';
-        totalValue =
-            '₹${total.toStringAsFixed(2)}  ·  ${pct.toStringAsFixed(1)}%';
-        break;
-      case SplitType.equal:
-        totalLabel = 'Total Included';
-        totalValue = '₹${total.toStringAsFixed(2)}';
-        break;
-    }
-
-    final children = <Widget>[
-      Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(totalLabel, style: AppTextStyles.body2(isDark)),
-          Text(
-            totalValue,
-            style: AppTextStyles.body2(
-              isDark,
-            ).copyWith(fontWeight: FontWeight.w600),
-          ),
-        ],
-      ),
-    ];
-
-    // For Unequally (Exact) — show the remaining-to-assign line + a helper.
-    if (widget.splitType == SplitType.exact) {
-      final remaining = widget.totalAmount - total;
-      Color rowColor;
-      String rowLabel;
-      String rowValue;
-      if (remaining.abs() < 0.01) {
-        rowColor = AppColors.success;
-        rowLabel = '✓ Balanced';
-        rowValue = '₹0.00';
-      } else if (remaining > 0) {
-        rowColor = AppColors.warning;
-        rowLabel = '⚠️ Remaining to assign';
-        rowValue = '₹${remaining.toStringAsFixed(2)}';
-      } else {
-        rowColor = AppColors.warning;
-        rowLabel = '⚠️ Over by';
-        rowValue = '₹${(-remaining).toStringAsFixed(2)}';
-      }
-
-      children.addAll([
-        const SizedBox(height: 8),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              rowLabel,
-              style: AppTextStyles.body2(
-                isDark,
-              ).copyWith(color: rowColor, fontWeight: FontWeight.w600),
-            ),
-            Text(
-              rowValue,
-              style: AppTextStyles.body2(
-                isDark,
-              ).copyWith(color: rowColor, fontWeight: FontWeight.w700),
+            SplitBreakdownFooter(
+              splitType: widget.splitType,
+              totalAmount: widget.totalAmount,
+              total: _getTotalIncluded(),
             ),
           ],
-        ),
-        const SizedBox(height: 8),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          decoration: BoxDecoration(
-            color: AppColors.brand.withValues(alpha: 0.06),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                Icons.lightbulb_outline_rounded,
-                size: 14,
-                color: AppColors.brand,
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  'Manually assign each amount. Sum must equal ₹${widget.totalAmount.toStringAsFixed(2)}.',
-                  style: AppTextStyles.caption(isDark).copyWith(
-                    color: AppColors.textSecondary(isDark),
-                    fontSize: 11,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ]);
-    }
-
-    return Padding(
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: children,
+        ],
       ),
     );
   }
@@ -594,6 +486,8 @@ class _SplitBreakdownWidgetState extends State<SplitBreakdownWidget> {
       statusCaption = value > 0
           ? 'Owes ₹${value.toStringAsFixed(2)}'
           : 'Not yet assigned';
+    } else if (!isIncluded) {
+      statusCaption = AppStrings.notInThisSplit;
     }
 
     return GestureDetector(

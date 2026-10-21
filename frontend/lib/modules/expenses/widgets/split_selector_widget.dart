@@ -2,47 +2,54 @@ import 'package:flutter/material.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
-import '../../../models/models.dart';
+import '../../../core/constants/app_strings.dart';
+import '../state/add_expense_split_math.dart';
 
-/// Compact 2x2 grid of split-type options. Picks the same 4 SplitTypes
-/// as before — only the visual styling changed to match the rest of the
-/// redesigned screens (hairline borders, subtle tints, no brand-color fills).
+/// Compact 2-column grid of split options: the 4 SplitTypes plus "By
+/// adjustment" (equal shares ± an amount per person). Hairline borders,
+/// subtle tints, no brand-color fills.
 class SplitSelectorWidget extends StatelessWidget {
   const SplitSelectorWidget({
     super.key,
-    required this.splitType,
+    required this.mode,
     required this.amount,
-    required this.onSplitTypeChanged,
+    required this.onModeChanged,
   });
 
-  final SplitType splitType;
+  final AddExpenseSplitMode mode;
   final double amount;
-  final ValueChanged<SplitType> onSplitTypeChanged;
+  final ValueChanged<AddExpenseSplitMode> onModeChanged;
 
   static const _options = <_OptionData>[
     _OptionData(
-      type: SplitType.equal,
+      mode: AddExpenseSplitMode.equal,
       icon: Icons.balance_rounded,
       label: 'Equally',
       description: 'Same share',
     ),
     _OptionData(
-      type: SplitType.exact,
+      mode: AddExpenseSplitMode.exact,
       icon: Icons.tune_rounded,
       label: 'Unequally',
       description: 'Amount each',
     ),
     _OptionData(
-      type: SplitType.percentage,
+      mode: AddExpenseSplitMode.percentage,
       icon: Icons.percent_rounded,
       label: 'By %',
       description: 'Percent each',
     ),
     _OptionData(
-      type: SplitType.shares,
+      mode: AddExpenseSplitMode.shares,
       icon: Icons.pie_chart_outline_rounded,
       label: 'By shares',
       description: 'Weight-based',
+    ),
+    _OptionData(
+      mode: AddExpenseSplitMode.adjustment,
+      icon: Icons.exposure_rounded,
+      label: AppStrings.splitAdjustment,
+      description: AppStrings.splitAdjustmentShort,
     ),
   ];
 
@@ -79,11 +86,11 @@ class SplitSelectorWidget extends StatelessWidget {
                   _OptionCard(
                     isDark: isDark,
                     data: opt,
-                    selected: splitType == opt.type,
+                    selected: mode == opt.mode,
                     onTap: () {
-                      if (splitType != opt.type) {
+                      if (mode != opt.mode) {
                         HapticService.instance.selection();
-                        onSplitTypeChanged(opt.type);
+                        onModeChanged(opt.mode);
                       }
                     },
                   ),
@@ -134,10 +141,7 @@ class _OptionCard extends StatelessWidget {
             decoration: BoxDecoration(
               color: bg,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: borderColor,
-                width: selected ? 1.4 : 1,
-              ),
+              border: Border.all(color: borderColor, width: selected ? 1.4 : 1),
             ),
             child: Row(
               children: [
@@ -149,11 +153,7 @@ class _OptionCard extends StatelessWidget {
                     color: accent.withValues(alpha: selected ? 0.18 : 0.10),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Icon(
-                    data.icon,
-                    size: 17,
-                    color: accent,
-                  ),
+                  child: Icon(data.icon, size: 17, color: accent),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -197,13 +197,13 @@ class _OptionCard extends StatelessWidget {
 
 class _OptionData {
   const _OptionData({
-    required this.type,
+    required this.mode,
     required this.icon,
     required this.label,
     required this.description,
   });
 
-  final SplitType type;
+  final AddExpenseSplitMode mode;
   final IconData icon;
   final String label;
   final String description;

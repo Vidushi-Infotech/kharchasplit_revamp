@@ -71,6 +71,41 @@ abstract final class AppStrings {
   static const splitShares = 'By shares';
   static const splitAdjustment = 'By adjustment';
   static String amountLeft(String amount) => '$amount left';
+  // Add/edit expense form: multiple payers, by adjustment, who's in.
+  static const multiplePeople = 'Multiple people';
+  static const whoPaid = 'Who paid?';
+  static const howMuchEachPaid = 'How much did each person pay?';
+  static String peopleCount(int n) => '$n people';
+  static String amountOfTotalLeft(String left, String total) =>
+      '$left of $total left';
+  static String amountOver(String amount) => 'Over by $amount';
+  static String paidAmountFor(String name) => 'Amount $name paid';
+  static const payersDontAddUp = "What people paid doesn't add up";
+  static const payersMismatch =
+      'What each person paid must add up to the total exactly.';
+  static const splitMismatch =
+      'The split must add up to the total exactly. Check the amounts.';
+  static const updateAppToEditExpense =
+      'This expense was paid by more than one person. Update KharchaSplit '
+      'to edit it.';
+  static const splitAdjustmentShort = 'Equal ± extra';
+  static const adjustmentHint =
+      'Everyone pays an equal part, then add or take off an amount for '
+      'anyone — e.g. +150 for an extra drink.';
+  static const adjustmentsTooLarge = 'Adjustments are more than the total';
+  static String adjustmentFor(String name) => 'Adjustment for $name';
+  static const flipAdjustmentSign = 'Switch between adding and taking off';
+  static String owesAmount(String amount) => 'Owes $amount';
+  static const usingGroupDefaultSplit = "Using the group's default split";
+  static const groupDefaultShort = 'Group default';
+  static const splitEquallyInstead = 'Split equally';
+  static const everyone = 'Everyone';
+  static String everyoneExcept(String names) => 'Everyone except $names';
+  static String onlyNames(String names) => 'Only $names';
+  static const nobodyInSplit = 'Nobody is in the split yet';
+  static const notInThisSplit = 'Not in this split';
+  static const selectAllPeople = 'All';
+  static const selectNoPeople = 'None';
 
   // ── Payments (settlements) ──────────────────────────────────────────
   static const settleUp = 'Settle up';
@@ -255,4 +290,69 @@ abstract final class AppStrings {
   static const searchGroupsOrFriends = 'Search groups or friends';
   static String couldNotOpenNonGroup(String error) =>
       'Could not start a non-group expense: $error';
+
+  // ── Expense detail: payers, comments, edit history ──────────────────
+  static String namePaidAmount(String name, String amount) =>
+      '$name paid $amount';
+  static String peoplePaid(int n) => '$n people paid';
+  static const comments = 'Comments';
+  static const addComment = 'Add a comment';
+  static const sendComment = 'Send comment';
+  static const noCommentsYet = 'No comments yet';
+  static const noCommentsYetHint =
+      'Ask a question or add details everyone on this expense can see.';
+  static const commentsLoadFailed = 'Could not load comments';
+  static const retry = 'Retry';
+  static const formerMember = 'Former member';
+  static const deleteCommentTitle = 'Delete comment?';
+  static const deleteCommentBody = "This can't be undone.";
+  static const delete = 'Delete';
+  static const cancel = 'Cancel';
+  static const commentDeleted = 'Comment deleted';
+  static const longPressToDelete = 'Long-press to delete';
+  static const editHistory = 'Edit history';
+  static const editHistoryHint = 'See and restore earlier versions';
+  static const noEditsYet = 'No edits yet';
+  static const noEditsYetHint = 'Earlier versions show here after an edit.';
+  static const editHistoryLoadFailed = 'Could not load the edit history';
+  static String editedByName(String name, String when) =>
+      'Edited by $name · $when';
+  static String historyChange(String field, String from, String to) =>
+      '$field: $from → $to';
+  static String historySplitChanged(String people) =>
+      'Split: different amounts ($people)';
+  static const historyCategoryChanged = 'Category changed';
+  static const historyNotesChanged = 'Notes changed';
+  static const historyOtherDetails = 'Other details changed';
+  static const restoreThisVersion = 'Restore this version';
+  static const restoreVersionTitle = 'Restore this version?';
+  static const restoreVersionBody =
+      'The expense goes back to how it was in this version. Balances '
+      'recalculate for everyone, and the current version stays in the '
+      'history.';
+  static const restore = 'Restore';
+  static const versionRestored = 'Earlier version restored';
+  static const restoreFailed = 'Could not restore this version';
+  static const restoreMemberLeft =
+      "Someone in that version has left the group, so it can't be restored.";
+  static const restoreOnlyPayers =
+      'Only someone who paid for this expense can restore a version.';
+
+  // ── Group default split ─────────────────────────────────────────────
+  static const defaultSplit = 'Default split';
+  static const defaultSplitHint =
+      'New expenses in this group start with this split. It can still be '
+      'changed on each expense.';
+  static const percentage = 'Percentage';
+  static const shares = 'Shares';
+  static String percentTotal(String total) => 'Total: $total% of 100%';
+  static String sharesTotal(String total) => 'Total: $total shares';
+  static const percentagesMustTotal100 = 'Percentages must add up to 100';
+  static const sharesMustBePositive = 'Give at least one person a share';
+  static const clearDefaultSplit = 'Clear (split equally)';
+  static const save = 'Save';
+  static const defaultSplitSaved = 'Default split saved';
+  static const defaultSplitCleared =
+      'Default split cleared — expenses split equally';
+  static const equallyByDefault = 'Equally (no default)';
 }

@@ -7,6 +7,7 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/date_formatter.dart';
 import '../../../models/models.dart';
 import '../../auth/state/auth_provider.dart';
+import '../../expenses/state/expense_detail_settle.dart';
 
 /// Compact, date-grouped list of recent expenses for the dashboard.
 class RecentExpensesSection extends ConsumerWidget {
@@ -196,7 +197,12 @@ class _ExpenseRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final youPaid = currentUserId != null && expense.paidBy.id == currentUserId;
+    // "You paid" when I'm a payer and paid at least my share; paying part
+    // of a multi-payer expense but less than my share still reads "you owe".
+    final me = currentUserId;
+    final youPaid = me != null &&
+        expense.isPayer(me) &&
+        myNetOnExpense(expense, me) > -0.005;
     final categoryColor = _parseHex(expense.category.colorHex);
     final isSettled = expense.isSettled;
 

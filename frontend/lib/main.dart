@@ -6,6 +6,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
+import 'core/state/feature_flags_provider.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'components/banners/offline_banner.dart';
@@ -137,6 +138,9 @@ class _KharchaSplitAppState extends ConsumerState<KharchaSplitApp> {
     // Kick the connectivity service awake — service starts listening on
     // first read and survives for the app's lifetime via ref.onDispose.
     ref.watch(connectivityServiceProvider);
+    // Load server feature flags at start-up, so flag checks inside tap
+    // handlers (watchFeature in a callback) don't read "still loading" as off.
+    ref.listen(featureFlagsProvider, (_, _) {});
 
     return MaterialApp.router(
       title: 'Kharcha Split',

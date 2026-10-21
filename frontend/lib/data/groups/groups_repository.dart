@@ -191,6 +191,20 @@ class GroupsRepository {
     ));
   }
 
+  /// Admin only: what Add expense starts from in this group —
+  /// `{type: 'percentage'|'shares', values: {userId: n}}`, or null to go
+  /// back to splitting equally. 403 for members, 400 when percentages don't
+  /// add up to 100 / someone isn't a member / it's a direct group.
+  Future<void> setDefaultSplit(
+    String groupId,
+    Map<String, dynamic>? defaultSplit,
+  ) async {
+    _ensureSuccess(await _client.dio.put(
+      '/groups/$groupId/default-split',
+      data: {'defaultSplit': defaultSplit},
+    ));
+  }
+
   /// The hidden group for non-group expenses with [friendId], created on
   /// first use (POST /groups/direct). Returns its id.
   Future<String> directGroupWith(String friendId) async {

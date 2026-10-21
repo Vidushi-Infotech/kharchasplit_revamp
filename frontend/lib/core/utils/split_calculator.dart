@@ -88,7 +88,10 @@ class SplitCalculator {
     if (members.isEmpty) return [];
 
     // Validate percentages sum to 100
-    final totalPercentage = percentages.values.fold(0.0, (sum, val) => sum + val);
+    final totalPercentage = percentages.values.fold(
+      0.0,
+      (sum, val) => sum + val,
+    );
     if ((totalPercentage - 100).abs() > 0.01) {
       throw Exception(
         'Percentages must sum to 100%, got ${totalPercentage.toStringAsFixed(1)}%',
@@ -103,7 +106,9 @@ class SplitCalculator {
       final share = (percentage / 100) * amount;
 
       // Adjust last member to ensure total equals amount (handle rounding)
-      final finalShare = i == members.length - 1 ? amount - allocatedAmount : share;
+      final finalShare = i == members.length - 1
+          ? amount - allocatedAmount
+          : share;
       allocatedAmount += share;
 
       splits.add(
@@ -161,9 +166,7 @@ class SplitCalculator {
 
   /// Simplify debts using greedy algorithm
   /// Minimizes number of transactions needed to settle all debts
-  static List<Map<String, dynamic>> simplifyDebts(
-    List<SplitModel> splits,
-  ) {
+  static List<Map<String, dynamic>> simplifyDebts(List<SplitModel> splits) {
     // Calculate net balance for each person
     final balances = <String, double>{};
 
@@ -178,10 +181,12 @@ class SplitCalculator {
 
     while (balances.isNotEmpty) {
       // Find person with maximum debt and maximum credit
-      final maxDebtor = balances.entries
-          .reduce((a, b) => a.value < b.value ? a : b);
-      final maxCreditor = balances.entries
-          .reduce((a, b) => a.value > b.value ? a : b);
+      final maxDebtor = balances.entries.reduce(
+        (a, b) => a.value < b.value ? a : b,
+      );
+      final maxCreditor = balances.entries.reduce(
+        (a, b) => a.value > b.value ? a : b,
+      );
 
       if (maxDebtor.value.abs() < 0.01 || maxCreditor.value < 0.01) {
         break;
@@ -217,5 +222,48 @@ class SplitCalculator {
   /// Ensures financial accuracy
   static double roundToPaisa(double value) {
     return (value * 100).round() / 100;
+  }
+
+  /// Rupees → whole paise. All exact money checks compare paise, never
+  /// doubles (the server rejects a split that is off by even one paisa).
+  static int toPaise(double rupees) => (rupees * 100).round();
+
+  /// Splits [totalPaise] in proportion to [weights] (equal = all 1s,
+  /// percentages, shares). Each person gets their floored share and the
+  /// leftover paise go to the first person with a non-zero weight — the same
+  /// rule as [calculateEqual] — so the result always sums to [totalPaise].
+  /// All zeros when no weight is positive.
+  static List<int> allocatePaise(int totalPaise, List<double> weights) {
+    final totalWeight = weights.fold<double>(0, (s, w) => s + (w > 0 ? w : 0));
+    if (totalWeight <= 0) return List.filled(weights.length, 0);
+    final out = [
+      for (final w in weights)
+        // The epsilon keeps 4999.9999… (double noise) from flooring to 4999.
+        w > 0 ? (totalPaise * w / totalWeight + 1e-6).floor() : 0,
+    ];
+    final first = weights.indexWhere((w) => w > 0);
+    out[first] += totalPaise - out.fold<int>(0, (s, v) => s + v);
+    return out;
+  }
+
+  /// "By adjustment": everyone owes an equal part of what is left after the
+  /// adjustments, plus their own adjustment —
+  /// `(total − Σadjustments) / n + adjustment_i`, in paise. The equal part
+  /// is floored and its remainder goes to the first person, as in
+  /// [calculateEqual]. Always sums to [totalPaise]; an entry can come out
+  /// negative when the adjustments are larger than the total (callers treat
+  /// that as an invalid split).
+  static List<int> adjustmentPaise(int totalPaise, List<int> adjustments) {
+    final n = adjustments.length;
+    if (n == 0) return const [];
+    final base = totalPaise - adjustments.fold<int>(0, (s, a) => s + a);
+    // Dart's % is never negative for a positive divisor, so this floors even
+    // when the adjustments exceed the total.
+    final remainder = base % n;
+    final perHead = (base - remainder) ~/ n;
+    return [
+      for (var i = 0; i < n; i++)
+        perHead + (i == 0 ? remainder : 0) + adjustments[i],
+    ];
   }
 }

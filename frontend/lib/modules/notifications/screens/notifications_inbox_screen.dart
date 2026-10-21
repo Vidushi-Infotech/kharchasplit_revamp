@@ -319,6 +319,8 @@ class _NotificationCard extends StatelessWidget {
       case 'EXPENSE_UPDATED':
       case 'EXPENSE_DELETED':
         return Icons.receipt_long_rounded;
+      case 'EXPENSE_COMMENT':
+        return Icons.chat_bubble_outline_rounded;
       case 'SETTLEMENT_CREATED':
       case 'SETTLEMENT_CONFIRMED':
         return Icons.payments_rounded;

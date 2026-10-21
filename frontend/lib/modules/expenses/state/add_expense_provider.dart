@@ -29,6 +29,25 @@ class AddExpenseState {
   /// and rendered on the expense detail screen as proof.
   final String? receiptBase64;
 
+  /// Multiple payers, userId → amount paid, in the order they were entered.
+  /// Empty = a single payer ([paidBy], or me) paid the whole amount.
+  final Map<String, double> payers;
+
+  /// "By adjustment" split. Stored with [splitType] = exact (that is how the
+  /// server keeps it); [adjustments] holds the +/− per person (userId →
+  /// rupees) and [splits] is unused while this is on.
+  final bool adjustmentMode;
+  final Map<String, double> adjustments;
+
+  /// The user picked a category by hand in this form — auto-suggestions must
+  /// never override it.
+  final bool categoryTouched;
+
+  /// The split was pre-filled from the group's default split (new expenses
+  /// only). Drives the "Using the group's default split" hint; cleared as
+  /// soon as the user picks another split method.
+  final bool usingGroupDefaultSplit;
+
   const AddExpenseState({
     this.title,
     this.amount = 0,
@@ -48,6 +67,11 @@ class AddExpenseState {
     this.isScanning = false,
     this.invoiceScanned = false,
     this.receiptBase64,
+    this.payers = const {},
+    this.adjustmentMode = false,
+    this.adjustments = const {},
+    this.categoryTouched = false,
+    this.usingGroupDefaultSplit = false,
   });
 
   AddExpenseState copyWith({
@@ -69,6 +93,11 @@ class AddExpenseState {
     bool? isScanning,
     bool? invoiceScanned,
     String? receiptBase64,
+    Map<String, double>? payers,
+    bool? adjustmentMode,
+    Map<String, double>? adjustments,
+    bool? categoryTouched,
+    bool? usingGroupDefaultSplit,
   }) {
     return AddExpenseState(
       title: title ?? this.title,
@@ -89,89 +118,17 @@ class AddExpenseState {
       isScanning: isScanning ?? this.isScanning,
       invoiceScanned: invoiceScanned ?? this.invoiceScanned,
       receiptBase64: receiptBase64 ?? this.receiptBase64,
+      payers: payers ?? this.payers,
+      adjustmentMode: adjustmentMode ?? this.adjustmentMode,
+      adjustments: adjustments ?? this.adjustments,
+      categoryTouched: categoryTouched ?? this.categoryTouched,
+      usingGroupDefaultSplit:
+          usingGroupDefaultSplit ?? this.usingGroupDefaultSplit,
     );
   }
 
-  bool get isValid {
-    // Title is required so the expense list / detail / activity feed all
-    // show a meaningful label. We require ≥1 non-whitespace character.
-    if (title == null || title!.trim().isEmpty) {
-      return false;
-    }
-    if (amount <= 0) {
-      return false;
-    }
-    return isSplitValid;
-  }
-
-  /// Whether the split breakdown itself is valid for the current split type,
-  /// independent of title/amount. Equal split (and the no-group case) is
-  /// always valid. Used to disable the split sheet's Done button and to flag
-  /// the Split row on the form.
-  bool get isSplitValid {
-    // If no group selected, equal split is valid
-    if (groupId == null) {
-      return true;
-    }
-
-    // If equal split, no additional validation needed
-    if (splitType == SplitType.equal) {
-      return true;
-    }
-
-    // For other split types, validate splits
-    if (splits.isEmpty) {
-      return false;
-    }
-
-    final includedSum = splits.entries
-        .where(
-          (e) => includedMemberIds.isEmpty || includedMemberIds.contains(e.key),
-        )
-        .fold<double>(0, (sum, e) => sum + e.value);
-
-    switch (splitType) {
-      case SplitType.exact:
-        // Sum of amounts should equal total (within 0.01)
-        return (includedSum - amount).abs() < 0.01;
-      case SplitType.percentage:
-        // Sum of percentages should equal 100 (within 0.01)
-        return (includedSum - 100).abs() < 0.01;
-      case SplitType.shares:
-        // Total shares should be > 0
-        return includedSum > 0;
-      case SplitType.equal:
-        return true;
-    }
-  }
-
-  /// Short reason the split is invalid, or null when valid. Surfaced on the
-  /// Split row so the user sees *why* it's blocking the save.
-  String? get splitError {
-    if (isSplitValid) return null;
-    if (splits.isEmpty) return 'Set each share';
-    final includedSum = splits.entries
-        .where(
-          (e) => includedMemberIds.isEmpty || includedMemberIds.contains(e.key),
-        )
-        .fold<double>(0, (sum, e) => sum + e.value);
-    switch (splitType) {
-      case SplitType.exact:
-        final diff = amount - includedSum;
-        return diff > 0
-            ? '₹${diff.toStringAsFixed(2)} left to assign'
-            : 'Over by ₹${(-diff).toStringAsFixed(2)}';
-      case SplitType.percentage:
-        final diff = 100 - includedSum;
-        return diff > 0
-            ? '${diff.toStringAsFixed(1)}% left to assign'
-            : 'Over by ${(-diff).toStringAsFixed(1)}%';
-      case SplitType.shares:
-        return 'Set at least one share';
-      case SplitType.equal:
-        return null;
-    }
-  }
+  // isValid / isSplitValid / splitError / payer checks live in
+  // add_expense_validation.dart (AddExpenseValidation extension).
 }
 
 /// autoDispose so the form state is destroyed (and re-created fresh) whenever
@@ -223,7 +180,7 @@ final equalSplitDerivedProvider = Provider.autoDispose
     .family<EqualSplitDerived?, String?>((ref, groupId) {
       if (groupId == null) return null;
       final s = ref.watch(addExpenseProvider);
-      if (s.splitType != SplitType.equal) return null;
+      if (s.splitType != SplitType.equal || s.adjustmentMode) return null;
 
       final detail = ref.watch(groupDetailProvider(groupId)).value;
       if (detail == null) return null;

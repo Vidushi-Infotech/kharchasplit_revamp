@@ -5,15 +5,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/app_strings.dart';
 import '../../../core/services/haptic_service.dart';
+import '../../../core/state/feature_flags_provider.dart';
 import '../../../components/web/web_form_row.dart';
 import '../../../data/expenses/expenses_repository.dart';
 import '../../../models/models.dart';
 import '../../../modules/auth/state/auth_provider.dart';
 import '../../../modules/groups/state/group_detail_provider.dart';
+import '../state/add_expense_form_effects.dart';
 import '../state/add_expense_form_helpers.dart';
 import '../state/add_expense_provider.dart';
 import '../state/add_expense_save_flow.dart';
 import '../state/add_expense_submit.dart';
+import '../state/add_expense_validation.dart';
 import '../widgets/add_expense_form_cards.dart';
 import '../widgets/add_expense_group_context.dart';
 import '../widgets/add_expense_hero_card.dart';
@@ -43,23 +46,21 @@ class AddExpenseScreen extends ConsumerStatefulWidget {
 }
 
 class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen>
-    with AddExpenseSaveFlow {
+    with AddExpenseSaveFlow, AddExpenseFormEffects {
   late TextEditingController _titleController;
   late TextEditingController _notesController;
 
   /// Latch — set once widget.groupId has been pushed into state.
   bool _groupIdSynced = false;
 
-  /// Debounce on the title TextField to avoid rebuilding the whole tree
-  /// on every keystroke.
+  /// Title debounce — no full-tree rebuild on every keystroke.
   Timer? _titleDebounce;
 
   bool _hydrating = false;
   String? _hydrateError;
 
-  /// Flipped on once the user taps the (disabled) Save bar with an invalid
-  /// form. Drives the red highlighting on the amount / title / split so the
-  /// user can see *which* field is blocking the save.
+  /// Set once the user taps the disabled Save bar: red-highlights the
+  /// amount / title / split that block the save.
   bool _showValidation = false;
 
   @override
@@ -104,12 +105,11 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen>
   @override
   void dispose() {
     _titleDebounce?.cancel();
+    disposeFormEffects();
     _titleController.dispose();
     _notesController.dispose();
-    // No manual provider reset here: addExpenseProvider is autoDispose, so it
-    // tears down and re-creates fresh state once this screen stops watching
-    // it. (Mutating it via a post-dispose microtask was unreliable — `ref` is
-    // already invalid by then.)
+    // No manual provider reset: addExpenseProvider is autoDispose (a
+    // post-dispose microtask reset was unreliable — `ref` is invalid then).
     super.dispose();
   }
 
@@ -117,11 +117,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen>
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // Keep addExpenseProvider (autoDispose) alive from the very first frame.
-    // In edit mode the fetched expense is written into it while the loading
-    // branch below is on screen; with no listener yet Riverpod dropped that
-    // state before the form ever read it, so the user saw amount 0, no
-    // category/date and "Pick a group before saving the expense".
+    // Keep addExpenseProvider (autoDispose) alive from the first frame: in
+    // edit mode the fetched expense is written into it while the loading
+    // branch is on screen; unwatched, Riverpod dropped it (amount 0 etc.).
     ref.watch(addExpenseProvider);
 
     if (widget.isEditing && (_hydrating || _hydrateError != null)) {
@@ -161,6 +159,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen>
     // Archived groups reject expense writes (409 GROUP_ARCHIVED): say so up
     // front and keep Save disabled.
     final archived = groupAsync?.value?.group.isArchived ?? false;
+    // New expense in a group with a default split → start from it.
+    applyGroupDefaultSplitOnce(groupAsync?.value);
 
     // Equal-split write-back — see [listenEqualSplitWriteBack].
     listenEqualSplitWriteBack(
@@ -170,8 +170,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen>
     );
 
     final screenWidth = MediaQuery.sizeOf(context).width;
-    // Wider on the web tier because the two option cards sit side by side
-    // there rather than stacked — see _buildFormBody.
+    // Wider on the web tier: the two option cards sit side by side there.
     final double maxFormWidth = screenWidth < 600
         ? double.infinity
         : screenWidth < 1100
@@ -201,8 +200,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen>
             ? AppStrings.groupArchived
             : addExpenseMissingFieldHint(expenseState),
         onTap: handleSave,
-        // Tapping the bar while it's disabled reveals which fields are
-        // wrong (red highlights) instead of doing nothing.
+        // Tapping it while disabled reveals which fields are wrong.
         onDisabledTap: () {
           if (archived) return blockArchivedSave();
           HapticService.instance.error();
@@ -239,9 +237,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen>
           onTitleChanged: _onTitleChanged,
         ),
         const SizedBox(height: 28),
-        // Stacked on touch, side by side on the web tier. Six full-width rows
-        // in a column push the submit button below the fold on a laptop for
-        // no reason — the two cards are independent, so they can share a row.
+        // Stacked on touch, side by side on the web tier (six full-width
+        // rows would push Save below the fold on a laptop).
         WebFormRow(
           spacing: 20,
           flex: const [3, 2],
@@ -258,6 +255,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen>
                 isDark: isDark,
                 state: state,
                 groupMembers: groupMembers,
+                allowMultiple:
+                    ref.read(featureFlagsProvider).value?.contains('multiPayer') ?? false,
               ),
               onSplitTap: () => showSplitSheet(
                 context,
@@ -289,6 +288,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen>
   }
 
   void _onTitleChanged(String value) {
+    suggestCategoryFor(value);
     _titleDebounce?.cancel();
     _titleDebounce = Timer(const Duration(milliseconds: 200), () {
       if (!mounted) return;

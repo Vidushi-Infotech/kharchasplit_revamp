@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../components/buttons/donate_heart_button.dart';
+import '../../../core/constants/app_strings.dart';
 import '../../../core/utils/base64_async.dart';
 import '../../../components/components.dart';
 import '../../../core/theme/app_colors.dart';
@@ -19,11 +20,18 @@ import '../../auth/state/auth_provider.dart';
 import '../../dashboard/state/dashboard_provider.dart';
 import '../../groups/state/group_balance_helpers.dart';
 import '../../groups/state/group_detail_provider.dart';
+import '../state/expense_comments_provider.dart';
 import '../state/expense_detail_provider.dart';
 import '../state/expense_error_message.dart';
+import '../widgets/expense_comments_input.dart';
+import '../widgets/expense_comments_section.dart';
+import '../widgets/expense_detail_history_row.dart';
+import '../widgets/expense_detail_paid_by.dart';
+import '../widgets/expense_detail_splits_card.dart';
 
-String _splitTypeLabel(SplitType t) {
-  switch (t) {
+String _splitTypeLabel(ExpenseModel e) {
+  if (e.isAdjustmentSplit) return AppStrings.splitAdjustment;
+  switch (e.splitType) {
     case SplitType.equal:
       return 'Equal share';
     case SplitType.exact:
@@ -44,12 +52,14 @@ class ExpenseDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final screenWidth = MediaQuery.sizeOf(context).width;
+    final maxContentWidth = screenWidth < 1100 ? 720.0 : 900.0;
     final expenseAsync = ref.watch(expenseDetailProvider(expenseId));
     final myId = ref.watch(myIdProvider);
+    // Any payer of the expense may edit or delete it (server rule).
     final canDelete =
         expenseAsync.value != null &&
         myId != null &&
-        expenseAsync.value!.paidBy.id == myId;
+        expenseAsync.value!.isPayer(myId);
 
     return Scaffold(
       backgroundColor: AppColors.background(isDark),
@@ -72,7 +82,7 @@ class ExpenseDetailScreen extends ConsumerWidget {
           error: (error, _) => ErrorStateWidget(
             title: 'Failed to load expense',
             message: 'Unable to fetch expense details. Please try again.',
-            onRetry: () {},
+            onRetry: () => ref.invalidate(expenseDetailProvider(expenseId)),
           ),
           data: (expense) {
             // Some split rows arrive from the backend with an empty
@@ -110,23 +120,6 @@ class ExpenseDetailScreen extends ConsumerWidget {
             // device address book, matched via the group member's phone.
             final contactNameByPhone = ref.watch(contactNameByPhoneProvider);
 
-            // "Paid by" has the same blank/"Unknown" problem: the per-group
-            // endpoint sends a flat paid_by id + name with no avatar. Resolve
-            // the name (real → contact → phone) and avatar from the group
-            // member so the Paid-by card stays consistent with the split rows.
-            final paidByMember = memberById[expense.paidBy.id];
-            final paidByName = resolveDisplayName(
-              backendName: expense.paidBy.name,
-              phone: paidByMember?.phone ?? '',
-              contactNameByPhone: contactNameByPhone,
-              placeholder: 'Unknown',
-            );
-            final ownPaidByAvatar = expense.paidBy.avatarUrl;
-            final paidByAvatar =
-                (ownPaidByAvatar != null && ownPaidByAvatar.isNotEmpty)
-                ? ownPaidByAvatar
-                : paidByMember?.avatarUrl;
-
             // Per-split display names, resolved the same way.
             final splitDisplayNames = <String, String>{
               for (final s in expense.splits)
@@ -137,89 +130,120 @@ class ExpenseDetailScreen extends ConsumerWidget {
                 ),
             };
 
-            return RefreshIndicator(
-              onRefresh: () async {
-                ref.invalidate(expenseDetailProvider(expenseId));
-                await ref.read(expenseDetailProvider(expenseId).future);
-              },
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxWidth: screenWidth < 1100 ? 720 : 900,
-                  ),
-                  child: ListView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
-                    children: [
-                      _Hero(expense: expense, isDark: isDark),
-                      const SizedBox(height: 22),
-                      _SectionLabel(label: 'PAID BY', isDark: isDark),
-                      const SizedBox(height: 8),
-                      _PersonCard(
-                        name: paidByName,
-                        imageUrl: paidByAvatar,
-                        amount: expense.amount,
-                        currency: expense.currency,
-                        accent: AppColors.success,
-                        isDark: isDark,
-                        isSelf: myId != null && expense.paidBy.id == myId,
-                      ),
-                      const SizedBox(height: 22),
-                      _SectionLabel(
-                        label:
-                            'SPLIT AMONG · ${expense.splits.length} · ${_splitTypeLabel(expense.splitType).toUpperCase()}',
-                        isDark: isDark,
-                      ),
-                      const SizedBox(height: 8),
-                      _SplitsCard(
-                        splits: expense.splits,
-                        currency: expense.currency,
-                        isDark: isDark,
-                        splitType: expense.splitType,
-                        totalAmount: expense.amount,
-                        currentUserId: myId,
-                        memberById: memberById,
-                        displayNames: splitDisplayNames,
-                        payerId: expense.paidBy.id,
-                        groupId: expense.groupId,
-                        netByUserId: netByUserId,
-                        pendingOutByUserId: pendingOutByUserId,
-                        onSettle: (amount) {
-                          final gid = expense.groupId;
-                          if (gid == null) return;
-                          context.push(
-                            '/settle/${expense.paidBy.id}?groupId=$gid'
-                            '&amount=${amount.toStringAsFixed(2)}',
-                          );
-                        },
-                        onRemind: (userId) => _sendReminder(
-                          context,
-                          ref,
-                          expense.groupId,
-                          userId,
+            void settleWith(String payerId, double amount) {
+              final gid = expense.groupId;
+              if (gid == null) return;
+              context.push(
+                '/settle/$payerId?groupId=$gid'
+                '&amount=${amount.toStringAsFixed(2)}',
+              );
+            }
+
+            final details = <Widget>[
+              _Hero(expense: expense, isDark: isDark),
+              const SizedBox(height: 22),
+              _SectionLabel(label: 'PAID BY', isDark: isDark),
+              const SizedBox(height: 8),
+              ExpenseDetailPaidBy(
+                expense: expense,
+                isDark: isDark,
+                myId: myId,
+                memberById: memberById,
+                contactNameByPhone: contactNameByPhone,
+                netByUserId: netByUserId,
+                pendingOutByUserId: pendingOutByUserId,
+                onSettle: settleWith,
+              ),
+              const SizedBox(height: 22),
+              _SectionLabel(
+                label:
+                    'SPLIT AMONG · ${expense.splits.length} · ${_splitTypeLabel(expense).toUpperCase()}',
+                isDark: isDark,
+              ),
+              const SizedBox(height: 8),
+              ExpenseDetailSplitsCard(
+                splits: expense.splits,
+                currency: expense.currency,
+                isDark: isDark,
+                splitType: expense.splitType,
+                totalAmount: expense.amount,
+                currentUserId: myId,
+                memberById: memberById,
+                displayNames: splitDisplayNames,
+                payerIds: {for (final p in expense.payers) p.userId},
+                groupId: expense.groupId,
+                netByUserId: netByUserId,
+                pendingOutByUserId: pendingOutByUserId,
+                onSettle: settleWith,
+                onRemind: (userId) =>
+                    _sendReminder(context, ref, expense.groupId, userId),
+              ),
+              if (expense.receiptBase64 != null &&
+                  expense.receiptBase64!.isNotEmpty) ...[
+                const SizedBox(height: 22),
+                _SectionLabel(label: 'RECEIPT', isDark: isDark),
+                const SizedBox(height: 8),
+                _ReceiptCard(base64Data: expense.receiptBase64!, isDark: isDark),
+              ],
+              if (expense.notes != null &&
+                  (expense.notes as String).isNotEmpty) ...[
+                const SizedBox(height: 22),
+                _SectionLabel(label: 'NOTES', isDark: isDark),
+                const SizedBox(height: 8),
+                _NotesCard(notes: expense.notes!, isDark: isDark),
+              ],
+              const SizedBox(height: 22),
+              ExpenseDetailHistoryRow(
+                expense: expense,
+                canEdit: myId != null && expense.isPayer(myId),
+                isDark: isDark,
+              ),
+            ];
+
+            // Comments scroll with the details (lazily, as slivers); the
+            // input box stays pinned below and rides up with the keyboard.
+            return Column(
+              children: [
+                Expanded(
+                  child: RefreshIndicator(
+                    onRefresh: () async {
+                      ref.invalidate(expenseDetailProvider(expenseId));
+                      ref.invalidate(expenseCommentsProvider(expenseId));
+                      await ref.read(expenseDetailProvider(expenseId).future);
+                    },
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(maxWidth: maxContentWidth),
+                        child: CustomScrollView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          slivers: [
+                            SliverPadding(
+                              padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+                              sliver: SliverMainAxisGroup(
+                                slivers: [
+                                  SliverList.list(children: details),
+                                  ExpenseCommentsSliver(
+                                    expenseId: expenseId,
+                                    isDark: isDark,
+                                    memberIds: groupDetail == null
+                                        ? null
+                                        : memberById.keys.toSet(),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      if (expense.receiptBase64 != null &&
-                          expense.receiptBase64!.isNotEmpty) ...[
-                        const SizedBox(height: 22),
-                        _SectionLabel(label: 'RECEIPT', isDark: isDark),
-                        const SizedBox(height: 8),
-                        _ReceiptCard(
-                          base64Data: expense.receiptBase64!,
-                          isDark: isDark,
-                        ),
-                      ],
-                      if (expense.notes != null &&
-                          (expense.notes as String).isNotEmpty) ...[
-                        const SizedBox(height: 22),
-                        _SectionLabel(label: 'NOTES', isDark: isDark),
-                        const SizedBox(height: 8),
-                        _NotesCard(notes: expense.notes!, isDark: isDark),
-                      ],
-                    ],
+                    ),
                   ),
                 ),
-              ),
+                ExpenseCommentInput(
+                  expenseId: expenseId,
+                  isDark: isDark,
+                  maxWidth: maxContentWidth,
+                ),
+              ],
             );
           },
         ),
@@ -316,7 +340,7 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback onBack;
   final ValueChanged<String> onMenuSelected;
 
-  /// Hides the Delete item when the current user didn't add this expense.
+  /// Hides the menu when the current user isn't one of the payers.
   final bool canDelete;
 
   @override
@@ -354,8 +378,8 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
               ),
               const DonateHeartButton(),
               const SizedBox(width: 8),
-              // Only the person who added the expense (the payer) sees the
-              // three-dots menu at all — other members get no menu button.
+              // Only the payers of the expense see the three-dots menu at
+              // all — other members get no menu button.
               if (canDelete)
                 Semantics(
                   button: true,
@@ -385,7 +409,7 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
                     itemBuilder: (_) => [
                       // Edit gates on the same payer-only rule as Delete: the
                       // backend rejects PUT /expenses/:id with 403 if the
-                      // caller isn't the original payer.
+                      // caller isn't one of the payers.
                       if (canDelete)
                         PopupMenuItem(
                           value: 'edit',
@@ -632,503 +656,6 @@ class _SectionLabel extends StatelessWidget {
   }
 }
 
-class _PersonCard extends StatelessWidget {
-  const _PersonCard({
-    required this.name,
-    required this.imageUrl,
-    required this.amount,
-    required this.currency,
-    required this.accent,
-    required this.isDark,
-    this.isSelf = false,
-  });
-
-  final String name;
-  final String? imageUrl;
-  final double amount;
-  final String currency;
-  final Color accent;
-  final bool isDark;
-
-  /// When true, the person is the signed-in user; we append " (Me)" so
-  /// they spot their own row at a glance.
-  final bool isSelf;
-
-  @override
-  Widget build(BuildContext context) {
-    final formatted = NumberFormat.currency(
-      locale: 'en_IN',
-      symbol: currency,
-      decimalDigits: 0,
-    ).format(amount);
-
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.cardBg(isDark),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.divider(isDark)),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      child: Row(
-        children: [
-          AvatarWidget(name: name, imageUrl: imageUrl, radius: 18),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  isSelf ? '$name (Me)' : name,
-                  style: AppTextStyles.body1(
-                    isDark,
-                  ).copyWith(fontWeight: FontWeight.w700, fontSize: 14),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'paid the full amount',
-                  style: AppTextStyles.caption(isDark).copyWith(
-                    color: AppColors.textSecondary(isDark),
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          Text(
-            '+$formatted',
-            style: AppTextStyles.body1(isDark).copyWith(
-              color: accent,
-              fontWeight: FontWeight.w700,
-              fontSize: 14,
-              letterSpacing: -0.2,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SplitsCard extends StatefulWidget {
-  const _SplitsCard({
-    required this.splits,
-    required this.currency,
-    required this.isDark,
-    required this.splitType,
-    required this.totalAmount,
-    this.currentUserId,
-    this.memberById = const {},
-    this.displayNames = const {},
-    this.payerId,
-    this.groupId,
-    this.netByUserId = const {},
-    this.pendingOutByUserId = const {},
-    this.onSettle,
-    this.onRemind,
-  });
-
-  final List<SplitModel> splits;
-  final String currency;
-  final bool isDark;
-  final SplitType splitType;
-  final String? currentUserId;
-  final double totalAmount;
-
-  /// Who paid the expense, the group it belongs to, and the actions used to
-  /// render a per-row Settle Up / Remind button.
-  final String? payerId;
-  final String? groupId;
-
-  /// Net pairwise balance with each other person (>0 ⇒ I owe them, <0 ⇒ they
-  /// owe me). The buttons are gated on this, so they vanish once settled.
-  final Map<String, double> netByUserId;
-
-  /// Amount I already have pending (unconfirmed) to each person — Settle Up
-  /// only asks for the not-yet-in-flight remainder.
-  final Map<String, double> pendingOutByUserId;
-  final void Function(double amount)? onSettle;
-  final void Function(String userId)? onRemind;
-
-  /// userId → group member, used to backfill an avatar when a split row's own
-  /// avatar is empty.
-  final Map<String, UserModel> memberById;
-
-  /// userId → resolved display name (real name → device contact → phone).
-  final Map<String, String> displayNames;
-
-  @override
-  State<_SplitsCard> createState() => _SplitsCardState();
-}
-
-class _SplitsCardState extends State<_SplitsCard> {
-  bool _expanded = false;
-
-  bool get _hasWorking =>
-      widget.splitType == SplitType.percentage ||
-      widget.splitType == SplitType.shares;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = widget.isDark;
-
-    final totalShares = widget.splitType == SplitType.shares
-        ? widget.splits.fold<double>(0, (s, e) => s + e.shares)
-        : 0.0;
-
-    final card = Container(
-      decoration: BoxDecoration(
-        color: AppColors.cardBg(isDark),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.divider(isDark)),
-      ),
-      child: Column(
-        children: [
-          for (int i = 0; i < widget.splits.length; i++) ...[
-            Builder(
-              builder: (_) {
-                final s = widget.splits[i];
-                final myId = widget.currentUserId;
-                final payerIsMe =
-                    widget.payerId != null && widget.payerId == myId;
-                final canAct = widget.groupId != null && myId != null;
-                final netWithPayer = widget.netByUserId[widget.payerId] ?? 0;
-                final netWithSplitUser = widget.netByUserId[s.userId] ?? 0;
-                // What's left to settle with the payer after subtracting my
-                // already-pending settlements to them. Guard the clamp: when
-                // netWithPayer <= 0 there's nothing to settle (and
-                // clamp(0, negative) would throw).
-                final toSettlePayer = netWithPayer > 0
-                    ? (netWithPayer -
-                              (widget.pendingOutByUserId[widget.payerId] ?? 0))
-                          .clamp(0, netWithPayer)
-                          .toDouble()
-                    : 0.0;
-
-                String? actionLabel;
-                IconData? actionIcon;
-                Color? actionColor;
-                VoidCallback? onAction;
-                if (canAct &&
-                    payerIsMe &&
-                    s.userId != myId &&
-                    widget.onRemind != null &&
-                    netWithSplitUser < -0.01) {
-                  // I paid AND this person still net-owes me → remind them.
-                  actionLabel = 'Remind';
-                  actionIcon = Icons.notifications_active_rounded;
-                  actionColor = AppColors.brand;
-                  onAction = () => widget.onRemind!(s.userId);
-                } else if (canAct &&
-                    !payerIsMe &&
-                    s.userId == myId &&
-                    widget.onSettle != null &&
-                    toSettlePayer > 0.01) {
-                  // Someone else paid and I still net-owe them (beyond what's
-                  // already pending) → settle the remaining amount.
-                  actionLabel = 'Settle up';
-                  actionIcon = Icons.check_circle_outline_rounded;
-                  actionColor = AppColors.tealDark;
-                  onAction = () => widget.onSettle!(toSettlePayer);
-                }
-
-                return _SplitRow(
-                  split: s,
-                  currency: widget.currency,
-                  isDark: isDark,
-                  splitType: widget.splitType,
-                  totalAmount: widget.totalAmount,
-                  totalShares: totalShares,
-                  showWorking: _expanded,
-                  fallbackMember: widget.memberById[s.userId],
-                  displayName: widget.displayNames[s.userId],
-                  isSelf: myId != null && s.userId == myId,
-                  actionLabel: actionLabel,
-                  actionIcon: actionIcon,
-                  actionColor: actionColor,
-                  onAction: onAction,
-                );
-              },
-            ),
-            if (i < widget.splits.length - 1)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                child: Divider(
-                  height: 1,
-                  thickness: 1,
-                  color: AppColors.divider(isDark).withValues(alpha: 0.6),
-                ),
-              ),
-          ],
-          if (_hasWorking) ...[
-            Divider(
-              height: 1,
-              thickness: 1,
-              color: AppColors.divider(isDark).withValues(alpha: 0.6),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              child: Row(
-                children: [
-                  Icon(
-                    _expanded
-                        ? Icons.keyboard_arrow_up_rounded
-                        : Icons.keyboard_arrow_down_rounded,
-                    size: 18,
-                    color: AppColors.textSecondary(isDark),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    _expanded ? 'Hide working' : 'Show working',
-                    style: AppTextStyles.caption(isDark).copyWith(
-                      color: AppColors.textSecondary(isDark),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-
-    if (!_hasWorking) return card;
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: () => setState(() => _expanded = !_expanded),
-        child: card,
-      ),
-    );
-  }
-}
-
-class _SplitRow extends StatelessWidget {
-  const _SplitRow({
-    required this.split,
-    required this.currency,
-    required this.isDark,
-    required this.splitType,
-    required this.totalAmount,
-    required this.totalShares,
-    required this.showWorking,
-    this.fallbackMember,
-    this.displayName,
-    this.isSelf = false,
-    this.actionLabel,
-    this.actionIcon,
-    this.actionColor,
-    this.onAction,
-  });
-
-  final SplitModel split;
-  final String currency;
-  final bool isDark;
-  final SplitType splitType;
-  final double totalAmount;
-  final double totalShares;
-  final bool showWorking;
-
-  /// Optional Settle Up / Remind action for this row (null = no button).
-  final String? actionLabel;
-  final IconData? actionIcon;
-  final Color? actionColor;
-  final VoidCallback? onAction;
-
-  /// Group member resolved from the split's userId — used when the split's
-  /// own avatar is blank so the row still shows the member's photo.
-  final UserModel? fallbackMember;
-
-  /// Pre-resolved display name (real name → device contact → phone). When
-  /// null, falls back to the split/member name locally.
-  final String? displayName;
-  final bool isSelf;
-
-  /// Name to show: the pre-resolved [displayName], else the split's own
-  /// userName, else the group member's name, else a safe placeholder.
-  String get _displayName {
-    final resolved = displayName?.trim() ?? '';
-    if (resolved.isNotEmpty) return resolved;
-    if (split.userName.trim().isNotEmpty) return split.userName;
-    final memberName = fallbackMember?.name.trim() ?? '';
-    return memberName.isNotEmpty ? memberName : 'Unknown member';
-  }
-
-  /// Avatar URL to show: the split's own, else the resolved member's.
-  String? get _displayAvatarUrl {
-    final own = split.userAvatarUrl;
-    if (own != null && own.isNotEmpty) return own;
-    return fallbackMember?.avatarUrl;
-  }
-
-  String _amount(double v) => NumberFormat.currency(
-    locale: 'en_IN',
-    symbol: currency,
-    decimalDigits: 0,
-  ).format(v);
-
-  /// Resolve percentage to display: prefer the value stored at create time,
-  /// otherwise derive it from the resolved amount (works for legacy rows
-  /// where the DB column is NULL).
-  double? _resolvedPercentage() {
-    if (split.percentage > 0) return split.percentage;
-    if (totalAmount > 0 && split.owedShare >= 0) {
-      return split.owedShare / totalAmount * 100;
-    }
-    return null;
-  }
-
-  String _trim(double v) =>
-      v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(2);
-
-  String? _inputChip() {
-    switch (splitType) {
-      case SplitType.percentage:
-        final p = _resolvedPercentage();
-        if (p == null) return null;
-        return '${_trim(p)}%';
-      case SplitType.shares:
-        if (split.shares <= 0) return null;
-        return '${_trim(split.shares)} ${split.shares == 1 ? 'share' : 'shares'}';
-      case SplitType.equal:
-      case SplitType.exact:
-        return null;
-    }
-  }
-
-  String? _workingLine() {
-    switch (splitType) {
-      case SplitType.percentage:
-        final p = _resolvedPercentage();
-        if (p == null) return null;
-        return '${_trim(p)}%  ×  ${_amount(totalAmount)}  =  ${_amount(split.owedShare)}';
-      case SplitType.shares:
-        if (split.shares <= 0 || totalShares <= 0) return null;
-        return '${_trim(split.shares)} / ${_trim(totalShares)}  ×  ${_amount(totalAmount)}  =  ${_amount(split.owedShare)}';
-      case SplitType.equal:
-      case SplitType.exact:
-        return null;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final formatted = _amount(split.owedShare);
-    final chip = _inputChip();
-    final working = showWorking ? _workingLine() : null;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 2),
-            child: AvatarWidget(
-              name: _displayName,
-              imageUrl: _displayAvatarUrl,
-              radius: 16,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  isSelf ? '$_displayName (Me)' : _displayName,
-                  style: AppTextStyles.body1(
-                    isDark,
-                  ).copyWith(fontWeight: FontWeight.w600, fontSize: 14),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (working != null) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    working,
-                    style: AppTextStyles.caption(isDark).copyWith(
-                      color: AppColors.textSecondary(isDark),
-                      fontFeatures: const [FontFeature.tabularFigures()],
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                formatted,
-                style: AppTextStyles.body1(isDark).copyWith(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
-                  letterSpacing: -0.2,
-                ),
-              ),
-              if (chip != null) ...[
-                const SizedBox(height: 2),
-                Text(
-                  chip,
-                  style: AppTextStyles.caption(
-                    isDark,
-                  ).copyWith(color: AppColors.textSecondary(isDark)),
-                ),
-              ],
-              if (actionLabel != null && onAction != null) ...[
-                const SizedBox(height: 6),
-                Material(
-                  color: (actionColor ?? AppColors.brand).withValues(
-                    alpha: 0.12,
-                  ),
-                  borderRadius: BorderRadius.circular(8),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(8),
-                    onTap: onAction,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 5,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            actionIcon,
-                            size: 13,
-                            color: actionColor ?? AppColors.brand,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            actionLabel!,
-                            style: TextStyle(
-                              color: actionColor ?? AppColors.brand,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _ReceiptCard extends StatefulWidget {
   const _ReceiptCard({required this.base64Data, required this.isDark});
 
@@ -1187,7 +714,7 @@ class _ReceiptCardState extends State<_ReceiptCard> {
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
-        onTap: canShow ? () => _showFullScreen(context, bytes!) : null,
+        onTap: canShow ? () => _showFullScreen(context, bytes) : null,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
           decoration: BoxDecoration(

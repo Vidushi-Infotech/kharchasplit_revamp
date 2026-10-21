@@ -1,7 +1,9 @@
 import 'package:flutter/painting.dart';
 
+import '../../../core/constants/app_strings.dart';
 import '../../../models/models.dart';
 import 'add_expense_provider.dart';
+import 'add_expense_validation.dart';
 
 /// Pure helpers backing the Add/Edit expense form. No widget state, no
 /// providers — just mapping and formatting of [AddExpenseState].
@@ -28,6 +30,18 @@ AddExpenseState addExpenseStateFromExpense(ExpenseModel expense) {
     if (value > 0) included.add(s.userId);
   }
 
+  // "By adjustment" reopens as adjustments, with everyone who was in it
+  // (someone can owe ₹0 after a negative adjustment).
+  final rawAdjustments = expense.splitMeta?['adjustments'];
+  final adjustments = <String, double>{
+    if (expense.isAdjustmentSplit && rawAdjustments is Map)
+      for (final e in rawAdjustments.entries)
+        if (e.value is num) e.key as String: (e.value as num).toDouble(),
+  };
+  if (expense.isAdjustmentSplit) {
+    included.addAll(expense.splits.map((s) => s.userId));
+  }
+
   return AddExpenseState(
     title: expense.title,
     amount: expense.amount,
@@ -41,7 +55,38 @@ AddExpenseState addExpenseStateFromExpense(ExpenseModel expense) {
     notes: expense.notes,
     groupId: expense.groupId,
     receiptBase64: expense.receiptBase64,
+    // Never drop payers: a multi-payer expense always reopens with them,
+    // whatever the multiPayer flag says.
+    payers: expense.hasMultiplePayers
+        ? {for (final p in expense.payers) p.userId: p.amount}
+        : const {},
+    adjustmentMode: expense.isAdjustmentSplit,
+    adjustments: adjustments,
+    // Editing never auto-changes the category.
+    categoryTouched: true,
   );
+}
+
+/// Value of the "Paid by" row: "You", a name, "You and Asha" or "3 people".
+String addExpensePaidBySummary(
+  AddExpenseState state,
+  List<UserModel> members,
+  String? myId,
+) {
+  String nameOf(String id) =>
+      members.where((m) => m.id == id).map((m) => m.name).firstOrNull ?? '';
+  if (state.payers.length == 2 &&
+      myId != null &&
+      state.payers.containsKey(myId)) {
+    final other = state.payers.keys.firstWhere((id) => id != myId);
+    return AppStrings.youAndName(nameOf(other));
+  }
+  if (state.payers.length > 1) {
+    return AppStrings.peopleCount(state.payers.length);
+  }
+  final payerId = state.payers.keys.firstOrNull ?? state.paidBy?.id ?? myId;
+  if (payerId == null || payerId == myId) return 'You';
+  return state.paidBy?.id == payerId ? state.paidBy!.name : nameOf(payerId);
 }
 
 String addExpenseSplitSummary(AddExpenseState state, List<UserModel> members) {
@@ -49,15 +94,21 @@ String addExpenseSplitSummary(AddExpenseState state, List<UserModel> members) {
       ? members.length
       : state.includedMemberIds.length;
   if (count == 0) return 'Equally';
+  if (state.adjustmentMode) return '${AppStrings.splitAdjustment} · $count';
   switch (state.splitType) {
     case SplitType.equal:
       return 'Equally · $count ${count == 1 ? 'person' : 'people'}';
     case SplitType.exact:
       return 'By amounts · $count';
     case SplitType.percentage:
-      return 'By percent · $count';
     case SplitType.shares:
-      return 'By shares · $count';
+      final how = state.splitType == SplitType.percentage
+          ? 'By percent'
+          : 'By shares';
+      // Started from the group's default split: say so on the row too.
+      return state.usingGroupDefaultSplit
+          ? '${AppStrings.groupDefaultShort} · $how'
+          : '$how · $count';
   }
 }
 
@@ -92,5 +143,31 @@ String? addExpenseMissingFieldHint(AddExpenseState state) {
   if (!hasTitle) return 'Enter title';
   if (state.groupId == null) return 'Pick a group';
   if (!state.isSplitValid) return 'Fix the split';
+  if (!state.isPayersValid) return 'Fix who paid';
   return 'Complete required fields';
+}
+
+/// Who's in the split, in words: "Everyone", "Everyone except Ravi" or
+/// "Only Asha, Ravi" (whichever list is shorter). An empty [included] set
+/// means everyone unless [emptyMeansNobody] (the "By adjustment" list).
+String addExpenseWhoIsIn(
+  List<UserModel> members,
+  Set<String> included, {
+  bool emptyMeansNobody = false,
+}) {
+  if (included.isEmpty) {
+    return emptyMeansNobody ? AppStrings.nobodyInSplit : AppStrings.everyone;
+  }
+  final inSplit = members.where((m) => included.contains(m.id)).toList();
+  final out = members.where((m) => !included.contains(m.id)).toList();
+  if (inSplit.isEmpty) return AppStrings.nobodyInSplit;
+  if (out.isEmpty) return AppStrings.everyone;
+  String names(List<UserModel> people) {
+    final shown = people.take(3).map((m) => m.name).join(', ');
+    return people.length > 3 ? '$shown +${people.length - 3}' : shown;
+  }
+
+  return out.length <= inSplit.length
+      ? AppStrings.everyoneExcept(names(out))
+      : AppStrings.onlyNames(names(inSplit));
 }

@@ -29,6 +29,14 @@ class ExpenseModel extends Equatable {
   final bool isSettled;
   final DateTime createdAt;
 
+  /// Who paid how much. Always at least the [paidBy] row for paid expenses
+  /// (older responses without `payers` get a single payer of [amount]).
+  final List<ExpensePayer> payers;
+
+  /// How a plain-amount split was entered, from `split_meta` — e.g.
+  /// `{mode: adjustment, adjustments: {userId: 150}}`. Null for the rest.
+  final Map<String, dynamic>? splitMeta;
+
   const ExpenseModel({
     required this.id,
     required this.title,
@@ -44,7 +52,20 @@ class ExpenseModel extends Equatable {
     this.splitType = SplitType.equal,
     this.isSettled = false,
     required this.createdAt,
+    this.payers = const [],
+    this.splitMeta,
   });
+
+  bool get hasMultiplePayers => payers.length > 1;
+
+  /// Entered "By adjustment" (stored as exact amounts for older builds).
+  bool get isAdjustmentSplit => splitMeta?['mode'] == 'adjustment';
+
+  /// Amount [userId] paid towards this expense (0 if not a payer).
+  double paidByUser(String userId) =>
+      payers.where((p) => p.userId == userId).fold(0, (s, p) => s + p.amount);
+
+  bool isPayer(String userId) => payers.any((p) => p.userId == userId);
 
   factory ExpenseModel.fromJson(Map<String, dynamic> json) {
     // paidBy can arrive as a nested object (dashboard endpoint) or as flat
@@ -83,10 +104,25 @@ class ExpenseModel extends Equatable {
         json['created_at'];
     final createdRaw = json['createdAt'] ?? json['created_at'];
 
+    final amount = _parseAmount(json['amount']);
+    final payersRaw = json['payers'];
+    final payers = payersRaw is List && payersRaw.isNotEmpty
+        ? payersRaw
+            .whereType<Map<String, dynamic>>()
+            .map(ExpensePayer.fromJson)
+            .toList()
+        : [
+            if (paidBy.id.isNotEmpty)
+              ExpensePayer(userId: paidBy.id, name: paidBy.name, amount: amount),
+          ];
+    final meta = json['split_meta'] ?? json['splitMeta'];
+
     return ExpenseModel(
+      payers: payers,
+      splitMeta: meta is Map<String, dynamic> ? meta : null,
       id: json['id'] as String,
       title: (json['description'] ?? json['title'] ?? '') as String,
-      amount: _parseAmount(json['amount']),
+      amount: amount,
       currency: CurrencyFormatter.symbolFor(
           (json['currency'] as String?) ?? 'INR'),
       category: category,
@@ -141,6 +177,8 @@ class ExpenseModel extends Equatable {
     SplitType? splitType,
     bool? isSettled,
     DateTime? createdAt,
+    List<ExpensePayer>? payers,
+    Map<String, dynamic>? splitMeta,
   }) {
     return ExpenseModel(
       id: id ?? this.id,
@@ -157,6 +195,8 @@ class ExpenseModel extends Equatable {
       splitType: splitType ?? this.splitType,
       isSettled: isSettled ?? this.isSettled,
       createdAt: createdAt ?? this.createdAt,
+      payers: payers ?? this.payers,
+      splitMeta: splitMeta ?? this.splitMeta,
     );
   }
 
@@ -182,5 +222,25 @@ class ExpenseModel extends Equatable {
         splitType,
         isSettled,
         createdAt,
+        payers,
+        splitMeta,
       ];
+}
+
+/// One payer of an expense (`expense_payers`).
+class ExpensePayer extends Equatable {
+  const ExpensePayer({required this.userId, required this.name, required this.amount});
+
+  final String userId;
+  final String name;
+  final double amount;
+
+  factory ExpensePayer.fromJson(Map<String, dynamic> json) => ExpensePayer(
+        userId: (json['user_id'] ?? json['userId'] ?? '') as String,
+        name: (json['name'] as String?) ?? 'Unknown',
+        amount: ExpenseModel._parseAmount(json['amount']),
+      );
+
+  @override
+  List<Object?> get props => [userId, name, amount];
 }

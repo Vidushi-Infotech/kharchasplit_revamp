@@ -65,6 +65,11 @@ class GroupModel extends Equatable {
 
   bool get isDirect => kind == 'direct';
 
+  /// What Add expense starts from in this group, e.g.
+  /// `{type: percentage, values: {userId: 60, …}}` (or `shares`); null =
+  /// split equally. Set by an admin (PUT /groups/:id/default-split).
+  final Map<String, dynamic>? defaultSplit;
+
   const GroupModel({
     required this.id,
     required this.name,
@@ -85,6 +90,7 @@ class GroupModel extends Equatable {
     this.simplifyDebts = false,
     this.simplifiedTransfers = const [],
     this.kind = 'group',
+    this.defaultSplit,
   });
 
   factory GroupModel.fromJson(Map<String, dynamic> json) {
@@ -133,6 +139,9 @@ class GroupModel extends Equatable {
           .map(SimplifiedTransfer.fromJson)
           .toList(),
       kind: (json['kind'] as String?) ?? 'group',
+      defaultSplit: json['defaultSplit'] is Map<String, dynamic>
+          ? json['defaultSplit'] as Map<String, dynamic>
+          : null,
     );
   }
 
@@ -159,6 +168,7 @@ class GroupModel extends Equatable {
     bool? simplifyDebts,
     List<SimplifiedTransfer>? simplifiedTransfers,
     String? kind,
+    Map<String, dynamic>? defaultSplit,
   }) {
     return GroupModel(
       id: id ?? this.id,
@@ -180,6 +190,7 @@ class GroupModel extends Equatable {
       simplifyDebts: simplifyDebts ?? this.simplifyDebts,
       simplifiedTransfers: simplifiedTransfers ?? this.simplifiedTransfers,
       kind: kind ?? this.kind,
+      defaultSplit: defaultSplit ?? this.defaultSplit,
     );
   }
 
@@ -223,6 +234,7 @@ class GroupModel extends Equatable {
         simplifyDebts,
         simplifiedTransfers,
         kind,
+        defaultSplit,
       ];
 }
 

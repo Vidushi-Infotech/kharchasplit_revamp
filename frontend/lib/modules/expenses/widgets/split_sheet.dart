@@ -7,8 +7,13 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../models/models.dart';
 import '../../../modules/auth/state/auth_provider.dart';
 import '../state/add_expense_provider.dart';
+import '../state/add_expense_split_math.dart';
+import '../state/add_expense_validation.dart';
 import 'add_expense_sheet_header.dart';
+import 'split_adjustment_breakdown.dart';
 import 'split_breakdown_widget.dart';
+import 'split_default_hint.dart';
+import 'split_people_toggle.dart';
 import 'split_selector_widget.dart';
 
 /// Split-type + per-member breakdown bottom sheet. [context] and [ref] are
@@ -94,47 +99,76 @@ void showSplitSheet(
                       child: Consumer(
                         builder: (_, ref, __) {
                           final s = ref.watch(addExpenseProvider);
+                          final notifier = ref.read(
+                            addExpenseProvider.notifier,
+                          );
+                          final memberIds = groupMembers.map((m) => m.id);
+                          final myId = ref.watch(myIdProvider);
                           return Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               SplitSelectorWidget(
-                                splitType: s.splitType,
+                                mode: s.splitMode,
                                 amount: s.amount,
-                                onSplitTypeChanged: (type) {
-                                  ref.read(addExpenseProvider.notifier).state =
-                                      s.copyWith(splitType: type);
+                                onModeChanged: (mode) {
+                                  notifier.state = addExpenseSwitchSplitMode(
+                                    notifier.state,
+                                    mode,
+                                    memberIds,
+                                  );
                                 },
                               ),
+                              if (s.usingGroupDefaultSplit)
+                                SplitDefaultHint(
+                                  onSplitEqually: () => notifier.state =
+                                      addExpenseSplitEquallyForAll(
+                                        notifier.state,
+                                      ),
+                                ),
                               const SizedBox(height: 12),
-                              SplitBreakdownWidget(
-                                splitType: s.splitType,
-                                totalAmount: s.amount,
-                                members: groupMembers,
-                                splits: s.splits,
-                                includedMemberIds: s.includedMemberIds,
-                                currentUserId: ref.watch(myIdProvider),
-                                onSplitsChanged: (splits) {
-                                  // Read the live state, not the captured `s`
-                                  // snapshot. _toggleMember fires this right
-                                  // after onIncludedMembersChanged; using the
-                                  // stale `s` here would clobber the just-set
-                                  // includedMemberIds back to its old value.
-                                  final notifier = ref.read(
-                                    addExpenseProvider.notifier,
-                                  );
-                                  notifier.state = notifier.state.copyWith(
-                                    splits: splits,
-                                  );
-                                },
-                                onIncludedMembersChanged: (included) {
-                                  final notifier = ref.read(
-                                    addExpenseProvider.notifier,
-                                  );
-                                  notifier.state = notifier.state.copyWith(
-                                    includedMemberIds: included,
-                                  );
-                                },
-                              ),
+                              if (s.adjustmentMode)
+                                SplitAdjustmentBreakdown(
+                                  totalAmount: s.amount,
+                                  members: groupMembers,
+                                  adjustments: s.adjustments,
+                                  includedMemberIds: s.includedMemberIds,
+                                  currentUserId: myId,
+                                  onAdjustmentsChanged: (a) => notifier.state =
+                                      notifier.state.copyWith(adjustments: a),
+                                  onIncludedMembersChanged: (ids) =>
+                                      notifier.state = notifier.state.copyWith(
+                                        includedMemberIds: ids,
+                                      ),
+                                )
+                              else ...[
+                                SplitPeopleToggle(
+                                  members: groupMembers,
+                                  includedMemberIds: s.includedMemberIds,
+                                ),
+                                SplitBreakdownWidget(
+                                  splitType: s.splitType,
+                                  totalAmount: s.amount,
+                                  members: groupMembers,
+                                  splits: s.splits,
+                                  includedMemberIds: s.includedMemberIds,
+                                  currentUserId: myId,
+                                  onSplitsChanged: (splits) {
+                                    // Read the live state, not the captured `s`
+                                    // snapshot. _toggleMember fires this right
+                                    // after onIncludedMembersChanged; using the
+                                    // stale `s` here would clobber the just-set
+                                    // includedMemberIds back to its old value.
+                                    notifier.state = notifier.state.copyWith(
+                                      splits: splits,
+                                    );
+                                  },
+                                  onIncludedMembersChanged: (included) {
+                                    notifier.state = notifier.state.copyWith(
+                                      includedMemberIds: included,
+                                    );
+                                  },
+                                ),
+                              ],
                             ],
                           );
                         },

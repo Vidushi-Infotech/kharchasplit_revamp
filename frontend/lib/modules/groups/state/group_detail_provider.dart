@@ -78,17 +78,21 @@ Map<String, double> computePairwiseDebts({
   required List<SettlementModel> settlements,
 }) {
   final pair = <String, double>{};
+  // Each split user owes every payer their share of the split, in
+  // proportion to what that payer paid (one payer → the whole split), the
+  // same flows as the backend ledger.
   for (final expense in expenses) {
-    final paidBy = expense.paidBy.id;
-    if (paidBy == myId) {
+    final paid = expense.payers.fold<double>(0, (s, p) => s + p.amount);
+    if (paid <= 0) continue;
+    for (final payer in expense.payers) {
+      final share = payer.amount / paid;
       for (final split in expense.splits) {
-        if (split.userId == myId) continue;
-        pair[split.userId] = (pair[split.userId] ?? 0) - split.owedShare;
-      }
-    } else {
-      for (final split in expense.splits) {
-        if (split.userId != myId) continue;
-        pair[paidBy] = (pair[paidBy] ?? 0) + split.owedShare;
+        if (split.userId == payer.userId) continue;
+        if (payer.userId == myId) {
+          pair[split.userId] = (pair[split.userId] ?? 0) - split.owedShare * share;
+        } else if (split.userId == myId) {
+          pair[payer.userId] = (pair[payer.userId] ?? 0) + split.owedShare * share;
+        }
       }
     }
   }

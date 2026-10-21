@@ -8,8 +8,10 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../models/models.dart';
+import '../state/group_detail_provider.dart';
 
-/// One owe/owed line, derived from a SINGLE split of a SINGLE expense.
+/// One owe/owed line between the current user and one person on a SINGLE
+/// expense.
 class SplitLogEntry {
   const SplitLogEntry({
     required this.personId,
@@ -20,10 +22,10 @@ class SplitLogEntry {
     required this.expense,
   });
 
-  /// userId of the other party (the debtor if [theyOweMe], else the payer).
+  /// userId of the other party (the debtor if [theyOweMe], else a payer).
   final String personId;
 
-  /// The other party in this line (the debtor if [theyOweMe], else the payer).
+  /// The other party in this line (the debtor if [theyOweMe], else a payer).
   final String personName;
   final String? personAvatar;
 
@@ -34,10 +36,12 @@ class SplitLogEntry {
   final ExpenseModel expense;
 }
 
-/// Builds the per-SPLIT log entries (one row per person per expense — never
-/// rolled up). Newest expense first; split rows within an expense keep order.
-/// Only includes splits that involve the current user (I paid → others owe me;
-/// someone else paid → I owe them).
+/// Builds the per-person log entries (one row per person per expense — never
+/// rolled up). Newest expense first; rows within an expense keep split order.
+/// Only includes people the current user owes or is owed by on that expense,
+/// payer-aware: with several payers each split user owes every payer in
+/// proportion to what they paid, so an expense both of us paid for shows the
+/// NET between us (same flows as [computePairwiseDebts]).
 List<SplitLogEntry> buildSplitLogEntries({
   required List<ExpenseModel> expenses,
   required String? currentUserId,
@@ -57,36 +61,33 @@ List<SplitLogEntry> buildSplitLogEntries({
   final sorted = [...expenses]..sort((a, b) => b.date.compareTo(a.date));
   final out = <SplitLogEntry>[];
   for (final e in sorted) {
-    if (e.paidBy.id == myId) {
-      for (final s in e.splits) {
-        if (s.userId == myId) continue;
-        if (s.owedShare <= 0.01) continue;
-        out.add(
-          SplitLogEntry(
-            personId: s.userId,
-            personName: nameFor(s.userId, s.userName),
-            personAvatar: memberById[s.userId]?.avatarUrl ?? s.userAvatarUrl,
-            theyOweMe: true,
-            amount: s.owedShare,
-            expense: e,
-          ),
-        );
-      }
-    } else {
-      final mine = e.splits.firstWhereOrNull((s) => s.userId == myId);
-      if (mine != null && mine.owedShare > 0.01) {
-        out.add(
-          SplitLogEntry(
-            personId: e.paidBy.id,
-            personName: nameFor(e.paidBy.id, e.paidBy.name),
-            personAvatar:
-                memberById[e.paidBy.id]?.avatarUrl ?? e.paidBy.avatarUrl,
-            theyOweMe: false,
-            amount: mine.owedShare,
-            expense: e,
-          ),
-        );
-      }
+    // > 0 ⇒ I owe them on this expense, < 0 ⇒ they owe me.
+    final net = computePairwiseDebts(
+      myId: myId,
+      expenses: [e],
+      settlements: const [],
+    );
+    if (net.isEmpty) continue;
+    final people = <String>[
+      for (final s in e.splits) s.userId,
+      for (final p in e.payers)
+        if (!e.splits.any((s) => s.userId == p.userId)) p.userId,
+    ];
+    for (final id in people) {
+      final v = net[id] ?? 0;
+      if (id == myId || v.abs() <= 0.01) continue;
+      final split = e.splits.firstWhereOrNull((s) => s.userId == id);
+      final payer = e.payers.firstWhereOrNull((p) => p.userId == id);
+      out.add(
+        SplitLogEntry(
+          personId: id,
+          personName: nameFor(id, split?.userName ?? payer?.name ?? ''),
+          personAvatar: memberById[id]?.avatarUrl ?? split?.userAvatarUrl,
+          theyOweMe: v < 0,
+          amount: v.abs(),
+          expense: e,
+        ),
+      );
     }
   }
   return out;

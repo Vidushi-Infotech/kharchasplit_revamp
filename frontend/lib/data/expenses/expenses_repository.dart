@@ -15,6 +15,16 @@ class ExpensesApiException implements Exception {
 
   bool get isGroupArchived => code == 'GROUP_ARCHIVED';
 
+  /// 400: what the payers paid doesn't add up to the amount (to the paisa).
+  bool get isPayersMismatch => code == 'PAYERS_MISMATCH';
+
+  /// 400: what the participants owe doesn't add up to the amount.
+  bool get isSplitMismatch => code == 'SPLIT_MISMATCH';
+
+  /// 409: editing a multi-payer expense needs a newer app (one that sends
+  /// `payers`).
+  bool get needsAppUpdate => code == 'UPDATE_APP';
+
   @override
   String toString() => message;
 }
@@ -37,13 +47,20 @@ class ExpenseParticipant {
   final int? shares;
 
   Map<String, dynamic> toJson() => {
-        'userId': userId,
-        'name': name,
-        'amount': amount,
-        if (percentage != null) 'percentage': percentage,
-        if (shares != null) 'shares': shares,
-      };
+    'userId': userId,
+    'name': name,
+    'amount': amount,
+    if (percentage != null) 'percentage': percentage,
+    if (shares != null) 'shares': shares,
+  };
 }
+
+/// Request body for `payers` (userId → paise) — paise so the amounts sent
+/// are exactly what the client checked against the total.
+List<Map<String, dynamic>> _payersJson(Map<String, int> payersPaise) => [
+  for (final e in payersPaise.entries)
+    {'userId': e.key, 'amount': e.value / 100},
+];
 
 class ExpensesRepository {
   ExpensesRepository(this._client);
@@ -87,11 +104,7 @@ class ExpensesRepository {
   }) async {
     final res = await _client.dio.get(
       '/expenses',
-      queryParameters: {
-        'groupId': groupId,
-        'page': page,
-        'limit': limit,
-      },
+      queryParameters: {'groupId': groupId, 'page': page, 'limit': limit},
     );
     final body = _ensureSuccess(res);
     final data = body['data'];
@@ -135,6 +148,8 @@ class ExpensesRepository {
     DateTime? expenseDate,
     String? receiptBase64,
     required List<ExpenseParticipant> participants,
+    Map<String, int>? payersPaise,
+    Map<String, dynamic>? splitMeta,
   }) async {
     final res = await _client.dio.post(
       '/expenses',
@@ -148,10 +163,11 @@ class ExpensesRepository {
         'paidByName': paidByName,
         'splitType': splitType,
         if (notes != null && notes.isNotEmpty) 'notes': notes,
-        if (expenseDate != null)
-          'expenseDate': expenseDate.toIso8601String(),
+        if (expenseDate != null) 'expenseDate': expenseDate.toIso8601String(),
         if (receiptBase64 != null) 'receiptBase64': receiptBase64,
         'participants': participants.map((p) => p.toJson()).toList(),
+        if (payersPaise != null) 'payers': _payersJson(payersPaise),
+        'splitMeta': ?splitMeta,
       },
     );
     final data = _ensureMap(res);
@@ -170,6 +186,8 @@ class ExpensesRepository {
     String? paidById,
     String? splitType,
     List<ExpenseParticipant>? participants,
+    Map<String, int>? payersPaise,
+    Map<String, dynamic>? splitMeta,
   }) async {
     final res = await _client.dio.put(
       '/expenses/$expenseId',
@@ -185,10 +203,27 @@ class ExpensesRepository {
         if (splitType != null) 'splitType': splitType,
         if (participants != null)
           'participants': participants.map((p) => p.toJson()).toList(),
+        if (payersPaise != null) 'payers': _payersJson(payersPaise),
+        'splitMeta': ?splitMeta,
       },
     );
     final data = _ensureMap(res);
     return ExpenseModel.fromJson(data);
+  }
+
+  /// The category the user last used for the same description, or null.
+  /// Best effort: any failure is just "no suggestion".
+  Future<String?> suggestCategory(String description) async {
+    try {
+      final res = await _client.dio.get(
+        '/expenses/category-suggestion',
+        queryParameters: {'description': description},
+      );
+      final data = _ensureSuccess(res)['data'];
+      return data is Map ? data['category'] as String? : null;
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<void> delete(String expenseId) async {
@@ -217,7 +252,8 @@ class ExpensesRepository {
   Map<String, dynamic> _ensureSuccess(Response res) {
     final body = res.data;
     if (body is! Map || body['success'] != true) {
-      final msg = (body is Map ? body['error'] : null)?.toString() ??
+      final msg =
+          (body is Map ? body['error'] : null)?.toString() ??
           'Request failed (status ${res.statusCode})';
       throw ExpensesApiException(
         msg,
@@ -232,7 +268,9 @@ class ExpensesRepository {
     final body = _ensureSuccess(res);
     final data = body['data'];
     if (data is! Map<String, dynamic>) {
-      throw ExpensesApiException('Malformed response — expected object in data');
+      throw ExpensesApiException(
+        'Malformed response — expected object in data',
+      );
     }
     return data;
   }

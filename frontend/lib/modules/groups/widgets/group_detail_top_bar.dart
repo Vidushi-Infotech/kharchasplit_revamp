@@ -19,6 +19,7 @@ class GroupDetailTopBar extends StatelessWidget implements PreferredSizeWidget {
     this.isDirect = false,
     this.lifecycleItems = const [],
     this.onLifecycleAction,
+    this.onDefaultSplit,
   });
 
   final bool isDark;
@@ -51,6 +52,10 @@ class GroupDetailTopBar extends StatelessWidget implements PreferredSizeWidget {
   /// [onLifecycleAction].
   final List<PopupMenuEntry<String>> lifecycleItems;
   final ValueChanged<String>? onLifecycleAction;
+
+  /// Opens the admin-only "Default split" editor. Null hides the entry
+  /// (still loading, or a direct group).
+  final VoidCallback? onDefaultSplit;
 
   @override
   Size get preferredSize => const Size.fromHeight(56);
@@ -110,6 +115,9 @@ class GroupDetailTopBar extends StatelessWidget implements PreferredSizeWidget {
                           case 'add_member':
                             onAddMember();
                             break;
+                          case 'default_split':
+                            onDefaultSplit?.call();
+                            break;
                           case 'export':
                             onExportGroup?.call();
                             break;
@@ -152,6 +160,25 @@ class GroupDetailTopBar extends StatelessWidget implements PreferredSizeWidget {
                                 ),
                                 const SizedBox(width: 10),
                                 const Text('Edit group'),
+                              ],
+                            ),
+                          ),
+                        // Default split: admin only, never for a direct group.
+                        if (canManage &&
+                            isAdmin &&
+                            !isDirect &&
+                            onDefaultSplit != null)
+                          PopupMenuItem(
+                            value: 'default_split',
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.pie_chart_outline_rounded,
+                                  size: 18,
+                                  color: AppColors.textPrimary(isDark),
+                                ),
+                                const SizedBox(width: 10),
+                                const Text(AppStrings.defaultSplit),
                               ],
                             ),
                           ),
