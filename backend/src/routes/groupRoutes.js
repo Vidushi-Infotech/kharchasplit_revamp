@@ -2,6 +2,7 @@ import express from 'express';
 import { body  } from 'express-validator';
 import { authenticate  } from '../middleware/auth.js';
 import { validate  } from '../middleware/validation.js';
+import { idempotent } from '../middleware/idempotency.js';
 import groupController from '../controllers/groupController.js';
 
 const router = express.Router();
@@ -17,6 +18,7 @@ router.post(
   '/',
   largeJson,
   authenticate,
+  idempotent,
   [body('name').trim().isLength({ min: 2, max: 255 })],
   validate,
   groupController.createGroup

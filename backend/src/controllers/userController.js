@@ -1,3 +1,4 @@
+import { userPairNetsSql } from '../services/ledger.js';
 import { query } from '../config/database.js';
 import User from '../models/User.js';
 import Group from '../models/Group.js';
@@ -519,46 +520,7 @@ const getDashboard = async (req, res, next) => {
            AND gm.deleted_at IS NULL
            AND g.deleted_at IS NULL
        ),
-       pair_deltas AS (
-         -- I paid → every other split row means that user owes me their share
-         SELECT e.group_id, es.user_id AS other_user_id, es.amount AS delta
-         FROM expenses e
-         JOIN expense_splits es ON es.expense_id = e.id
-         WHERE e.deleted_at IS NULL
-           AND e.paid_by = $1
-           AND es.user_id != $1
-           AND e.group_id IN (SELECT group_id FROM active_groups)
-         UNION ALL
-         -- Someone else paid → I owe THEM my split (delta negative)
-         SELECT e.group_id, e.paid_by AS other_user_id, -es.amount AS delta
-         FROM expenses e
-         JOIN expense_splits es ON es.expense_id = e.id
-         WHERE e.deleted_at IS NULL
-           AND e.paid_by != $1
-           AND es.user_id = $1
-           AND e.group_id IN (SELECT group_id FROM active_groups)
-         UNION ALL
-         -- I paid them a settlement → they owe me that much more (or I owe less)
-         SELECT s.group_id, s.to_user_id AS other_user_id, s.amount AS delta
-         FROM settlements s
-         WHERE s.deleted_at IS NULL
-           AND s.status = 'paid'
-           AND s.from_user_id = $1
-           AND s.group_id IN (SELECT group_id FROM active_groups)
-         UNION ALL
-         -- They paid me → I owe them more (or they owe me less)
-         SELECT s.group_id, s.from_user_id AS other_user_id, -s.amount AS delta
-         FROM settlements s
-         WHERE s.deleted_at IS NULL
-           AND s.status = 'paid'
-           AND s.to_user_id = $1
-           AND s.group_id IN (SELECT group_id FROM active_groups)
-       ),
-       pair_net AS (
-         SELECT group_id, other_user_id, SUM(delta) AS net
-         FROM pair_deltas
-         GROUP BY group_id, other_user_id
-       )
+       pair_net AS (${userPairNetsSql('$1', 'IN (SELECT group_id FROM active_groups)')})
        SELECT COALESCE(SUM(GREATEST(net, 0)), 0) AS you_are_owed,
               COALESCE(SUM(GREATEST(-net, 0)), 0) AS you_owe,
               COALESCE(SUM(net), 0) AS total
@@ -935,42 +897,7 @@ const getReports = async (req, res, next) => {
            AND gm.deleted_at IS NULL
            AND g.deleted_at IS NULL
        ),
-       pair_deltas AS (
-         SELECT e.group_id, es.user_id AS other_user_id, es.amount AS delta
-         FROM expenses e
-         JOIN expense_splits es ON es.expense_id = e.id
-         WHERE e.deleted_at IS NULL
-           AND e.paid_by = $1
-           AND es.user_id != $1
-           AND e.group_id IN (SELECT group_id FROM active_groups)
-         UNION ALL
-         SELECT e.group_id, e.paid_by AS other_user_id, -es.amount AS delta
-         FROM expenses e
-         JOIN expense_splits es ON es.expense_id = e.id
-         WHERE e.deleted_at IS NULL
-           AND e.paid_by != $1
-           AND es.user_id = $1
-           AND e.group_id IN (SELECT group_id FROM active_groups)
-         UNION ALL
-         SELECT s.group_id, s.to_user_id AS other_user_id, s.amount AS delta
-         FROM settlements s
-         WHERE s.deleted_at IS NULL
-           AND s.status = 'paid'
-           AND s.from_user_id = $1
-           AND s.group_id IN (SELECT group_id FROM active_groups)
-         UNION ALL
-         SELECT s.group_id, s.from_user_id AS other_user_id, -s.amount AS delta
-         FROM settlements s
-         WHERE s.deleted_at IS NULL
-           AND s.status = 'paid'
-           AND s.to_user_id = $1
-           AND s.group_id IN (SELECT group_id FROM active_groups)
-       ),
-       pair_net AS (
-         SELECT group_id, other_user_id, SUM(delta) AS net
-         FROM pair_deltas
-         GROUP BY group_id, other_user_id
-       )
+       pair_net AS (${userPairNetsSql('$1', 'IN (SELECT group_id FROM active_groups)')})
        SELECT COALESCE(SUM(GREATEST(net, 0)), 0) AS you_are_owed,
               COALESCE(SUM(GREATEST(-net, 0)), 0) AS you_owe
        FROM pair_net`,

@@ -3,17 +3,23 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+// Connection settings shared by the pool and standalone clients
+// (e.g. the cache-invalidation listener in services/cacheBus.js).
+const connectionConfig = {
+  host: process.env.DB_HOST || 'localhost',
+  port: process.env.DB_PORT || 5432,
+  database: process.env.DB_NAME || 'kharchasplit',
+  user: process.env.DB_USER || 'kharchasplit',
+  password: process.env.DB_PASSWORD,
+};
+
 // PostgreSQL connection pool
 // Pool size guide: max = (CPU cores * 2) + disk spindles
 // For a single-node setup with SSD, 10 is a good default.
 // AWS RDS micro/small instances cap at ~60 connections total,
 // so leave headroom for migrations, monitoring, and other services.
 const pool = new Pool({
-  host: process.env.DB_HOST || 'localhost',
-  port: process.env.DB_PORT || 5432,
-  database: process.env.DB_NAME || 'kharchasplit',
-  user: process.env.DB_USER || 'kharchasplit',
-  password: process.env.DB_PASSWORD,
+  ...connectionConfig,
   min: parseInt(process.env.DB_POOL_MIN) || 2,
   max: parseInt(process.env.DB_POOL_MAX) || 10,
   idleTimeoutMillis: 30000,       // close idle connections after 30s
@@ -107,6 +113,7 @@ const getPoolMetrics = () => ({
 });
 
 export {
+  connectionConfig,
   pool,
   query,
   transaction,

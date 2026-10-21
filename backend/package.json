@@ -13,6 +13,7 @@
     "migrate": "node migrations/migrate.js",
     "seed": "node migrations/seed.js",
     "test": "jest --coverage",
+    "test:unit": "node --test tests/",
     "clean": "rm -rf node_modules coverage"
   },
   "keywords": [

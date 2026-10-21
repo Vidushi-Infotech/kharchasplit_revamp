@@ -13,9 +13,15 @@
  *   MIN_SUPPORTED_APP_VERSION  e.g. "3.0.0"
  *   FORCE_UPDATE_MESSAGE       optional human-readable reason
  *
+ * `features` lists server feature flags (FEATURES env, see
+ * utils/appVersion.js) so the app can show a feature only once the backend
+ * supports it.
+ *
  * Store URLs are derived from the package name / Apple ID and kept here so
  * the client doesn't hardcode store-specific strings.
  */
+
+import { enabledFeatures } from '../utils/appVersion.js';
 
 const APP_STORE_URL = 'https://apps.apple.com/app/id6754237285';
 const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.kharchasplit';
@@ -44,6 +50,7 @@ const getAppVersion = async (req, res) => {
       forceUpdate,
       forceUpdateMessage,
       softUpdateMessage,
+      features: enabledFeatures(),
       storeUrls: {
         android: PLAY_STORE_URL,
         ios: APP_STORE_URL,

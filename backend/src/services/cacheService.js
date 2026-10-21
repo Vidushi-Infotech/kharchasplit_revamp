@@ -2,9 +2,12 @@
  * Cache Service — in-memory LRU cache with TTL support.
  *
  * Uses a simple Map + doubly-linked-list for O(1) get/set/eviction.
- * Good for single-process deployments (which this app is).
- * If you scale to multiple processes, swap this for Redis by setting
- * REDIS_URL in env and implementing the same get/set/del/invalidate interface.
+ *
+ * Multi-process (PM2 cluster): every process has its own copy, so each
+ * del()/invalidate() is also broadcast to the other processes through
+ * services/cacheBus.js (Postgres LISTEN/NOTIFY). While the bus is not
+ * connected the cache is bypassed entirely (`coherent = false`): slower,
+ * but never stale. Single-process setups can opt out with CACHE_BUS=false.
  *
  * Design decisions:
  * - Max 1000 entries by default (each entry is a small JSON object, ~1-5KB)
@@ -19,12 +22,34 @@ class CacheService {
     this.cache = new Map(); // Map preserves insertion order — we use this for LRU
     this.hits = 0;
     this.misses = 0;
+    // False until cacheBus is listening (or CACHE_BUS=false). Scripts and
+    // jobs run outside server.js therefore never cache.
+    this.coherent = process.env.CACHE_BUS === 'false';
+    // Bumped on every invalidation; getOrSet skips caching a value whose
+    // read overlapped an invalidation (it may predate the write).
+    this.epoch = 0;
+    // Set by cacheBus: (op, key) => void, broadcasts to other processes.
+    this.publisher = null;
+    this.reinvalidateMs = parseInt(process.env.CACHE_REINVALIDATE_MS) || 1500;
+  }
+
+  /** Called by cacheBus when the listener connects / drops. */
+  setCoherent(value) {
+    if (this.coherent === value) return;
+    this.coherent = value;
+    // Anything cached may have missed invalidations while we were deaf.
+    this.cache.clear();
+    this.epoch++;
   }
 
   /**
    * Get a value from cache. Returns null on miss or expired entry.
    */
   get(key) {
+    if (!this.coherent) {
+      this.misses++;
+      return null;
+    }
     const entry = this.cache.get(key);
     if (!entry) {
       this.misses++;
@@ -49,6 +74,7 @@ class CacheService {
    * Set a value with optional TTL in seconds.
    */
   set(key, value, ttlSeconds = 60) {
+    if (!this.coherent) return;
     // If key exists, delete first to update insertion order
     if (this.cache.has(key)) {
       this.cache.delete(key);
@@ -68,21 +94,46 @@ class CacheService {
   }
 
   /**
-   * Delete a specific key.
+   * Delete a specific key — here and in every other process.
    */
   del(key) {
-    return this.cache.delete(key);
+    return this._invalidate('del', key, true);
   }
 
   /**
-   * Invalidate all keys matching a prefix.
+   * Invalidate all keys matching a prefix — here and in every other process.
    * E.g., invalidate('group:123') deletes group:123, group:123:members, group:123:balances, etc.
    */
   invalidate(prefix) {
+    return this._invalidate('prefix', prefix, true);
+  }
+
+  /** An invalidation received from another process (cacheBus). */
+  applyRemote(op, key) {
+    this._invalidate(op, key, false);
+  }
+
+  /**
+   * Drop matching entries now and once more after `reinvalidateMs`.
+   * The second pass catches a concurrent request that read the row before
+   * the writer's transaction committed and cached it after our first
+   * delete ("delayed double delete").
+   */
+  _invalidate(op, key, broadcast) {
+    const count = this._dropLocal(op, key);
+    if (broadcast && this.publisher) this.publisher(op, key);
+    const timer = setTimeout(() => this._dropLocal(op, key), this.reinvalidateMs);
+    timer.unref();
+    return op === 'del' ? count > 0 : count;
+  }
+
+  _dropLocal(op, key) {
+    this.epoch++;
+    if (op === 'del') return this.cache.delete(key) ? 1 : 0;
     let count = 0;
-    for (const key of this.cache.keys()) {
-      if (key.startsWith(prefix)) {
-        this.cache.delete(key);
+    for (const k of this.cache.keys()) {
+      if (k.startsWith(key)) {
+        this.cache.delete(k);
         count++;
       }
     }
@@ -102,10 +153,12 @@ class CacheService {
       return cached;
     }
 
+    const epoch = this.epoch;
     const value = await fn();
 
-    // Don't cache null/undefined results (e.g., "group not found")
-    if (value != null) {
+    // Don't cache null/undefined results (e.g., "group not found"), nor a
+    // value whose read raced an invalidation.
+    if (value != null && epoch === this.epoch) {
       this.set(key, value, ttlSeconds);
     }
 
@@ -118,6 +171,7 @@ class CacheService {
   getStats() {
     const total = this.hits + this.misses;
     return {
+      coherent: this.coherent,
       size: this.cache.size,
       maxSize: this.maxSize,
       hits: this.hits,

@@ -1,3 +1,4 @@
+import { userPairNetsSql } from '../services/ledger.js';
 import ExcelJS from 'exceljs';
 
 import { query } from '../config/database.js';
@@ -51,44 +52,7 @@ const getGroups = async (req, res, next) => {
     if (groupIds.length > 0) {
       const placeholders = groupIds.map((_, i) => `$${i + 2}`).join(', ');
       const balanceResult = await query(
-        `WITH pair_deltas AS (
-           -- I paid → each other split row means that user owes me
-           SELECT e.group_id, es.user_id AS other_user_id, es.amount AS delta
-           FROM expenses e
-           JOIN expense_splits es ON es.expense_id = e.id
-           WHERE e.deleted_at IS NULL
-             AND e.paid_by = $1
-             AND es.user_id != $1
-             AND e.group_id IN (${placeholders})
-           UNION ALL
-           -- Other paid → I owe them my split
-           SELECT e.group_id, e.paid_by AS other_user_id, -es.amount AS delta
-           FROM expenses e
-           JOIN expense_splits es ON es.expense_id = e.id
-           WHERE e.deleted_at IS NULL
-             AND e.paid_by != $1
-             AND es.user_id = $1
-             AND e.group_id IN (${placeholders})
-           UNION ALL
-           SELECT s.group_id, s.to_user_id AS other_user_id, s.amount AS delta
-           FROM settlements s
-           WHERE s.deleted_at IS NULL
-             AND s.status = 'paid'
-             AND s.from_user_id = $1
-             AND s.group_id IN (${placeholders})
-           UNION ALL
-           SELECT s.group_id, s.from_user_id AS other_user_id, -s.amount AS delta
-           FROM settlements s
-           WHERE s.deleted_at IS NULL
-             AND s.status = 'paid'
-             AND s.to_user_id = $1
-             AND s.group_id IN (${placeholders})
-         ),
-         pair_net AS (
-           SELECT group_id, other_user_id, SUM(delta) AS net
-           FROM pair_deltas
-           GROUP BY group_id, other_user_id
-         )
+        `WITH pair_net AS (${userPairNetsSql('$1', `IN (${placeholders})`)})
          SELECT group_id,
                 COALESCE(SUM(net), 0)                  AS my_balance,
                 COALESCE(SUM(GREATEST(net, 0)), 0)     AS you_are_owed_in_group,

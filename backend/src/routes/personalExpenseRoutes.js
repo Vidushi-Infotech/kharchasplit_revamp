@@ -2,6 +2,7 @@ import express from 'express';
 import { body  } from 'express-validator';
 import { authenticate  } from '../middleware/auth.js';
 import { validate  } from '../middleware/validation.js';
+import { idempotent } from '../middleware/idempotency.js';
 import personalExpenseController from '../controllers/personalExpenseController.js';
 
 const router = express.Router();
@@ -12,6 +13,7 @@ router.get('/:id', authenticate, personalExpenseController.getPersonalExpense);
 router.post(
   '/',
   authenticate,
+  idempotent,
   [
     body('description').trim().isLength({ min: 1, max: 500 }),
     body('amount').custom((value) => {

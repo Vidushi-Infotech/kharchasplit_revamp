@@ -12,6 +12,8 @@ import { initializeDatabase } from './config/initDatabase.js';
 import { initFirebase, isFirebaseReady } from './config/firebaseAdmin.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
 import { cache } from './services/cacheService.js';
+import { startCacheBus, stopCacheBus } from './services/cacheBus.js';
+import { startIdempotencyCleanup } from './middleware/idempotency.js';
 import { logger } from './utils/logger.js';
 import { startEmailVerifyReminderScheduler } from './jobs/emailVerifyReminderJob.js';
 import { startEmailOutboxWorker } from './services/emailOutbox.js';
@@ -81,6 +83,8 @@ if (rawCors === '*' || rawCors === '') {
 app.use(cors({
   origin: corsOrigin,
   credentials: true,
+  // Let the web app read idempotent-replay / back-off hints.
+  exposedHeaders: ['Idempotent-Replayed', 'Retry-After'],
 }));
 
 // Rate limiting - more permissive for mobile app usage patterns
@@ -183,6 +187,10 @@ const startServer = async () => {
       process.exit(1);
     }
 
+    // Cross-process cache invalidation (PM2 cluster). Until it is
+    // listening the cache is bypassed, so a failure here is not fatal.
+    await startCacheBus();
+
     // Initialize Firebase Admin (push notifications). Non-fatal if missing.
     await initFirebase();
 
@@ -232,6 +240,8 @@ const startServer = async () => {
     // Daily automatic settle-up reminders + Monday weekly summary (opt-in).
     startSettlementReminderScheduler();
     startWeeklySummaryScheduler();
+    // Expires Idempotency-Key replay rows after 24h.
+    startIdempotencyCleanup();
 
     server = app.listen(PORT, () => {
       console.log('');
@@ -274,6 +284,7 @@ const gracefulShutdown = (signal) => {
     server.close(async () => {
       console.log('HTTP server closed');
       try {
+        await stopCacheBus();
         await pool.end();
         console.log('Database pool closed');
       } catch (err) {

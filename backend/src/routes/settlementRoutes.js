@@ -2,6 +2,7 @@ import express from 'express';
 import { body  } from 'express-validator';
 import { authenticate  } from '../middleware/auth.js';
 import { validate  } from '../middleware/validation.js';
+import { idempotent } from '../middleware/idempotency.js';
 import settlementController from '../controllers/settlementController.js';
 
 const router = express.Router();
@@ -11,6 +12,7 @@ router.get('/', authenticate, settlementController.getSettlements);
 router.post(
   '/',
   authenticate,
+  idempotent,
   [
     body('groupId').notEmpty(),
     body('fromUserId').notEmpty(),

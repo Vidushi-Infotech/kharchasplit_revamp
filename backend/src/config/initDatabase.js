@@ -299,6 +299,19 @@ CREATE TABLE IF NOT EXISTS auto_reminder_state (
   sent_count INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (group_id, debtor_id, creditor_id)
 );
+
+-- Idempotency-Key replay store (middleware/idempotency.js). Rows expire
+-- after 24h (hourly cleanup on PM2 instance 0).
+CREATE TABLE IF NOT EXISTS idempotency_keys (
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  key VARCHAR(100) NOT NULL,
+  request_hash CHAR(64) NOT NULL,
+  status VARCHAR(16) NOT NULL DEFAULT 'in_progress', -- in_progress | done
+  response_status INTEGER,
+  response_body JSONB,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, key)
+);
 `;
 
 // =====================================================
@@ -517,6 +530,11 @@ CREATE INDEX IF NOT EXISTS idx_email_outbox_due
   ON email_outbox(send_after) WHERE status = 'pending';
 CREATE INDEX IF NOT EXISTS idx_email_outbox_user
   ON email_outbox(user_id, created_at DESC);
+
+-- =====================================================
+-- IDEMPOTENCY KEYS: hourly expiry scan
+-- =====================================================
+CREATE INDEX IF NOT EXISTS idx_idempotency_keys_created ON idempotency_keys(created_at);
 `;
 
 // =====================================================

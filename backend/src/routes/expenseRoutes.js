@@ -2,6 +2,7 @@ import express from 'express';
 import { body  } from 'express-validator';
 import { authenticate  } from '../middleware/auth.js';
 import { validate  } from '../middleware/validation.js';
+import { idempotent } from '../middleware/idempotency.js';
 import { expenseCreateRateLimit } from '../middleware/rateLimits.js';
 import expenseController from '../controllers/expenseController.js';
 
@@ -18,6 +19,8 @@ router.post(
   '/',
   largeJson,
   authenticate,
+  // Before the rate limit, so replaying a retried request costs no slot.
+  idempotent,
   // Per-user limit (60/min) sits AFTER authenticate so the key generator
   // can read req.user.id; before validate so a malformed payload still
   // costs a slot.
