@@ -1,5 +1,6 @@
 import { query, transaction  } from '../config/database.js';
 import { cache, TTL } from '../services/cacheService.js';
+import { readReceiptBase64 } from '../services/receiptStore.js';
 
 class Expense {
   /**
@@ -8,7 +9,9 @@ class Expense {
   static async findById(id) {
     const expenseResult = await query(
       `SELECT e.id, e.group_id, e.description, e.amount, e.currency, e.category,
-              e.paid_by, e.split_type, e.split_meta, e.recurring_rule_id, e.receipt_base64, e.notes, e.expense_date,
+              e.paid_by, e.split_type, e.split_meta, e.recurring_rule_id, e.receipt_base64, e.receipt_path,
+              e.original_amount, e.original_currency, e.fx_rate, to_char(e.fx_date, 'YYYY-MM-DD') AS fx_date,
+              e.notes, e.expense_date,
               e.created_at, e.updated_at, u.name as paid_by_name
        FROM expenses e
        LEFT JOIN users u ON e.paid_by = u.id
@@ -34,6 +37,12 @@ class Expense {
 
     expense.participants = participantsResult.rows;
     expense.payers = (await this.payersByExpense([id]))[id] || [];
+    // Receipts moved to disk are returned exactly as before (base64).
+    if (expense.receipt_path && !expense.receipt_base64) {
+      expense.receipt_base64 = await readReceiptBase64(expense.receipt_path);
+    }
+    expense.has_receipt = !!expense.receipt_base64;
+    delete expense.receipt_path;
     return expense;
   }
 
@@ -49,6 +58,8 @@ class Expense {
     const expensesResult = await query(
       `SELECT e.id, e.group_id, e.description, e.amount, e.currency, e.category,
               e.paid_by, e.split_type, e.split_meta, e.recurring_rule_id, e.notes, e.expense_date,
+              e.original_amount, e.original_currency, e.fx_rate,
+              (e.receipt_path IS NOT NULL OR e.receipt_base64 IS NOT NULL) AS has_receipt,
               e.created_at, e.updated_at, u.name as paid_by_name
        FROM expenses e
        LEFT JOIN users u ON e.paid_by = u.id
@@ -197,12 +208,20 @@ class Expense {
              amount = COALESCE($2, amount),
              currency = COALESCE($3, currency),
              category = COALESCE($4, category),
-             receipt_base64 = COALESCE($5, receipt_base64),
              notes = COALESCE($6, notes),
              expense_date = COALESCE($7, expense_date),
              paid_by = COALESCE($8, paid_by),
              split_type = COALESCE($9, split_type),
              split_meta = CASE WHEN $11::boolean THEN $12::jsonb ELSE split_meta END,
+             -- A new receipt goes to disk; drop any old in-database copy.
+             receipt_path = COALESCE($13, receipt_path),
+             receipt_base64 = CASE WHEN $13::text IS NOT NULL THEN NULL
+                                   ELSE COALESCE($5, receipt_base64) END,
+             -- Currency conversion: set together when the app sends them.
+             original_amount = CASE WHEN $14::boolean THEN $15 ELSE original_amount END,
+             original_currency = CASE WHEN $14::boolean THEN $16 ELSE original_currency END,
+             fx_rate = CASE WHEN $14::boolean THEN $17 ELSE fx_rate END,
+             fx_date = CASE WHEN $14::boolean THEN $18::date ELSE fx_date END,
              -- Offline edits compare against this (baseUpdatedAt).
              updated_at = NOW()
          WHERE id = $10 AND deleted_at IS NULL
@@ -221,6 +240,12 @@ class Expense {
           id,
           fields.splitMeta !== undefined,
           fields.splitMeta == null ? null : JSON.stringify(fields.splitMeta),
+          fields.receiptPath || null,
+          fields.fx !== undefined,
+          fields.fx?.originalAmount ?? null,
+          fields.fx?.originalCurrency ?? null,
+          fields.fx?.fxRate ?? null,
+          fields.fx?.fxDate ?? null,
         ],
       );
       if (!expense) return null;
@@ -270,9 +295,9 @@ class Expense {
         `INSERT INTO expenses (
           group_id, description, amount, currency, category,
           paid_by, split_type, receipt_base64, notes, expense_date, split_meta,
-          recurring_rule_id
+          recurring_rule_id, receipt_path, original_amount, original_currency, fx_rate, fx_date
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
         RETURNING id, group_id, description, amount, currency, category,
                   paid_by, split_type, split_meta, notes, expense_date, recurring_rule_id,
                   created_at, updated_at`,
@@ -289,6 +314,11 @@ class Expense {
           expenseData.expenseDate || new Date(),
           expenseData.splitMeta ? JSON.stringify(expenseData.splitMeta) : null,
           expenseData.recurringRuleId || null,
+          expenseData.receiptPath || null,
+          expenseData.originalAmount ?? null,
+          expenseData.originalCurrency ?? null,
+          expenseData.fxRate ?? null,
+          expenseData.fxDate ?? null,
         ]
       );
       const expense = expenseResult.rows[0];

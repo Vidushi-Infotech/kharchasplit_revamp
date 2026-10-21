@@ -368,6 +368,16 @@ CREATE TABLE IF NOT EXISTS recurring_occurrences (
   PRIMARY KEY (rule_id, occurrence_date)
 );
 
+-- Daily exchange rates (services/fxService.js, migration 023).
+CREATE TABLE IF NOT EXISTS fx_rates (
+  rate_date DATE NOT NULL,
+  base VARCHAR(10) NOT NULL,
+  quote VARCHAR(10) NOT NULL,
+  rate DECIMAL(18, 8) NOT NULL,
+  fetched_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (rate_date, base, quote)
+);
+
 -- State of an expense before each edit (services/expenseHistory.js).
 CREATE TABLE IF NOT EXISTS expense_revisions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -424,6 +434,13 @@ const columnAdditions = [
   { table: 'expenses', column: 'notes', type: 'TEXT' },
   // How a plain-amount split was entered, e.g. {"mode":"adjustment",…}.
   { table: 'expenses', column: 'split_meta', type: 'JSONB' },
+  // Receipt photo file (services/receiptStore.js) and currency conversion
+  // (services/fxService.js) — migration 023.
+  { table: 'expenses', column: 'receipt_path', type: 'TEXT' },
+  { table: 'expenses', column: 'original_amount', type: 'DECIMAL(12, 2)' },
+  { table: 'expenses', column: 'original_currency', type: 'VARCHAR(10)' },
+  { table: 'expenses', column: 'fx_rate', type: 'DECIMAL(18, 8)' },
+  { table: 'expenses', column: 'fx_date', type: 'DATE' },
   // The recurring rule an expense was created from (migration 022).
   { table: 'expenses', column: 'recurring_rule_id', type: 'UUID REFERENCES recurring_rules(id) ON DELETE SET NULL' },
   { table: 'expenses', column: 'is_deleted', type: 'BOOLEAN DEFAULT FALSE' },
@@ -447,6 +464,7 @@ const columnAdditions = [
   // Personal expenses columns
   { table: 'personal_expenses', column: 'deleted_at', type: 'TIMESTAMP' },
   { table: 'personal_expenses', column: 'receipt_base64', type: 'TEXT' },
+  { table: 'personal_expenses', column: 'receipt_path', type: 'TEXT' },
   { table: 'personal_expenses', column: 'notes', type: 'TEXT' },
   { table: 'personal_expenses', column: 'is_deleted', type: 'BOOLEAN DEFAULT FALSE' },
 

@@ -8,3 +8,6 @@ __MACOSX/
 firebase-service-account.json
 firebase-service-account*.json
 *service-account*.json
+
+# Receipt photos (src/services/receiptStore.js) — user data, never commit
+uploads/

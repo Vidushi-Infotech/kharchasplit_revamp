@@ -8,6 +8,8 @@ import { cache } from '../services/cacheService.js';
 import { query, transaction } from '../config/database.js';
 import { FREQUENCIES, isDateString, toDateOnly } from '../utils/recurrence.js';
 import { templateFrom, insertRuleWithFirstExpense } from '../services/recurringService.js';
+import { prepareFx } from '../services/fxService.js';
+import { saveReceipt, deleteReceipt } from '../services/receiptStore.js';
 import { parsePayers, largestPayer, checkTotals, splitInput } from '../utils/expenseInput.js';
 
 /**
@@ -145,6 +147,24 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 const createExpense = async (req, res, next) => {
   try {
+    // Entered in another currency → amounts in the group's currency.
+    const fxGroup = await Group.findById(req.body.groupId);
+    let fx;
+    try {
+      ({ body: req.body, fx } = await prepareFx(req.body, fxGroup?.currency));
+    } catch (e) {
+      if (e.status) return res.status(e.status).json({ success: false, code: e.code, error: e.message });
+      throw e;
+    }
+    // A receipt photo is stored as a file (services/receiptStore.js).
+    let receiptPath;
+    try {
+      if (req.body.receiptBase64) receiptPath = await saveReceipt(req.body.receiptBase64);
+    } catch (e) {
+      if (e.status === 400) return res.status(400).json({ success: false, code: 'INVALID_RECEIPT', error: e.message });
+      throw e;
+    }
+
     const {
       groupId,
       description,
@@ -196,7 +216,8 @@ const createExpense = async (req, res, next) => {
       paidByName,
       splitType: split.splitType,
       splitMeta: split.splitMeta,
-      receiptBase64,
+      receiptPath,
+      ...(fx ?? {}),
       notes,
       // A calendar day in India: apps send local date-times or UTC instants
       // ("2026-10-20T18:30:00Z" is 21 Oct in India) — Postgres would keep
@@ -296,7 +317,7 @@ const createExpense = async (req, res, next) => {
 const updateExpense = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const {
+    let {
       description,
       amount,
       currency,
@@ -324,6 +345,33 @@ const updateExpense = async (req, res, next) => {
     // Verify user has access
     await GroupService.validateGroupAccess(existingExpense.group_id, req.user.id);
     if (rejectIfArchived(await Group.findById(existingExpense.group_id), res)) return;
+    // Entered in another currency → amounts in the group's currency. An
+    // edit that changes the amount without currency info (older app) drops
+    // the stale original-currency record.
+    let fx;
+    try {
+      const g = await Group.findById(existingExpense.group_id);
+      ({ body: req.body, fx } = await prepareFx(req.body, g?.currency));
+    } catch (e) {
+      if (e.status) return res.status(e.status).json({ success: false, code: e.code, error: e.message });
+      throw e;
+    }
+    if (!fx && req.body.amount !== undefined && existingExpense.original_currency) {
+      fx = { originalAmount: null, originalCurrency: null, fxRate: null, fxDate: null };
+    }
+    ({ amount, currency, participants } = req.body);
+    let receiptPath;
+    let oldReceiptPath;
+    try {
+      if (req.body.receiptBase64) {
+        receiptPath = await saveReceipt(req.body.receiptBase64);
+        oldReceiptPath = (await query('SELECT receipt_path FROM expenses WHERE id = $1', [id])).rows[0]?.receipt_path;
+      }
+    } catch (e) {
+      if (e.status === 400) return res.status(400).json({ success: false, code: 'INVALID_RECEIPT', error: e.message });
+      throw e;
+    }
+
     // Offline edits send the updated_at they were made against: if someone
     // changed the expense since, don't overwrite their edit blindly.
     if (req.body.baseUpdatedAt !== undefined && existingExpense.updated_at) {
@@ -394,7 +442,8 @@ const updateExpense = async (req, res, next) => {
       amount,
       currency,
       category,
-      receiptBase64,
+      receiptPath,
+      fx,
       notes,
       expenseDate: expenseDate === undefined || expenseDate === null ? undefined : toDateOnly(expenseDate),
       paidById: newPayerId,
@@ -410,6 +459,9 @@ const updateExpense = async (req, res, next) => {
       payers,
       editorId: req.user.id,
     });
+
+    // The replaced receipt file (if it was on disk) is no longer needed.
+    if (receiptPath && oldReceiptPath) await deleteReceipt(oldReceiptPath);
 
     // Invalidate group expense/balance caches + every member's dashboard.
     Expense.invalidateGroupExpenses(existingExpense.group_id);

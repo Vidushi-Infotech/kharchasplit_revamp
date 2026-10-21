@@ -28,6 +28,7 @@ import groupRoutes from './routes/groupRoutes.js';
 import expenseRoutes from './routes/expenseRoutes.js';
 import settlementRoutes from './routes/settlementRoutes.js';
 import recurringRoutes from './routes/recurringRoutes.js';
+import insightsRoutes from './routes/insightsRoutes.js';
 import personalExpenseRoutes from './routes/personalExpenseRoutes.js';
 import syncRoutes from './routes/syncRoutes.js';
 import activityRoutes from './routes/activityRoutes.js';
@@ -157,6 +158,8 @@ app.use(`/api/${API_VERSION}/groups`, groupRoutes);
 app.use(`/api/${API_VERSION}/expenses`, expenseRoutes);
 app.use(`/api/${API_VERSION}/settlements`, settlementRoutes);
 app.use(`/api/${API_VERSION}/recurring`, recurringRoutes);
+// /fx/rate, /search, /groups/:id/export.csv, /users/:id/expenses.csv
+app.use(`/api/${API_VERSION}`, insightsRoutes);
 app.use(`/api/${API_VERSION}/personal-expenses`, personalExpenseRoutes);
 app.use(`/api/${API_VERSION}/sync`, syncRoutes);
 app.use(`/api/${API_VERSION}/activities`, activityRoutes);
