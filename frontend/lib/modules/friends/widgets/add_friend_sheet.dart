@@ -19,6 +19,9 @@ import 'add_friend_result.dart';
 Future<void> showAddFriendSheet(BuildContext context) {
   return showModalBottomSheet<void>(
     context: context,
+    // Root navigator: from a tab screen the shell's floating bottom bar
+    // would otherwise cover the bottom of the sheet.
+    useRootNavigator: true,
     isScrollControlled: true,
     useSafeArea: true,
     showDragHandle: true,

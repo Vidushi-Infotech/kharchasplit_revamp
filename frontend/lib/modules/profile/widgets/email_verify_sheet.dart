@@ -25,6 +25,9 @@ class EmailVerifySheet extends ConsumerStatefulWidget {
   static Future<void> show(BuildContext context, {required String email}) {
     return showModalBottomSheet<void>(
       context: context,
+      // Root navigator: from a tab screen the shell's floating bottom bar
+      // would otherwise cover the bottom of the sheet.
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => EmailVerifySheet(email: email),

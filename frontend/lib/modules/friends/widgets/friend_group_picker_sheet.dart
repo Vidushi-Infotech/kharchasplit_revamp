@@ -16,6 +16,9 @@ Future<FriendGroupBalance?> showFriendGroupPicker(
 }) {
   return showModalBottomSheet<FriendGroupBalance>(
     context: context,
+    // Root navigator: from a tab screen the shell's floating bottom bar
+    // would otherwise cover the bottom of the sheet.
+    useRootNavigator: true,
     showDragHandle: true,
     isScrollControlled: true,
     builder: (context) {

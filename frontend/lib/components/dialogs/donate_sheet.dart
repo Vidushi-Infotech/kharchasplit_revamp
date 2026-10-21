@@ -19,6 +19,9 @@ Future<void> showDonateSheet(BuildContext context) {
   final isDark = Theme.of(context).brightness == Brightness.dark;
   return showModalBottomSheet<void>(
     context: context,
+    // Root navigator: from a tab screen the shell's floating bottom bar
+    // would otherwise cover the bottom of the sheet.
+    useRootNavigator: true,
     isScrollControlled: true,
     backgroundColor: AppColors.background(isDark),
     shape: const RoundedRectangleBorder(
