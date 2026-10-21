@@ -19,6 +19,7 @@ import '../../../models/user_model.dart';
 import '../../auth/state/auth_provider.dart';
 import '../widgets/account_shortcuts_section.dart';
 import '../widgets/email_verify_sheet.dart';
+import '../widgets/upi_id_row.dart';
 
 /// Default-currency preference row on the profile screen. See the
 /// comment at the use site for why it is off.
@@ -120,6 +121,8 @@ class _Body extends ConsumerWidget {
               ),
             ],
           ),
+          const SizedBox(height: 10),
+          UpiIdRow(upiId: user?.upiId, isDark: isDark),
           const SizedBox(height: 20),
           _SectionLabel(label: 'APPEARANCE', isDark: isDark),
           const SizedBox(height: 8),

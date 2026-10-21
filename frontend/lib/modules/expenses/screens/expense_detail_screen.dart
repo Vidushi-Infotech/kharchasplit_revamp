@@ -17,6 +17,7 @@ import '../../../data/groups/groups_repository.dart';
 import '../../../models/models.dart';
 import '../../auth/state/auth_provider.dart';
 import '../../dashboard/state/dashboard_provider.dart';
+import '../../groups/state/group_balance_helpers.dart';
 import '../../groups/state/group_detail_provider.dart';
 import '../state/expense_detail_provider.dart';
 import '../state/expense_error_message.dart';
@@ -87,15 +88,12 @@ class ExpenseDetailScreen extends ConsumerWidget {
               for (final m in members) m.id: m,
             };
 
-            // Net pairwise balance with each person, so the Settle Up / Remind
+            // Net balance with each person, so the Settle Up / Remind
             // buttons reflect the OUTSTANDING net (not this one expense's
-            // share). Once settled, the button disappears.
+            // share) — simplified in a "Simplify group debts" group, same as
+            // the Balances tab. Once settled, the button disappears.
             final netByUserId = (myId != null && groupDetail != null)
-                ? computePairwiseDebts(
-                    myId: myId,
-                    expenses: groupDetail.expenses,
-                    settlements: groupDetail.settlements,
-                  )
+                ? groupVisibleDebts(myId: myId, detail: groupDetail)
                 : const <String, double>{};
             // Already in-flight (pending) settlements I've sent — so Settle Up
             // only asks for the remainder.

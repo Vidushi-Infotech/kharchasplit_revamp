@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../components/components.dart';
 import '../../../core/responsive/breakpoints.dart';
+import '../../../core/state/feature_flags_provider.dart';
 import '../../../data/groups/groups_repository.dart';
 import '../../auth/state/auth_provider.dart';
 import '../state/group_detail_provider.dart';
@@ -12,6 +13,7 @@ import '../widgets/group_detail_layouts.dart';
 import '../widgets/group_detail_top_bar.dart';
 import '../widgets/group_lifecycle_actions.dart';
 import '../widgets/group_member_actions.dart';
+import '../widgets/group_simplify_debts.dart';
 
 class GroupDetailScreen extends ConsumerWidget {
   final String groupId;
@@ -61,15 +63,23 @@ class GroupDetailScreen extends ConsumerWidget {
             : () => exportGroup(groupId, context, ref, loadedDetail.group),
         lifecycleItems: loadedDetail == null
             ? const []
-            : buildGroupLifecycleMenuItems(isDark, loadedDetail.group),
+            : [
+                ...buildGroupLifecycleMenuItems(isDark, loadedDetail.group),
+                // The flag only hides the switch; a group simplified on a
+                // newer build still shows simplified balances.
+                if (watchFeature(ref, 'simplifyDebts'))
+                  buildSimplifyDebtsMenuItem(isDark, loadedDetail.group),
+              ],
         onLifecycleAction: loadedDetail == null
             ? null
-            : (value) => handleGroupLifecycleAction(
-                value,
-                context,
-                ref,
-                loadedDetail,
-              ),
+            : (value) => value == simplifyDebtsMenuValue
+                  ? showSimplifyDebtsSheet(context, groupId)
+                  : handleGroupLifecycleAction(
+                      value,
+                      context,
+                      ref,
+                      loadedDetail,
+                    ),
       ),
       body: detailAsync.when(
         loading: () => const ShimmerList(type: ShimmerListType.group),

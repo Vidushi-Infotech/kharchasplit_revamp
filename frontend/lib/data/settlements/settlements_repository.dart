@@ -13,6 +13,38 @@ class SettlementsApiException implements Exception {
   String toString() => message;
 }
 
+/// One group's balance with a friend on the Settle all balances screen.
+/// [amount] > 0 = I owe the friend in this group; < 0 = the friend owes me
+/// (the server's sign for `expected` / `current`).
+class SettleAllLine {
+  const SettleAllLine({
+    required this.groupId,
+    required this.groupName,
+    required this.amount,
+  });
+
+  final String groupId;
+  final String groupName;
+  final double amount;
+
+  factory SettleAllLine.fromJson(Map<String, dynamic> json) => SettleAllLine(
+        groupId: json['groupId'] as String,
+        groupName: (json['groupName'] as String?) ?? '',
+        amount: double.tryParse(json['amount'].toString()) ?? 0,
+      );
+}
+
+/// 409 `BALANCES_CHANGED` from settle-all: the balances moved since they
+/// were shown, nothing was recorded. [current] are the amounts to show now.
+class SettleAllBalancesChanged implements Exception {
+  SettleAllBalancesChanged(this.message, this.current);
+  final String message;
+  final List<SettleAllLine> current;
+
+  @override
+  String toString() => message;
+}
+
 class SettlementsRepository {
   SettlementsRepository(this._client);
   final ApiClient _client;
@@ -106,6 +138,45 @@ class SettlementsRepository {
     );
     final data = _ensureMap(res);
     return SettlementModel.fromJson(data);
+  }
+
+  /// Settles every group balance with [friendId] in [currency] with one
+  /// payment (POST /settlements/settle-all). [expected] must be exactly the
+  /// amounts shown. Returns the net total paid. Throws
+  /// [SettleAllBalancesChanged] on 409 and [SettlementsApiException] (with
+  /// the server's message) otherwise.
+  Future<double> settleAll({
+    required String friendId,
+    required String currency,
+    required List<SettleAllLine> expected,
+    SettlementMethod? method,
+    String? notes,
+  }) async {
+    final res = await _client.dio.post(
+      '/settlements/settle-all',
+      data: {
+        'friendId': friendId,
+        'currency': currency,
+        'expected': [
+          for (final l in expected)
+            {'groupId': l.groupId, 'amount': l.amount},
+        ],
+        if (method != null) 'method': method.apiValue,
+        if (notes != null && notes.isNotEmpty) 'notes': notes,
+      },
+    );
+    final body = res.data;
+    if (body is Map && body['code'] == 'BALANCES_CHANGED') {
+      throw SettleAllBalancesChanged(
+        (body['error'] ?? 'Balances changed').toString(),
+        ((body['current'] as List?) ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .map(SettleAllLine.fromJson)
+            .toList(),
+      );
+    }
+    final data = _ensureMap(res);
+    return double.tryParse(data['total'].toString()) ?? 0;
   }
 
   Future<void> confirm(String settlementId) async {

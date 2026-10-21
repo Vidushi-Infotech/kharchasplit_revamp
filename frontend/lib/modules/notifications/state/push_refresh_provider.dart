@@ -20,6 +20,8 @@ const _balanceTypes = <String>{
   'SETTLEMENT_CONFIRMED',
   'SETTLEMENT_DELETED',
   'BALANCE_WRITTEN_OFF',
+  'PAYMENT_NOT_RECEIVED',
+  'SETTLE_ALL_RECEIVED',
 };
 
 const _groupListTypes = <String>{
@@ -31,6 +33,10 @@ const _groupListTypes = <String>{
   'MEMBER_ADDED',
   'MEMBER_LEFT',
   'MEMBER_REMOVED',
+  // Group cards carry balances too; a rejected payment or a settle-all
+  // (which spans groups, no groupId) changes them.
+  'PAYMENT_NOT_RECEIVED',
+  'SETTLE_ALL_RECEIVED',
 };
 
 /// Keep-alive listener; read it once from the app root to start it.

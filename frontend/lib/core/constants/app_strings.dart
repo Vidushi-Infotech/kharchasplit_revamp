@@ -77,6 +77,30 @@ abstract final class AppStrings {
       '$from paid $to $amount';
   static const paymentMethod = 'Paid with';
   static const paymentRecorded = 'Payment recorded';
+  static String settleAllBalancesIn(String currency) =>
+      'Settle all balances ($currency)';
+  static const settleUpOneGroup = 'Settle up one group';
+  static String settleAllGroupYouOwe(String group, String amount) =>
+      '$group — you owe $amount';
+  static String settleAllGroupOwesYou(
+    String group,
+    String name,
+    String amount,
+  ) =>
+      '$group — $name owes you $amount';
+  static String totalYouPay(String name, String amount) =>
+      'Total you pay $name: $amount';
+  static String settleAllExplain(int groups) =>
+      'Balances in all $groups groups are settled with one payment.';
+  static String recordAmountPayment(String amount) =>
+      'Record $amount payment';
+  static const balancesChangedCheckTotal =
+      'Balances changed — check the new total';
+  static String settledUpWithName(String name) => 'Settled up with $name';
+  static String nothingToPayName(String name) =>
+      "You don't owe $name anything overall right now.";
+  static const nothingToSettle = 'Nothing to settle';
+  static const notesOptional = 'Notes (optional)';
 
   // ── Groups & people ─────────────────────────────────────────────────
   static const groups = 'Groups';
@@ -108,6 +132,19 @@ abstract final class AppStrings {
   static String completeNeedsSettle(String amount) =>
       '$amount is still unsettled in this group. Everyone needs to be '
       'settled up before it can be marked complete.';
+  static const simplifyGroupDebts = 'Simplify group debts';
+  static const simplifyGroupDebtsHint =
+      'Combines debts to reduce the number of payments. Nobody owes more or '
+      'less in total.';
+  static const simplifyDebtsTurnedOn = 'Simplify group debts turned on';
+  static const simplifyDebtsTurnedOff = 'Simplify group debts turned off';
+  static const simplified = 'Simplified';
+  static const simplifiedBalancesHint =
+      'Simplify group debts is on: debts are combined to reduce the number '
+      'of payments, so who you pay can differ from the expense log. Nobody '
+      'owes more or less in total.';
+  static const on = 'On';
+  static const off = 'Off';
 
   // ── Navigation (tab bar, Account, Groups list) ─────────────────────
   static const personalExpenses = 'Personal expenses';
@@ -128,4 +165,55 @@ abstract final class AppStrings {
   static const whatsNewAccount =
       'Personal expenses and Reports are under Account';
   static const gotIt = 'Got it';
+
+  // ── UPI (pay by UPI, UPI ID on the profile) ─────────────────────────
+  static const upiId = 'UPI ID';
+  static const upiIdHint = 'name@okhdfcbank';
+  static const upiIdHelper =
+      'So friends can pay you with one tap. Only people who owe you can see it.';
+  static const upiIdInvalid = 'Enter a valid UPI ID, like name@okhdfcbank';
+  static const addUpiId = 'Add';
+  static String upiNote(String group) => 'KharchaSplit - $group';
+  static String payWithUpi(String amount) => 'Pay $amount with UPI';
+  static const upiLimitWarning = 'UPI allows up to ₹1,00,000 per payment';
+  static String askForUpiId(String name) => 'Ask $name for their UPI ID';
+  static String upiIdRequested(String name) =>
+      'Asked $name to add their UPI ID';
+  static String didUpiPaymentGoThrough(String amount, String name) =>
+      'Did your $amount payment to $name go through?';
+  static const upiCheckYourApp =
+      'Check your UPI app. Only record it once the money has left your account.';
+  static String yesRecordAmount(String amount) => 'Yes, record $amount';
+  static const upiNotPaid = 'No';
+  static const iHavePaidRecordIt = 'I’ve paid — record it';
+  static String payNameByUpi(String name) => 'Pay $name by UPI';
+  static const noUpiAppFound =
+      'No UPI app opened. Copy the UPI ID or scan the QR with your phone.';
+  static const scanWithUpiApp = 'Scan with any UPI app';
+  static const copyUpiId = 'Copy UPI ID';
+  static const upiIdCopied = 'UPI ID copied';
+  static const iHavePaid = 'I’ve paid';
+  static const upiRequestFailed =
+      'Could not send the request. Check your connection.';
+
+  // ── Payment checks ("Not received") ─────────────────────────────────
+  static const notReceived = 'Not received';
+  static const markNotReceivedTitle = 'Payment not received?';
+  static String markNotReceivedBody(String amount, String name) =>
+      'Mark $amount from $name as not received? The payment will be '
+      'removed and the amount will show as owed again. $name will be '
+      'notified.';
+  static const markNotReceived = 'Mark not received';
+  static const keepPayment = 'Cancel';
+  static String markedNotReceived(String name) =>
+      'Payment removed. $name has been notified.';
+  static const notReceivedFailed =
+      'Could not update the payment. Check your connection.';
+
+  // ── Settle all + UPI ────────────────────────────────────────────────
+  static String upiRecordedInGroup(String group) =>
+      'Balances had changed, so your UPI payment was recorded in $group';
+  static String upiPaidNotRecorded(String error) =>
+      'Your UPI payment went through but could not be recorded ($error). '
+      'Record it from the group with "Record payment".';
 }

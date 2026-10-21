@@ -327,6 +327,12 @@ class _NotificationCard extends StatelessWidget {
         return Icons.money_off_rounded;
       case 'SETTLEMENT_REMINDER':
         return Icons.alarm_rounded;
+      case 'SETTLE_ALL_RECEIVED':
+        return Icons.done_all_rounded;
+      case 'PAYMENT_NOT_RECEIVED':
+        return Icons.report_gmailerrorred_rounded;
+      case 'UPI_ID_REQUESTED':
+        return Icons.account_balance_wallet_outlined;
       case 'GROUP_INVITE':
         return Icons.group_add_rounded;
       case 'MEMBER_ADDED':
@@ -353,8 +359,10 @@ class _NotificationCard extends StatelessWidget {
     switch (type) {
       case 'SETTLEMENT_CREATED':
       case 'SETTLEMENT_CONFIRMED':
+      case 'SETTLE_ALL_RECEIVED':
         return AppColors.success;
       case 'SETTLEMENT_REMINDER':
+      case 'PAYMENT_NOT_RECEIVED':
         return AppColors.warning;
       case 'GROUP_INVITE':
       case 'MEMBER_ADDED':

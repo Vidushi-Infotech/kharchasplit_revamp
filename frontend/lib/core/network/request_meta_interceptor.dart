@@ -18,6 +18,7 @@ class RequestMetaInterceptor extends Interceptor {
   static const _idempotentPaths = {
     '/expenses',
     '/settlements',
+    '/settlements/settle-all',
     '/groups',
     '/personal-expenses',
   };

@@ -72,5 +72,11 @@
             <action android:name="android.intent.action.VIEW"/>
             <data android:scheme="whatsapp"/>
         </intent>
+        <!-- Pay with UPI: lets url_launcher hand upi://pay links to the
+             installed UPI apps (GPay, PhonePe, Paytm, BHIM...). -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="upi"/>
+        </intent>
     </queries>
 </manifest>

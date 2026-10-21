@@ -1,11 +1,12 @@
 import 'package:collection/collection.dart';
+import '../../../models/group_model.dart';
 import '../widgets/balance_summary_cards.dart';
 import 'group_detail_provider.dart';
 
-/// Pairwise debts from the current user's perspective. Delegates to the
-/// shared [computePairwiseDebts] so the screen, the log rows and the
-/// expense-detail buttons all agree (and match the backend, which counts
-/// only confirmed settlements).
+/// Raw pairwise debts from [myId]'s perspective, ignoring "Simplify group
+/// debts". Delegates to the shared [computePairwiseDebts]. Only for what
+/// the server also checks raw (removing a member); balances shown to the
+/// user come from [groupVisibleDebts].
 Map<String, double> groupPairwiseDebts({
   required String myId,
   required GroupDetail detail,
@@ -17,6 +18,41 @@ Map<String, double> groupPairwiseDebts({
   );
 }
 
+/// The debts [myId] sees in the group, same sign as [computePairwiseDebts]
+/// (> 0 = I owe them). In a group with "Simplify group debts" on these are
+/// the server's simplified transfers (whatever the feature flag says), so
+/// the Balances tab, Settle up amounts and Remind match the server;
+/// otherwise the raw pairwise debts.
+Map<String, double> groupVisibleDebts({
+  required String myId,
+  required GroupDetail detail,
+}) {
+  if (!detail.group.simplifyDebts) {
+    return groupPairwiseDebts(myId: myId, detail: detail);
+  }
+  return simplifiedPairDebts(
+    myId: myId,
+    transfers: detail.group.simplifiedTransfers,
+  );
+}
+
+/// [myId]'s per-person map from simplified [transfers]: from = me → I owe
+/// `to`; to = me → `from` owes me.
+Map<String, double> simplifiedPairDebts({
+  required String myId,
+  required List<SimplifiedTransfer> transfers,
+}) {
+  final pair = <String, double>{};
+  for (final t in transfers) {
+    if (t.fromUserId == myId) {
+      pair[t.toUserId] = (pair[t.toUserId] ?? 0) + t.amount;
+    } else if (t.toUserId == myId) {
+      pair[t.fromUserId] = (pair[t.fromUserId] ?? 0) - t.amount;
+    }
+  }
+  return pair;
+}
+
 /// Per-person net balances vs. the current user, sorted by magnitude
 /// (largest first) for the balance cards carousel.
 List<BalanceCardData> buildBalanceCardData({
@@ -24,7 +60,7 @@ List<BalanceCardData> buildBalanceCardData({
   required GroupDetail detail,
   Map<String, double> pendingOut = const {},
 }) {
-  final pair = groupPairwiseDebts(myId: myId, detail: detail);
+  final pair = groupVisibleDebts(myId: myId, detail: detail);
   final cards = <BalanceCardData>[];
 
   // "You" card first — my net across the group (positive = I'm owed).

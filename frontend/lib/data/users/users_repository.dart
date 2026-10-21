@@ -150,6 +150,68 @@ extension EmailVerificationApi on UsersRepository {
   }
 }
 
+/// What the payer needs to pay someone by UPI (GET /users/:id/payment-info).
+class PaymentInfo {
+  const PaymentInfo({
+    required this.userId,
+    required this.name,
+    required this.hasUpiId,
+    required this.upiId,
+    required this.owedAmount,
+  });
+
+  final String userId;
+  final String name;
+  final bool hasUpiId;
+
+  /// Only sent while the caller owes this person money in a shared group —
+  /// VPAs often contain phone numbers, so the server withholds it otherwise.
+  final String? upiId;
+  final double owedAmount;
+
+  factory PaymentInfo.fromJson(Map<String, dynamic> json) {
+    final upi = json['upiId']?.toString().trim();
+    return PaymentInfo(
+      userId: (json['userId'] ?? '').toString(),
+      name: (json['name'] ?? '').toString(),
+      hasUpiId: json['hasUpiId'] == true,
+      upiId: upi == null || upi.isEmpty ? null : upi,
+      owedAmount: (json['owedAmount'] as num?)?.toDouble() ?? 0,
+    );
+  }
+}
+
+/// UPI ID on the profile + pay-by-UPI lookups (feature flag `upiPay`).
+extension UpiApi on UsersRepository {
+  /// Sets (or with null / "" clears) the caller's own UPI ID. The server
+  /// trims, lowercases and validates; a 400 surfaces as [UsersApiException]
+  /// carrying the server's message.
+  Future<void> updateUpiId(String userId, String? upiId) async {
+    final res = await _client.dio.put(
+      '/users/$userId',
+      data: {'upiId': (upiId == null || upiId.isEmpty) ? null : upiId},
+    );
+    _ensureEnvelope(res);
+  }
+
+  Future<PaymentInfo> fetchPaymentInfo(String userId) async {
+    final res = await _client.dio.get('/users/$userId/payment-info');
+    final data = _ensureEnvelope(res)['data'];
+    if (data is! Map) {
+      throw UsersApiException('Malformed response — expected object');
+    }
+    return PaymentInfo.fromJson(data.cast<String, dynamic>());
+  }
+
+  /// Pushes "please add your UPI ID" to [userId]. Throws with the server's
+  /// wording on 409 (already has one), 429 (asked in the last 24h) and 400
+  /// (caller doesn't owe them).
+  Future<void> requestUpiId(String userId) async {
+    final res = await _client.dio.post('/users/$userId/upi-request');
+    _ensureEnvelope(res);
+  }
+}
+
 final usersRepositoryProvider = Provider<UsersRepository>((ref) {
   return UsersRepository(ref.watch(apiClientProvider));
 });

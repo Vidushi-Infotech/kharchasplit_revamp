@@ -19,6 +19,7 @@ import '../../groups/state/group_detail_provider.dart';
 import '../state/pending_settlements_provider.dart';
 import '../../groups/state/groups_provider.dart';
 import '../widgets/payment_method_selector.dart';
+import '../widgets/settle_upi_section.dart';
 
 class SettleScreen extends ConsumerStatefulWidget {
   const SettleScreen({
@@ -69,7 +70,8 @@ class _SettleScreenState extends ConsumerState<SettleScreen> {
     super.dispose();
   }
 
-  Future<void> _handleSubmit() async {
+  /// [method] overrides the picker — the UPI flow records with `upi`.
+  Future<void> _handleSubmit({SettlementMethod? method}) async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     final group = _selectedGroup;
     final me = ref.read(authProvider).user;
@@ -95,7 +97,7 @@ class _SettleScreenState extends ConsumerState<SettleScreen> {
             notes: _notesController.text.trim().isEmpty
                 ? null
                 : _notesController.text.trim(),
-            method: _method,
+            method: method ?? _method,
           );
       ref.invalidate(dashboardProvider);
       ref.invalidate(groupDetailProvider(group.id));
@@ -237,6 +239,16 @@ class _SettleScreenState extends ConsumerState<SettleScreen> {
                     minLines: 2,
                   ),
                   const SizedBox(height: 24),
+                  if (_selectedGroup != null && !_submitting)
+                    SettleUpiSection(
+                      recipientUserId: widget.recipientUserId,
+                      recipientName: recipient?.name ?? '',
+                      currency: _selectedGroup!.currency,
+                      groupName: _selectedGroup!.name,
+                      amountController: _amountController,
+                      onConfirmedPaid: () =>
+                          _handleSubmit(method: SettlementMethod.upi),
+                    ),
                   SizedBox(
                     width: double.infinity,
                     child: PrimaryButton(

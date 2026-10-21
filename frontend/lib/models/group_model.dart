@@ -50,6 +50,14 @@ class GroupModel extends Equatable {
 
   bool get isCompleted => completedAt != null;
 
+  /// "Simplify group debts" (PUT /groups/:id/simplify). When on, balances
+  /// are the server's [simplifiedTransfers], not raw pairwise debts.
+  final bool simplifyDebts;
+
+  /// Who should pay whom to settle the group with the fewest payments
+  /// (GET /groups/:id `balances`). Only filled on the group detail fetch.
+  final List<SimplifiedTransfer> simplifiedTransfers;
+
   const GroupModel({
     required this.id,
     required this.name,
@@ -67,6 +75,8 @@ class GroupModel extends Equatable {
     this.isArchived = false,
     this.archivedAt,
     this.completedAt,
+    this.simplifyDebts = false,
+    this.simplifiedTransfers = const [],
   });
 
   factory GroupModel.fromJson(Map<String, dynamic> json) {
@@ -109,6 +119,11 @@ class GroupModel extends Equatable {
       isArchived: (json['isArchived'] ?? json['is_archived'] ?? false) == true,
       archivedAt: _date(json['archivedAt'] ?? json['archived_at']),
       completedAt: _date(json['completedAt'] ?? json['completed_at']),
+      simplifyDebts: (json['simplifyDebts'] ?? false) == true,
+      simplifiedTransfers: ((json['balances'] as List?) ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(SimplifiedTransfer.fromJson)
+          .toList(),
     );
   }
 
@@ -132,6 +147,8 @@ class GroupModel extends Equatable {
     bool? isArchived,
     DateTime? archivedAt,
     DateTime? completedAt,
+    bool? simplifyDebts,
+    List<SimplifiedTransfer>? simplifiedTransfers,
   }) {
     return GroupModel(
       id: id ?? this.id,
@@ -150,6 +167,8 @@ class GroupModel extends Equatable {
       isArchived: isArchived ?? this.isArchived,
       archivedAt: archivedAt ?? this.archivedAt,
       completedAt: completedAt ?? this.completedAt,
+      simplifyDebts: simplifyDebts ?? this.simplifyDebts,
+      simplifiedTransfers: simplifiedTransfers ?? this.simplifiedTransfers,
     );
   }
 
@@ -190,5 +209,30 @@ class GroupModel extends Equatable {
         isArchived,
         archivedAt,
         completedAt,
+        simplifyDebts,
+        simplifiedTransfers,
       ];
+}
+
+/// One payment in a group's simplified settle-up plan.
+class SimplifiedTransfer extends Equatable {
+  const SimplifiedTransfer({
+    required this.fromUserId,
+    required this.toUserId,
+    required this.amount,
+  });
+
+  final String fromUserId;
+  final String toUserId;
+  final double amount;
+
+  factory SimplifiedTransfer.fromJson(Map<String, dynamic> json) =>
+      SimplifiedTransfer(
+        fromUserId: json['fromUserId'] as String,
+        toUserId: json['toUserId'] as String,
+        amount: double.tryParse(json['amount'].toString()) ?? 0,
+      );
+
+  @override
+  List<Object?> get props => [fromUserId, toUserId, amount];
 }

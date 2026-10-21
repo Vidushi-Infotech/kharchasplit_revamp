@@ -12,6 +12,7 @@ import 'group_member_actions.dart';
 import 'pending_incoming_settlements_section.dart';
 import 'pending_outgoing_settlements_section.dart';
 import 'received_settlements_section.dart';
+import 'simplified_balances_chip.dart';
 
 Widget buildGroupBalancesTab(
   String groupId,
@@ -44,7 +45,7 @@ Widget buildGroupBalancesTab(
   // once everything's settled" rather than reacting to a single expense).
   final pair = myId == null
       ? const <String, double>{}
-      : groupPairwiseDebts(myId: myId, detail: detail);
+      : groupVisibleDebts(myId: myId, detail: detail);
 
   // Per-split log entries, computed once and rendered lazily below.
   final logEntries = buildSplitLogEntries(
@@ -74,7 +75,16 @@ Widget buildGroupBalancesTab(
             if (cards.isEmpty)
               _buildAllSettledCard(isDark, pad)
             else ...[
-              _buildSectionHeader('Balances', isDark: isDark, padding: pad),
+              _buildSectionHeader(
+                'Balances',
+                isDark: isDark,
+                padding: pad,
+                // Shown whenever the group is simplified, even with the
+                // simplifyDebts flag off — the numbers are simplified.
+                trailing: detail.group.simplifyDebts
+                    ? const SimplifiedBalancesChip()
+                    : null,
+              ),
               const SizedBox(height: 8),
               BalanceSummaryCards(
                 entries: cards,
@@ -191,16 +201,20 @@ Widget _buildSectionHeader(
   String label, {
   required bool isDark,
   required double padding,
+  Widget? trailing,
 }) {
+  final text = Text(
+    label.toUpperCase(),
+    style: AppTextStyles.caption(isDark).copyWith(
+      color: AppColors.textSecondary(isDark),
+      fontWeight: FontWeight.w700,
+      letterSpacing: 0.6,
+    ),
+  );
   return Padding(
     padding: EdgeInsets.fromLTRB(padding, 4, padding, 8),
-    child: Text(
-      label.toUpperCase(),
-      style: AppTextStyles.caption(isDark).copyWith(
-        color: AppColors.textSecondary(isDark),
-        fontWeight: FontWeight.w700,
-        letterSpacing: 0.6,
-      ),
-    ),
+    child: trailing == null
+        ? text
+        : Row(children: [text, const SizedBox(width: 8), trailing]),
   );
 }

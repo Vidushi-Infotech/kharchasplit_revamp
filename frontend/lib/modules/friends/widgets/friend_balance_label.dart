@@ -19,15 +19,25 @@ String formatFriendAmount(double amount, String currency) =>
     CurrencyFormatter.format(amount.abs(), currency: currency);
 
 /// "In Goa trip ₹500 · Flat ₹200 · +1 more" — only when the friend has
-/// balances in more than one group; `null` otherwise.
+/// balances in more than one group; `null` otherwise. When the groups go
+/// both ways each one says which: "Goa trip: you owe ₹500 · Flat: owes
+/// you ₹200".
 String? friendGroupsSubtitle(FriendBalance f) {
   if (f.groups.length < 2) return null;
+  final mixed = f.groups.any((g) => g.net > 0) && f.groups.any((g) => g.net < 0);
   final shown = f.groups
       .take(2)
-      .map((g) => '${g.groupName} ${formatFriendAmount(g.net, g.currency)}')
+      .map((g) {
+        final amount = formatFriendAmount(g.net, g.currency);
+        if (!mixed) return '${g.groupName} $amount';
+        return g.net > 0
+            ? '${g.groupName}: ${AppStrings.owesYou} $amount'
+            : '${g.groupName}: ${AppStrings.youOweLower} $amount';
+      })
       .join(' · ');
   final more = f.groups.length - 2;
-  return 'In $shown${more > 0 ? ' · +$more more' : ''}';
+  final prefix = mixed ? '' : 'In ';
+  return '$prefix$shown${more > 0 ? ' · +$more more' : ''}';
 }
 
 /// Right-aligned "owes you ₹X" / "you owe ₹X" / "settled up" for a friend

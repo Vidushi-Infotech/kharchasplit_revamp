@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_strings.dart';
+import '../../../core/state/feature_flags_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../data/groups/groups_repository.dart';
 import '../state/friend_detail_provider.dart';
@@ -11,7 +12,10 @@ import 'friend_group_picker_sheet.dart';
 
 /// Settle up (primary, when you owe them in some group) and Remind
 /// (secondary, when they owe you in some group). Multi-group balances ask
-/// which group first. Renders nothing when everything is settled.
+/// which group first. With the `settleAll` flag, owing them overall across
+/// several groups makes "Settle all balances" the primary action and the
+/// per-group Settle up secondary. Renders nothing when everything is
+/// settled.
 class FriendDetailActions extends ConsumerStatefulWidget {
   const FriendDetailActions({super.key, required this.friend});
 
@@ -35,51 +39,111 @@ class _FriendDetailActionsState extends ConsumerState<FriendDetailActions> {
       return const SizedBox.shrink();
     }
     final name = widget.friend.user.name;
+    // "Settle all balances" (flag `settleAll`): one per currency you owe in
+    // overall across 2+ groups. Per-group Settle up then becomes secondary.
+    final settleAllCurrencies = watchFeature(ref, 'settleAll')
+        ? widget.friend.settleAllCurrencies
+        : const <String>[];
+    final multiCurrency = widget.friend.netByCurrency.length > 1;
+
+    final buttons = <Widget>[
+      for (final currency in settleAllCurrencies)
+        _primary(
+          label: multiCurrency
+              ? AppStrings.settleAllBalancesIn(currency)
+              : AppStrings.settleAllBalances,
+          semantics: '${AppStrings.settleAllBalances} with $name, $currency',
+          icon: Icons.done_all_rounded,
+          onPressed: () => context.push(
+            '/settle-all/${widget.friend.user.id}?currency=$currency',
+          ),
+        ),
+      if (settleGroups.isNotEmpty)
+        settleAllCurrencies.isEmpty
+            ? _primary(
+                label: AppStrings.settleUp,
+                semantics: '${AppStrings.settleUp} with $name',
+                icon: Icons.check_circle_outline_rounded,
+                onPressed: () => _settle(settleGroups),
+              )
+            : _secondary(
+                isDark,
+                label: AppStrings.settleUpOneGroup,
+                semantics: '${AppStrings.settleUpOneGroup} with $name',
+                icon: Icons.check_circle_outline_rounded,
+                onPressed: () => _settle(settleGroups),
+              ),
+      if (remindGroups.isNotEmpty)
+        _secondary(
+          isDark,
+          label: AppStrings.remind,
+          semantics: '${AppStrings.remind} $name',
+          icon: Icons.notifications_none_rounded,
+          onPressed: _reminding ? null : () => _remind(remindGroups),
+        ),
+    ];
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (settleGroups.isNotEmpty)
-            Semantics(
-              button: true,
-              label: '${AppStrings.settleUp} with $name',
-              child: FilledButton.icon(
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.brand,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                icon: const Icon(Icons.check_circle_outline_rounded),
-                label: const Text(AppStrings.settleUp),
-                onPressed: () => _settle(settleGroups),
-              ),
-            ),
-          if (settleGroups.isNotEmpty && remindGroups.isNotEmpty)
-            const SizedBox(height: 8),
-          if (remindGroups.isNotEmpty)
-            Semantics(
-              button: true,
-              label: '${AppStrings.remind} $name',
-              child: OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.textSecondary(isDark),
-                  side: BorderSide(color: AppColors.divider(isDark)),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                icon: const Icon(Icons.notifications_none_rounded),
-                label: const Text(AppStrings.remind),
-                onPressed: _reminding ? null : () => _remind(remindGroups),
-              ),
-            ),
+          for (var i = 0; i < buttons.length; i++) ...[
+            if (i > 0) const SizedBox(height: 8),
+            buttons[i],
+          ],
         ],
+      ),
+    );
+  }
+
+  Widget _primary({
+    required String label,
+    required String semantics,
+    required IconData icon,
+    required VoidCallback onPressed,
+  }) {
+    return Semantics(
+      button: true,
+      label: semantics,
+      child: FilledButton.icon(
+        style: FilledButton.styleFrom(
+          backgroundColor: AppColors.brand,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        icon: Icon(icon),
+        label: Text(label),
+        onPressed: onPressed,
+      ),
+    );
+  }
+
+  Widget _secondary(
+    bool isDark, {
+    required String label,
+    required String semantics,
+    required IconData icon,
+    required VoidCallback? onPressed,
+  }) {
+    return Semantics(
+      button: true,
+      label: semantics,
+      child: OutlinedButton.icon(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.textSecondary(isDark),
+          side: BorderSide(color: AppColors.divider(isDark)),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        icon: Icon(icon),
+        label: Text(label),
+        onPressed: onPressed,
       ),
     );
   }

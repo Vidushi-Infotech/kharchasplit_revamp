@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../data/groups/groups_repository.dart';
+import '../../dashboard/state/dashboard_provider.dart';
 import 'group_detail_provider.dart';
 import 'groups_provider.dart';
 
@@ -35,9 +36,9 @@ class GroupNotSettledException implements Exception {
   final double openAmount;
 }
 
-/// Archive / unarchive / complete for the group detail screen. The API call
-/// plus the cache refresh live here; dialogs and snackbars stay in
-/// group_lifecycle_actions.dart.
+/// Archive / unarchive / complete / simplify debts for the group detail
+/// screen. The API call plus the cache refresh live here; dialogs and
+/// snackbars stay in group_lifecycle_actions.dart / group_simplify_debts.dart.
 class GroupLifecycleController {
   GroupLifecycleController(this._ref);
   final Ref _ref;
@@ -57,6 +58,14 @@ class GroupLifecycleController {
   Future<void> unarchive(String groupId) async {
     await _repo.unarchive(groupId);
     _refresh(groupId);
+  }
+
+  /// Admin only: "Simplify group debts" on/off. Every balance the user
+  /// sees (group, groups list, dashboard, friends) changes with it.
+  Future<void> setSimplifyDebts(String groupId, {required bool enabled}) async {
+    await _repo.setSimplifyDebts(groupId, enabled: enabled);
+    _refresh(groupId);
+    _ref.invalidate(dashboardProvider);
   }
 
   /// Marks the group complete. Throws [GroupNotSettledException] when the

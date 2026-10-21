@@ -7,10 +7,12 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../models/settlement_model.dart';
 import '../../settlements/state/payment_method_format.dart';
+import '../../settlements/widgets/not_received_button.dart';
 
 /// Payments other members have made to the current user. Settlements are
 /// final on creation (no confirm step), so this is how the recipient sees who
-/// has settled — the balance cards above show who still owes.
+/// has settled — the balance cards above show who still owes. Each row
+/// carries a small "Not received" action for payments that never arrived.
 class ReceivedSettlementsSection extends StatelessWidget {
   const ReceivedSettlementsSection({
     super.key,
@@ -112,6 +114,8 @@ class ReceivedSettlementsSection extends StatelessWidget {
                               isDark,
                             ).copyWith(color: AppColors.textSecondary(isDark)),
                           ),
+                          const SizedBox(width: 4),
+                          NotReceivedButton(settlement: s, groupId: groupId),
                         ],
                       ),
                     ),

@@ -4,11 +4,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../components/avatar/avatar_widget.dart';
+import '../../../core/constants/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/avatar_picker.dart';
 import '../../../models/user_model.dart';
+import '../../../data/users/users_repository.dart';
 import '../../auth/state/auth_provider.dart';
+import '../state/upi_id_controller.dart';
 import '../widgets/email_verify_sheet.dart';
 
 class EditProfileScreen extends ConsumerStatefulWidget {
@@ -22,6 +25,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameController;
   late final TextEditingController _emailController;
+  late final TextEditingController _upiController;
   bool _saving = false;
 
   /// Base64 of the freshly-picked image (no data URL prefix). Null until the
@@ -36,6 +40,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     final user = ref.read(authProvider).user;
     _nameController = TextEditingController(text: user?.name ?? '');
     _emailController = TextEditingController(text: user?.email ?? '');
+    _upiController = TextEditingController(text: user?.upiId ?? '');
     // The verify row below the field depends on whether the typed address
     // still matches the saved one.
     _emailController.addListener(_onEmailChanged);
@@ -77,6 +82,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     _nameController.dispose();
     _emailController.removeListener(_onEmailChanged);
     _emailController.dispose();
+    _upiController.dispose();
     super.dispose();
   }
 
@@ -110,13 +116,33 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     final nameChanged = newName != user.name;
     final emailChanged = newEmail != (user.email);
     final avatarChanged = _newAvatarBase64 != null;
+    final newUpi = normalizeUpiId(_upiController.text);
+    final upiChanged = newUpi != (user.upiId ?? '');
 
-    if (!nameChanged && !emailChanged && !avatarChanged) {
+    if (!nameChanged && !emailChanged && !avatarChanged && !upiChanged) {
       _showSnack('Nothing to save', success: false);
       return;
     }
 
     setState(() => _saving = true);
+    // UPI ID goes through its own call (authProvider.updateProfile doesn't
+    // carry it); it refreshes the signed-in user afterwards.
+    if (upiChanged) {
+      try {
+        await ref.read(upiIdControllerProvider).save(newUpi);
+      } on UsersApiException catch (e) {
+        if (!mounted) return;
+        setState(() => _saving = false);
+        _showSnack(e.message, success: false);
+        return;
+      } catch (_) {
+        if (!mounted) return;
+        setState(() => _saving = false);
+        _showSnack('Could not update profile', success: false);
+        return;
+      }
+      if (!mounted) return;
+    }
     final ok = await ref.read(authProvider.notifier).updateProfile(
           name: nameChanged ? newName : null,
           email: emailChanged ? newEmail : null,
@@ -293,6 +319,20 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                     hintIfEmpty: 'Not set',
                     lockedHint: "Phone can't be changed",
                   ),
+                  const SizedBox(height: 18),
+                  _SectionLabel(label: 'UPI ID', isDark: isDark),
+                  const SizedBox(height: 8),
+                  _Field(
+                    controller: _upiController,
+                    isDark: isDark,
+                    hint: AppStrings.upiIdHint,
+                    icon: Icons.account_balance_wallet_outlined,
+                    keyboardType: TextInputType.emailAddress,
+                    validator: (v) => isValidUpiId(v ?? '')
+                        ? null
+                        : AppStrings.upiIdInvalid,
+                  ),
+                  _HelperText(text: AppStrings.upiIdHelper, isDark: isDark),
                   const SizedBox(height: 32),
                   _GradientSaveButton(
                     isDark: isDark,
@@ -405,6 +445,23 @@ class _SectionLabel extends StatelessWidget {
       ),
     );
   }
+}
+
+class _HelperText extends StatelessWidget {
+  const _HelperText({required this.text, required this.isDark});
+  final String text;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(left: 2, top: 6),
+    child: Text(
+      text,
+      style: AppTextStyles.caption(
+        isDark,
+      ).copyWith(color: AppColors.textSecondary(isDark)),
+    ),
+  );
 }
 
 class _Field extends StatelessWidget {

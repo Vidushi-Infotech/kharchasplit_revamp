@@ -25,7 +25,7 @@ Widget buildGroupTabs(
   // matches what the Balances tab actually renders.
   int? balancesCount;
   if (detail != null && myId != null) {
-    final pair = groupPairwiseDebts(myId: myId, detail: detail);
+    final pair = groupVisibleDebts(myId: myId, detail: detail);
     balancesCount = pair.values.where((v) => v.abs() > 0.01).length;
   }
 

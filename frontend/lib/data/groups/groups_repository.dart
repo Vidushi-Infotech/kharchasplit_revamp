@@ -183,6 +183,14 @@ class GroupsRepository {
     _ensureSuccess(await _client.dio.put('/groups/$groupId/complete'));
   }
 
+  /// Admin only: turn "Simplify group debts" on or off. 403 for members.
+  Future<void> setSimplifyDebts(String groupId, {required bool enabled}) async {
+    _ensureSuccess(await _client.dio.put(
+      '/groups/$groupId/simplify',
+      data: {'enabled': enabled},
+    ));
+  }
+
   Future<void> delete(String groupId) async {
     final res = await _client.dio.delete('/groups/$groupId');
     _ensureSuccess(res);

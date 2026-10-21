@@ -26,6 +26,7 @@ import '../../modules/expenses/screens/expense_detail_screen.dart';
 import '../../modules/personal_expenses/screens/personal_expenses_screen.dart';
 import '../../modules/personal_expenses/screens/add_personal_expense_screen.dart';
 import '../../modules/reports/screens/reports_screen.dart';
+import '../../modules/settlements/screens/settle_all_screen.dart';
 import '../../modules/settlements/screens/settle_screen.dart';
 import '../../modules/settlements/screens/settlement_history_screen.dart';
 import '../../layouts/shell/mobile_shell.dart';
@@ -273,6 +274,15 @@ final appRouter = GoRouter(
               initialAmount: amount,
             );
           },
+        ),
+        // Settle all balances with one friend, one currency at a time.
+        GoRoute(
+          path: '/settle-all/:friendId',
+          name: 'settle-all',
+          builder: (context, state) => SettleAllScreen(
+            friendId: state.pathParameters['friendId']!,
+            currency: state.uri.queryParameters['currency'] ?? 'INR',
+          ),
         ),
         GoRoute(
           path: '/reports',

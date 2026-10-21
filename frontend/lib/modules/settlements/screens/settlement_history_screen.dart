@@ -15,6 +15,8 @@ import '../../../models/user_model.dart';
 import '../../auth/state/auth_provider.dart';
 import '../../groups/state/group_detail_provider.dart';
 import '../state/payment_method_format.dart';
+import '../../groups/state/group_balance_helpers.dart';
+import '../widgets/not_received_button.dart';
 
 /// History of settlements between the current user and one other member,
 /// scoped to a single group. Lists every transfer (pending, completed,
@@ -76,11 +78,10 @@ class SettlementHistoryScreen extends ConsumerWidget {
                 // what's happened and what's left.
                 final net = me == null
                     ? 0.0
-                    : (computePairwiseDebts(
-                            myId: me.id,
-                            expenses: detail.expenses,
-                            settlements: detail.settlements,
-                          )[otherUserId] ??
+                    // Simplified groups show the simplified view, like the
+                    // Balances tab card this screen was opened from.
+                    : (groupVisibleDebts(myId: me.id, detail: detail)[
+                              otherUserId] ??
                           0); // >0 ⇒ I owe them
                 final pendingFromMe = pair
                     .where(
@@ -180,6 +181,7 @@ class SettlementHistoryScreen extends ConsumerWidget {
                 _SettlementRow(
                   settlement: items[j],
                   myId: myId,
+                  groupId: groupId,
                   isDark: isDark,
                 ),
                 if (j < items.length - 1)
@@ -840,11 +842,13 @@ class _SettlementRow extends StatelessWidget {
   const _SettlementRow({
     required this.settlement,
     required this.myId,
+    required this.groupId,
     required this.isDark,
   });
 
   final SettlementModel settlement;
   final String myId;
+  final String groupId;
   final bool isDark;
 
   @override
@@ -976,6 +980,17 @@ class _SettlementRow extends StatelessWidget {
                     ),
                   ),
                 ],
+                if (!iPaid && settlement.status == SettlementStatus.completed)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: NotReceivedButton(
+                        settlement: settlement,
+                        groupId: groupId,
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),

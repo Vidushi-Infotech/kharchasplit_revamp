@@ -19,6 +19,11 @@ class UserModel extends Equatable {
 
   bool get isEmailVerified => emailVerifiedAt != null;
 
+  /// The user's own UPI VPA (e.g. name@okhdfcbank). Only ever present on
+  /// the signed-in user's profile; to pay someone else, use
+  /// GET /users/:id/payment-info.
+  final String? upiId;
+
   const UserModel({
     required this.id,
     required this.name,
@@ -31,6 +36,7 @@ class UserModel extends Equatable {
     required this.createdAt,
     this.isPlaceholder = false,
     this.emailVerifiedAt,
+    this.upiId,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -55,6 +61,7 @@ class UserModel extends Equatable {
       totalOwing: (json['totalOwing'] as num?)?.toDouble() ?? 0,
       createdAt: created is String ? DateTime.parse(created) : DateTime.now(),
       isPlaceholder: (json['isPlaceholder'] ?? json['is_placeholder'] ?? false) as bool,
+      upiId: (json['upiId'] ?? json['upi_id']) as String?,
     );
   }
 
@@ -71,6 +78,7 @@ class UserModel extends Equatable {
         'isPlaceholder': isPlaceholder,
         if (emailVerifiedAt != null)
           'emailVerifiedAt': emailVerifiedAt!.toIso8601String(),
+        if (upiId != null) 'upiId': upiId,
       };
 
   UserModel copyWith({
@@ -85,6 +93,8 @@ class UserModel extends Equatable {
     DateTime? createdAt,
     bool? isPlaceholder,
     DateTime? emailVerifiedAt,
+    String? upiId,
+    bool clearUpiId = false,
   }) {
     return UserModel(
       emailVerifiedAt: emailVerifiedAt ?? this.emailVerifiedAt,
@@ -98,6 +108,7 @@ class UserModel extends Equatable {
       totalOwing: totalOwing ?? this.totalOwing,
       createdAt: createdAt ?? this.createdAt,
       isPlaceholder: isPlaceholder ?? this.isPlaceholder,
+      upiId: clearUpiId ? null : (upiId ?? this.upiId),
     );
   }
 
@@ -114,5 +125,6 @@ class UserModel extends Equatable {
         createdAt,
         emailVerifiedAt,
         isPlaceholder,
+        upiId,
       ];
 }

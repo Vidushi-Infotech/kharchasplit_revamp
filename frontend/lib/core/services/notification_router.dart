@@ -18,6 +18,10 @@ import 'package:go_router/go_router.dart';
 ///   REMOVED_FROM_GROUP   → { type, groupId }  (no access any more → groups list)
 ///   BALANCE_WRITTEN_OFF  → { type, groupId }
 ///   NEW_LOGIN / PASSWORD_CHANGED / SESSIONS_REVOKED → { type }  (→ Security)
+///   UPI_ID_REQUESTED     → { type, requesterId, requesterName, amount }
+///                          (→ Edit profile, where the UPI ID is added)
+///   PAYMENT_NOT_RECEIVED → { type, groupId }  (receiver rejected a payment)
+///   SETTLE_ALL_RECEIVED  → { type, batchId }  (spans groups → Friends tab)
 class NotificationRouter {
   NotificationRouter._();
 
@@ -62,6 +66,7 @@ class NotificationRouter {
       case 'MEMBER_ADDED':
       case 'MEMBER_LEFT':
       case 'MEMBER_REMOVED':
+      case 'PAYMENT_NOT_RECEIVED':
         if (groupId != null && groupId.isNotEmpty) {
           router.push('/home/groups/$groupId');
         }
@@ -70,6 +75,14 @@ class NotificationRouter {
       case 'GROUP_DELETED':
       case 'REMOVED_FROM_GROUP':
         router.push('/home/groups');
+        return;
+
+      case 'UPI_ID_REQUESTED':
+        router.push('/home/profile/edit');
+        return;
+
+      case 'SETTLE_ALL_RECEIVED':
+        router.push('/home/friends');
         return;
 
       case 'NEW_LOGIN':

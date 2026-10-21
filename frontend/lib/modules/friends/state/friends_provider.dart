@@ -97,4 +97,17 @@ extension FriendBalanceX on FriendBalance {
   /// Groups where this friend owes you (remind candidates).
   List<FriendGroupBalance> get groupsOwingYou =>
       groups.where((g) => g.net > 0.005).toList();
+
+  /// Currencies where "Settle all balances" applies: you owe this friend
+  /// overall in that currency, across two or more groups (with one group,
+  /// the per-group Settle up is the same payment).
+  List<String> get settleAllCurrencies => [
+        for (final e in netByCurrency.entries)
+          if (e.value < -0.005 &&
+              groups
+                      .where((g) => g.currency == e.key && g.net.abs() > 0.005)
+                      .length >=
+                  2)
+            e.key,
+      ];
 }
