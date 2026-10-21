@@ -36,9 +36,12 @@ Widget buildGroupExpensesList(
           label: 'Expense - ${expense.title} for ₹${expense.amount}',
           child: ExpenseCard(
             expense: expense,
-            onTap: () {
-              context.push('/expense/${expense.id}');
-            },
+            // Not on the server yet: show it in Unsynced changes.
+            onTap: () => context.push(
+              expense.isPendingSync
+                  ? '/home/profile/unsynced'
+                  : '/expense/${expense.id}',
+            ),
           ),
         ),
       );

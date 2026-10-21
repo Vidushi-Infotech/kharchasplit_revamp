@@ -56,6 +56,11 @@ class AddExpenseState {
   /// then asks "just this one" or "this and future".
   final String? recurringRuleId;
 
+  /// Edit mode: the server's `updated_at` of the expense being edited, sent
+  /// as `baseUpdatedAt` so an edit made against an outdated copy (e.g.
+  /// offline) is refused (409 EDIT_CONFLICT) instead of overwriting.
+  final String? baseUpdatedAt;
+
   const AddExpenseState({
     this.title,
     this.amount = 0,
@@ -82,6 +87,7 @@ class AddExpenseState {
     this.usingGroupDefaultSplit = false,
     this.repeat = AddExpenseRepeat.never,
     this.recurringRuleId,
+    this.baseUpdatedAt,
   });
 
   AddExpenseState copyWith({
@@ -137,6 +143,7 @@ class AddExpenseState {
           usingGroupDefaultSplit ?? this.usingGroupDefaultSplit,
       repeat: repeat ?? this.repeat,
       recurringRuleId: recurringRuleId,
+      baseUpdatedAt: baseUpdatedAt,
     );
   }
 

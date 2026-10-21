@@ -40,6 +40,14 @@ class ExpenseModel extends Equatable {
   /// The recurring rule this expense was created from (null = one-off).
   final String? recurringRuleId;
 
+  /// Server `updated_at`, kept verbatim: sent back as `baseUpdatedAt` when
+  /// editing so a stale edit is refused rather than overwriting.
+  final String? updatedAtRaw;
+
+  /// Not from the server: 'pending' / 'failed' for a change still in the
+  /// offline outbox (shown with a badge), null otherwise.
+  final String? syncState;
+
   const ExpenseModel({
     required this.id,
     required this.title,
@@ -58,7 +66,11 @@ class ExpenseModel extends Equatable {
     this.payers = const [],
     this.splitMeta,
     this.recurringRuleId,
+    this.updatedAtRaw,
+    this.syncState,
   });
+
+  bool get isPendingSync => syncState != null;
 
   bool get isRecurring => recurringRuleId != null;
 
@@ -126,6 +138,7 @@ class ExpenseModel extends Equatable {
     return ExpenseModel(
       recurringRuleId:
           (json['recurring_rule_id'] ?? json['recurringRuleId']) as String?,
+      updatedAtRaw: (json['updated_at'] ?? json['updatedAt'])?.toString(),
       payers: payers,
       splitMeta: meta is Map<String, dynamic> ? meta : null,
       id: json['id'] as String,
@@ -188,6 +201,7 @@ class ExpenseModel extends Equatable {
     List<ExpensePayer>? payers,
     Map<String, dynamic>? splitMeta,
     String? recurringRuleId,
+    String? syncState,
   }) {
     return ExpenseModel(
       id: id ?? this.id,
@@ -207,6 +221,8 @@ class ExpenseModel extends Equatable {
       payers: payers ?? this.payers,
       splitMeta: splitMeta ?? this.splitMeta,
       recurringRuleId: recurringRuleId ?? this.recurringRuleId,
+      updatedAtRaw: updatedAtRaw,
+      syncState: syncState ?? this.syncState,
     );
   }
 
@@ -235,6 +251,8 @@ class ExpenseModel extends Equatable {
         payers,
         splitMeta,
         recurringRuleId,
+        updatedAtRaw,
+        syncState,
       ];
 }
 

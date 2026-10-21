@@ -423,4 +423,36 @@ abstract final class AppStrings {
   static String recurringPaidBy(String names) => 'Paid by $names';
   static const recurringOnlyCreatorOrAdmin =
       'Only the person who set it up or a group admin can change it.';
+
+  // ── Offline mode ────────────────────────────────────────────────────
+  static const offlineNoConnection = 'No internet connection';
+  static String offlineShowingDataFrom(String ago) =>
+      'Offline · showing data from $ago';
+  static const savedOffline =
+      'Saved offline — will sync when you\'re back online';
+  static const unsyncedChanges = 'Unsynced changes';
+  static String unsyncedChangesCount(int n) => 'Unsynced changes ($n)';
+  static const pendingSync = 'Pending sync';
+  static const notSynced = 'Not synced';
+  static const syncAllNow = 'Sync now';
+  static const retrySync = 'Retry';
+  static const discardChange = 'Discard';
+  static const discardChangeTitle = 'Discard this change?';
+  static const discardChangeBody =
+      'It was never sent, so nobody else will see it.';
+  static const noUnsyncedChanges = 'Everything is synced';
+  static const waitingForConnection = 'Waiting for connection';
+  static const syncing = 'Syncing…';
+  static String logoutUnsyncedWarning(int n) => n == 1
+      ? '1 change hasn\'t synced yet and will be lost if you log out.'
+      : '$n changes haven\'t synced yet and will be lost if you log out.';
+  static const syncConflict =
+      'Someone changed this expense while you were offline. Open it and edit again.';
+  static const syncExpenseDeleted = 'This expense was deleted, so the change was dropped.';
+  static const syncNotMember = 'You\'re no longer in this group.';
+  static const syncGroupArchived = 'This group is archived.';
+  static const openExpense = 'Open expense';
+  static const editConflictOnline =
+      'Someone else changed this expense just now. Close it, reopen and edit again.';
+  static const upiNeedsInternet = 'UPI needs an internet connection';
 }

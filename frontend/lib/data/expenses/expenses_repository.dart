@@ -25,6 +25,12 @@ class ExpensesApiException implements Exception {
   /// `payers`).
   bool get needsAppUpdate => code == 'UPDATE_APP';
 
+  /// 409: someone changed the expense since this edit's version.
+  bool get isEditConflict => code == 'EDIT_CONFLICT';
+
+  /// 410: the expense was deleted.
+  bool get isDeleted => code == 'EXPENSE_DELETED';
+
   @override
   String toString() => message;
 }
@@ -211,10 +217,15 @@ class ExpensesRepository {
     List<ExpenseParticipant>? participants,
     Map<String, int>? payersPaise,
     Map<String, dynamic>? splitMeta,
+    String? baseUpdatedAt,
+    String? groupId,
   }) async {
     final res = await _client.dio.put(
       '/expenses/$expenseId',
       data: {
+        // Not used by the server; lets an edit queued offline be shown in
+        // its group straight away.
+        'groupId': ?groupId,
         if (description != null) 'description': description,
         if (amount != null) 'amount': amount,
         if (currency != null) 'currency': normalizeCurrencyCode(currency),
@@ -228,6 +239,9 @@ class ExpensesRepository {
           'participants': participants.map((p) => p.toJson()).toList(),
         if (payersPaise != null) 'payers': expensePayersJson(payersPaise),
         'splitMeta': ?splitMeta,
+        // The version this edit was made against (409 EDIT_CONFLICT if the
+        // expense changed since).
+        'baseUpdatedAt': ?baseUpdatedAt,
       },
     );
     final data = _ensureMap(res);
@@ -249,8 +263,13 @@ class ExpensesRepository {
     }
   }
 
-  Future<void> delete(String expenseId) async {
-    final res = await _client.dio.delete('/expenses/$expenseId');
+  /// [groupId] only helps an offline-queued delete hide the expense in its
+  /// group right away; the server ignores it.
+  Future<void> delete(String expenseId, {String? groupId}) async {
+    final res = await _client.dio.delete(
+      '/expenses/$expenseId',
+      queryParameters: {'groupId': ?groupId},
+    );
     _ensureSuccess(res);
   }
 

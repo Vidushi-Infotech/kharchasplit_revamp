@@ -315,7 +315,7 @@ class ExpenseDetailScreen extends ConsumerWidget {
     final groupId = cachedExpense?.groupId;
 
     try {
-      await ref.read(expensesRepositoryProvider).delete(expenseId);
+      await ref.read(expensesRepositoryProvider).delete(expenseId, groupId: groupId);
       ref.invalidate(dashboardProvider);
       if (groupId != null) {
         ref.invalidate(groupDetailProvider(groupId));

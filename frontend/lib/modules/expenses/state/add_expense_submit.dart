@@ -140,6 +140,8 @@ Future<void> submitExpense(
       participants: participants,
       payersPaise: payersPaise,
       splitMeta: splitMeta,
+      baseUpdatedAt: state.baseUpdatedAt,
+      groupId: groupId,
     );
   } else {
     await repo.create(

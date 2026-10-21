@@ -65,6 +65,7 @@ AddExpenseState addExpenseStateFromExpense(ExpenseModel expense) {
     // Editing never auto-changes the category.
     categoryTouched: true,
     recurringRuleId: expense.recurringRuleId,
+    baseUpdatedAt: expense.updatedAtRaw,
   );
 }
 

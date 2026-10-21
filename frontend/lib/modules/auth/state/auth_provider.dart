@@ -4,6 +4,8 @@ import 'package:dio/dio.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/storage/local_store.dart';
+
 import '../../../core/network/api_client.dart';
 import '../../../core/services/push_service.dart';
 import '../../../data/auth/auth_repository.dart';
@@ -363,6 +365,7 @@ class AuthNotifier extends Notifier<AuthData> {
       await _repo.logout(refresh);
     }
     await _apiClient.tokens.clear();
+    await LocalStore.clearUserData();
     state = const AuthData();
   }
 
@@ -380,6 +383,7 @@ class AuthNotifier extends Notifier<AuthData> {
       throw Exception(body['error']?.toString() ?? 'Account deletion failed');
     }
     await _apiClient.tokens.clear();
+    await LocalStore.clearUserData();
     state = const AuthData();
   }
 
@@ -402,6 +406,7 @@ class AuthNotifier extends Notifier<AuthData> {
       // the user is signed out on this device.
     }
     await _apiClient.tokens.clear();
+    await LocalStore.clearUserData();
     state = const AuthData();
     return revoked;
   }

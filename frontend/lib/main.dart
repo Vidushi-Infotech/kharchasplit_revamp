@@ -7,6 +7,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 import 'core/state/feature_flags_provider.dart';
+import 'core/storage/local_store.dart';
+import 'modules/outbox/state/outbox_provider.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'components/banners/offline_banner.dart';
@@ -69,6 +71,9 @@ void main() async {
             tag: 'main', error: e, stackTrace: st);
       }
     }
+
+    // Offline cache + outbox (Hive). Never blocks startup on failure.
+    await LocalStore.init();
 
     runApp(
       const ProviderScope(
@@ -141,6 +146,8 @@ class _KharchaSplitAppState extends ConsumerState<KharchaSplitApp> {
     // Load server feature flags at start-up, so flag checks inside tap
     // handlers (watchFeature in a callback) don't read "still loading" as off.
     ref.listen(featureFlagsProvider, (_, _) {});
+    // Offline outbox: loads queued changes and sends them when possible.
+    ref.listen(outboxProvider, (_, _) {});
 
     return MaterialApp.router(
       title: 'Kharcha Split',

@@ -10,6 +10,7 @@ import '../../models/models.dart';
 import '../../modules/auth/state/auth_provider.dart';
 import '../../modules/expenses/state/expense_detail_settle.dart';
 import '../../modules/expenses/widgets/recurring_badge.dart';
+import '../../modules/outbox/widgets/sync_badge.dart';
 import '../text/currency_text.dart';
 
 /// Card widget for displaying a single expense
@@ -154,6 +155,13 @@ class ExpenseCard extends ConsumerWidget {
                           if (expense.isRecurring) ...[
                             const SizedBox(width: 6),
                             RecurringBadge(isDark: isDark),
+                          ],
+                          if (expense.isPendingSync) ...[
+                            const SizedBox(width: 6),
+                            SyncBadge(
+                              isDark: isDark,
+                              failed: expense.syncState == 'failed',
+                            ),
                           ],
                           if (showGroup) ...[
                             const SizedBox(width: 8),

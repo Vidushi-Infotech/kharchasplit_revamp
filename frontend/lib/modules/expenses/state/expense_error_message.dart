@@ -17,6 +17,8 @@ String expenseErrorMessage(Object error, {required String fallback}) {
     if (error.isPayersMismatch) return AppStrings.payersMismatch;
     if (error.isSplitMismatch) return AppStrings.splitMismatch;
     if (error.needsAppUpdate) return AppStrings.updateAppToEditExpense;
+    if (error.isEditConflict) return AppStrings.editConflictOnline;
+    if (error.isDeleted) return AppStrings.syncExpenseDeleted;
     return error.message;
   }
   return '$fallback: $error';

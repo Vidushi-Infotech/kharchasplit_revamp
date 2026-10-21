@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../outbox/state/outbox_provider.dart';
 
 /// "Tools" rows near the top of the Account tab. Personal expenses and
 /// Reports used to be primary tabs; with the Splitwise-style tab bar they
@@ -11,14 +13,23 @@ import '../../../core/theme/app_text_styles.dart';
 ///
 /// Styled to match the settings list on the Account screen (label + card
 /// of icon rows with dividers).
-class AccountShortcutsSection extends StatelessWidget {
+class AccountShortcutsSection extends ConsumerWidget {
   const AccountShortcutsSection({super.key, required this.isDark});
 
   final bool isDark;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final unsynced = ref.watch(unsyncedCountProvider);
     final rows = <_ShortcutRow>[
+      // Changes made offline that aren't on the server yet.
+      if (unsynced > 0)
+        _ShortcutRow(
+          icon: Icons.cloud_upload_outlined,
+          label: AppStrings.unsyncedChangesCount(unsynced),
+          isDark: isDark,
+          onTap: () => context.push('/home/profile/unsynced'),
+        ),
       _ShortcutRow(
         icon: Icons.account_balance_wallet_outlined,
         label: AppStrings.personalExpenses,

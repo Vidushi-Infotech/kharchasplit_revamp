@@ -20,6 +20,7 @@ import '../../modules/profile/screens/profile_screen.dart';
 import '../../modules/profile/screens/edit_profile_screen.dart';
 import '../../modules/profile/screens/notifications_settings_screen.dart';
 import '../../modules/profile/screens/security_screen.dart';
+import '../../modules/outbox/screens/unsynced_changes_screen.dart';
 import '../../modules/profile/screens/active_sessions_screen.dart';
 import '../../modules/profile/screens/policy_screen.dart';
 import '../../modules/expenses/screens/add_expense_screen.dart';
@@ -204,6 +205,11 @@ final appRouter = GoRouter(
           path: '/home/profile/notifications',
           name: 'notification-settings',
           builder: (context, state) => const NotificationsSettingsScreen(),
+        ),
+        GoRoute(
+          path: '/home/profile/unsynced',
+          name: 'unsynced-changes',
+          builder: (context, state) => const UnsyncedChangesScreen(),
         ),
         GoRoute(
           path: '/home/profile/security',

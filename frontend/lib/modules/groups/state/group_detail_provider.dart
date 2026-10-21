@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 
+import '../../../core/outbox/outbox_store.dart';
 import '../../../core/state/keep_alive_for.dart';
 import '../../../data/expenses/expenses_repository.dart';
 import '../../../data/groups/groups_repository.dart';
@@ -9,6 +10,8 @@ import '../../../models/expense_model.dart';
 import '../../../models/group_model.dart';
 import '../../../models/settlement_model.dart';
 import '../../../models/user_model.dart';
+import '../../auth/state/auth_provider.dart';
+import '../../outbox/state/outbox_overlay.dart';
 
 class GroupDetail {
   const GroupDetail({
@@ -49,8 +52,16 @@ final groupDetailProvider =
   ]);
 
   final group = results[0] as GroupModel;
-  final expenses = results[1] as List<ExpenseModel>;
-  final settlements = results[2] as List<SettlementModel>;
+  // With this user's unsent offline changes applied (marked pending); the
+  // outbox refreshes this provider whenever those change.
+  final withOutbox = applyOutbox(
+    groupId: groupId,
+    expenses: results[1] as List<ExpenseModel>,
+    settlements: results[2] as List<SettlementModel>,
+    items: OutboxStore.itemsFor(ref.read(authProvider).user?.id),
+  );
+  final expenses = withOutbox.expenses;
+  final settlements = withOutbox.settlements;
 
   final totalExpense = expenses.fold<double>(0, (s, e) => s + e.amount);
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/app_strings.dart';
+import '../../../core/state/connectivity_provider.dart';
 import '../../../core/state/feature_flags_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -47,6 +48,19 @@ class SettleUpiSection extends ConsumerWidget {
       return const SizedBox.shrink();
     }
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    // UPI needs the network (payment info, the UPI app, recording right
+    // after); manual "Record payment" below still works offline.
+    if (ref.watch(isOfflineProvider)) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Text(
+          AppStrings.upiNeedsInternet,
+          style: AppTextStyles.caption(isDark).copyWith(
+            color: AppColors.textSecondary(isDark),
+          ),
+        ),
+      );
+    }
     final infoAsync = ref.watch(paymentInfoProvider(recipientUserId));
 
     return infoAsync.when(

@@ -1,7 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/constants/app_strings.dart';
+import '../../core/outbox/outbox_item.dart';
+import '../../core/outbox/outbox_store.dart';
 import '../../core/state/connectivity_provider.dart';
+import '../../core/state/offline_data.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 
@@ -35,6 +41,30 @@ class _OfflineBannerState extends ConsumerState<OfflineBanner> {
   /// disposed during a transition).
   final GlobalKey<ScaffoldMessengerState> _messengerKey =
       GlobalKey<ScaffoldMessengerState>();
+
+  StreamSubscription<OutboxItem>? _queued;
+
+  @override
+  void initState() {
+    super.initState();
+    // A write that went to the offline outbox instead of the server.
+    _queued = OutboxStore.queued.listen((_) {
+      final messenger = _messengerKey.currentState;
+      if (messenger == null) return;
+      messenger.clearSnackBars();
+      messenger.showSnackBar(const SnackBar(
+        content: Text(AppStrings.savedOffline),
+        behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: 3),
+      ));
+    });
+  }
+
+  @override
+  void dispose() {
+    _queued?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -152,6 +182,15 @@ class _BannerContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final accent = AppColors.warning;
+    // Above the Navigator, so no Material ancestor: without one Flutter
+    // draws Text with the yellow "missing Material" underline.
+    return Material(
+      type: MaterialType.transparency,
+      child: _content(accent),
+    );
+  }
+
+  Widget _content(Color accent) {
     return Container(
       height: 32,
       width: double.infinity,
@@ -173,13 +212,20 @@ class _BannerContent extends StatelessWidget {
               color: accent,
             ),
             const SizedBox(width: 8),
-            Text(
-              'No internet connection',
-              style: AppTextStyles.caption(isDark).copyWith(
-                color: accent,
-                fontWeight: FontWeight.w700,
-                fontSize: 12,
-                letterSpacing: 0.2,
+            // "Offline · showing data from 2h ago" when cached data is on
+            // screen (core/network/cache_interceptor.dart).
+            ValueListenableBuilder<DateTime?>(
+              valueListenable: OfflineData.instance.staleSince,
+              builder: (context, since, _) => Text(
+                since == null
+                    ? AppStrings.offlineNoConnection
+                    : AppStrings.offlineShowingDataFrom(formatAgo(since)),
+                style: AppTextStyles.caption(isDark).copyWith(
+                  color: accent,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                  letterSpacing: 0.2,
+                ),
               ),
             ),
           ],

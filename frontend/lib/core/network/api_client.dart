@@ -10,6 +10,8 @@ import '../constants/api_config.dart';
 import '../services/connectivity_service.dart';
 import '../services/token_storage.dart';
 import '../state/connectivity_provider.dart';
+import '../outbox/outbox_interceptor.dart';
+import 'cache_interceptor.dart';
 import 'offline_interceptor.dart';
 import 'request_meta_interceptor.dart';
 import 'retry_interceptor.dart';
@@ -29,7 +31,13 @@ class ApiClient {
   ApiClient(this.tokens, this._connectivity) {
     dio = Dio(_baseOptions());
     _installCertificatePinning();
-    // Offline interceptor runs FIRST so requests fail fast and don't
+    // Offline read cache: stores good GET responses and answers from them
+    // while the device is offline (before the offline interceptor rejects).
+    dio.interceptors.add(CacheInterceptor(tokens, _connectivity));
+    // Offline writes (expenses, payments) go to the outbox instead of
+    // failing; also edits of expenses that only exist in the outbox.
+    dio.interceptors.add(OutboxInterceptor(tokens, _connectivity));
+    // Offline interceptor runs next so requests fail fast and don't
     // bother going through the auth interceptor while we're offline.
     dio.interceptors.add(OfflineInterceptor(_connectivity));
     // Version header + Idempotency-Key. Before the retry interceptor, so a
@@ -40,6 +48,11 @@ class ApiClient {
     // refreshed token if one landed in between.
     dio.interceptors.add(RetryInterceptor(dio));
     dio.interceptors.add(_AuthInterceptor(this));
+    // Last: a GET that still failed for lack of a connection (after the
+    // retries) is answered from the offline cache when possible.
+    dio.interceptors.add(CacheFallbackInterceptor());
+    // …and a write that failed for lack of a connection goes to the outbox.
+    dio.interceptors.add(OutboxFallbackInterceptor(tokens));
   }
 
   /// Shared by the main client and the token-refresh client so both get
