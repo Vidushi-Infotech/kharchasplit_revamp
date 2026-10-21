@@ -42,14 +42,15 @@ import GroupService from './groupService.js';
 const NOTIFICATION_TYPES = {
   SETTLEMENT_CREATED: {
     title: 'Payment received',
-    getBody: (data) => `${data.fromUserName} settled ${data.currency}${data.amount} with you`,
+    getBody: (data) => `${data.fromUserName} paid you ${data.currency}${data.amount}`
+      + (data.groupName ? ` in "${data.groupName}"` : ''),
     channelId: 'payments',
     prefKey: 'payment_received',
     email: EmailTemplates.settlementReceived,
   },
   SETTLEMENT_DELETED: {
-    title: 'Settlement removed',
-    getBody: (data) => `${data.actorName} removed the ${data.currency}${data.amount} settlement from ${data.fromUserName} to ${data.toUserName} in "${data.groupName}"`,
+    title: 'Payment deleted',
+    getBody: (data) => `${data.actorName} deleted the ${data.currency}${data.amount} payment from ${data.fromUserName} to ${data.toUserName} in "${data.groupName}"`,
     channelId: 'payments',
     prefKey: 'payment_received',
     email: EmailTemplates.settlementDeleted,
@@ -63,8 +64,8 @@ const NOTIFICATION_TYPES = {
   SETTLEMENT_REMINDER: {
     title: 'Time to settle up',
     getBody: (data) => (data.fromUserName
-      ? `You owe ${data.currency}${data.amount} to ${data.fromUserName} in ${data.groupName}`
-      : `You owe ${data.currency}${data.amount} in ${data.groupName}`),
+      ? `You owe ${data.fromUserName} ${data.currency}${data.amount} in "${data.groupName}"`
+      : `You owe ${data.currency}${data.amount} in "${data.groupName}"`),
     channelId: 'payments',
     prefKey: 'settlement_reminder',
     email: EmailTemplates.settlementReminder,
@@ -85,8 +86,8 @@ const NOTIFICATION_TYPES = {
     email: EmailTemplates.groupClosedSummary,
   },
   GROUP_COMPLETED: {
-    title: 'Group closed',
-    getBody: (data) => `"${data.groupName}" has been marked as complete`,
+    title: 'Group completed',
+    getBody: (data) => `"${data.groupName}" is all settled up and marked complete`,
     channelId: 'groups',
     prefKey: null,
     email: EmailTemplates.groupClosedSummary,
@@ -137,7 +138,7 @@ const NOTIFICATION_TYPES = {
   EXPENSE_ADDED: {
     title: 'New expense',
     getBody: (data) => `${data.paidByName} added "${data.description}" (${data.currency}${data.amount}) in "${data.groupName}"`
-      + (data.yourShare ? ` · your share ${data.currency}${data.yourShare}` : ''),
+      + (data.yourShare ? ` · you owe ${data.currency}${data.yourShare}` : ''),
     channelId: 'expenses',
     prefKey: 'new_expense',
   },

@@ -208,7 +208,7 @@ class ActivityService {
       entityType: this.ENTITY_TYPES.SETTLEMENT,
       entityId: settlementId,
       title: 'Settlement',
-      description: `${fromName} settled ${currency} ${amountNum.toFixed(2)} with ${toName} in "${groupName}"`,
+      description: `${fromName} paid ${toName} ${currency} ${amountNum.toFixed(2)} in "${groupName}"`,
       metadata: { groupName, fromName, toName, amount: amountNum, currency },
     });
   }
@@ -242,7 +242,7 @@ class ActivityService {
       entityType: this.ENTITY_TYPES.SETTLEMENT,
       entityId: settlementId,
       title: 'Settlement deleted',
-      description: `Deleted settlement between ${fromName} and ${toName} in "${groupName}"`,
+      description: `Deleted a payment from ${fromName} to ${toName} in "${groupName}"`,
       metadata: { groupName, fromName, toName },
     });
   }

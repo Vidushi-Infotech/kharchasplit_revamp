@@ -10,7 +10,7 @@ class Group {
     return cache.getOrSet(`group:${id}`, TTL.GROUP_DETAIL, async () => {
       const result = await query(
         `SELECT g.id, g.name, g.description, g.currency,
-                g.is_archived, g.created_by, g.created_at, g.updated_at,
+                g.is_archived, g.archived_at, g.completed_at, g.created_by, g.created_at, g.updated_at,
                 (SELECT COUNT(*) FROM group_members gm
                  WHERE gm.group_id = g.id AND gm.deleted_at IS NULL) as member_count,
                 (SELECT COUNT(*) FROM expenses e
@@ -31,7 +31,7 @@ class Group {
   static async findByIdFull(id) {
     const result = await query(
       `SELECT g.id, g.name, g.description, g.cover_image_base64, g.currency,
-              g.is_archived, g.created_by, g.created_at, g.updated_at,
+              g.is_archived, g.archived_at, g.completed_at, g.created_by, g.created_at, g.updated_at,
               (SELECT COUNT(*) FROM group_members gm
                WHERE gm.group_id = g.id AND gm.deleted_at IS NULL) as member_count,
               (SELECT COUNT(*) FROM expenses e
@@ -54,7 +54,7 @@ class Group {
     // render the actual photo (cover images are compressed to ~30-80KB).
     const result = await query(
       `SELECT g.id, g.name, g.description, g.created_by, g.created_at, g.updated_at,
-              g.currency, g.is_archived, g.cover_image_base64,
+              g.currency, g.is_archived, g.archived_at, g.completed_at, g.cover_image_base64,
               (SELECT COUNT(*) FROM group_members gm2
                WHERE gm2.group_id = g.id AND gm2.deleted_at IS NULL) as member_count,
               (SELECT COUNT(*) FROM expenses e
@@ -162,7 +162,8 @@ class Group {
    */
   static async archive(id) {
     const result = await query(
-      'UPDATE groups SET is_archived = TRUE WHERE id = $1 AND deleted_at IS NULL AND is_archived = FALSE RETURNING id',
+      `UPDATE groups SET is_archived = TRUE, archived_at = NOW()
+        WHERE id = $1 AND deleted_at IS NULL AND is_archived = FALSE RETURNING id`,
       [id]
     );
     if (result.rows.length > 0) cache.del(`group:${id}`);
@@ -170,11 +171,36 @@ class Group {
   }
 
   /**
-   * Unarchive group
+   * Mark a group complete: archived + completed_at. Also works on an
+   * already archived group. The caller checks that balances are settled.
+   */
+  static async complete(id) {
+    const result = await query(
+      `UPDATE groups
+          SET is_archived = TRUE,
+              archived_at = COALESCE(archived_at, NOW()),
+              completed_at = NOW()
+        WHERE id = $1 AND deleted_at IS NULL AND completed_at IS NULL
+        RETURNING id`,
+      [id]
+    );
+    if (result.rows.length > 0) cache.del(`group:${id}`);
+    return result.rows.length > 0;
+  }
+
+  /** Undo complete only (the group stays archived). */
+  static async uncomplete(id) {
+    await query('UPDATE groups SET completed_at = NULL WHERE id = $1', [id]);
+    cache.del(`group:${id}`);
+  }
+
+  /**
+   * Unarchive group (also clears completed)
    */
   static async unarchive(id) {
     const result = await query(
-      'UPDATE groups SET is_archived = FALSE WHERE id = $1 AND deleted_at IS NULL AND is_archived = TRUE RETURNING id',
+      `UPDATE groups SET is_archived = FALSE, archived_at = NULL, completed_at = NULL
+        WHERE id = $1 AND deleted_at IS NULL AND is_archived = TRUE RETURNING id`,
       [id]
     );
     if (result.rows.length > 0) cache.del(`group:${id}`);

@@ -57,7 +57,7 @@ const getSettlements = async (req, res, next) => {
  */
 const createSettlement = async (req, res, next) => {
   try {
-    const { groupId, fromUserId, toUserId, amount, currency, notes } = req.body;
+    const { groupId, fromUserId, toUserId, amount, currency, notes, method } = req.body;
 
     // Verify user has access
     await GroupService.validateGroupAccess(groupId, req.user.id);
@@ -87,6 +87,7 @@ const createSettlement = async (req, res, next) => {
       amount,
       currency,
       notes,
+      method,
       status: 'paid',
     });
 

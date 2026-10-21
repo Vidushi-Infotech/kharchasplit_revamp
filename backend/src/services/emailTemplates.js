@@ -136,11 +136,11 @@ function fmtWhen(iso) {
 export function settlementReceived(d, r) {
   const amount = formatMoney(d.amount, d.currencyCode);
   return {
-    subject: `${d.fromUserName} settled ${amount} with you on KharchaSplit`,
+    subject: `${d.fromUserName} paid you ${amount} on KharchaSplit`,
     ...renderLayout({
       heading: 'Payment received',
       greetingName: r.name,
-      paragraphs: [`${d.fromUserName} settled up with you in "${d.groupName}".`],
+      paragraphs: [`${d.fromUserName} paid you ${amount} in "${d.groupName}".`],
       highlight: amount,
       details: d.notes ? [['Note', d.notes]] : [],
       footnote: "The balance has been updated in the app. Open the group's Balances tab to see who has settled and who still owes.",
@@ -152,12 +152,12 @@ export function settlementReceived(d, r) {
 export function settlementDeleted(d, r) {
   const amount = formatMoney(d.amount, d.currencyCode);
   return {
-    subject: `A ${amount} settlement was removed in "${d.groupName}"`,
+    subject: `A ${amount} payment was deleted in "${d.groupName}"`,
     ...renderLayout({
-      heading: 'Settlement removed',
+      heading: 'Payment deleted',
       greetingName: r.name,
       paragraphs: [
-        `${d.actorName} removed a settlement of ${amount} from ${d.fromUserName} to ${d.toUserName} in "${d.groupName}".`,
+        `${d.actorName} deleted a ${amount} payment from ${d.fromUserName} to ${d.toUserName} in "${d.groupName}".`,
         'The balance has been recalculated, so that amount now shows as owed again.',
       ],
       highlight: amount,
@@ -170,7 +170,7 @@ export function settlementDeleted(d, r) {
 export function settlementReminder(d, r) {
   const amount = formatMoney(d.amount, d.currencyCode);
   return {
-    subject: `Reminder: you owe ${amount} to ${d.fromUserName} in "${d.groupName}"`,
+    subject: `Reminder: you owe ${d.fromUserName} ${amount} in "${d.groupName}"`,
     ...renderLayout({
       heading: 'Time to settle up',
       greetingName: r.name,
@@ -272,7 +272,7 @@ export function groupClosedSummary(d, r) {
   return {
     subject: `"${d.groupName}" was ${verb} — your summary`,
     ...renderLayout({
-      heading: d.closeKind === 'completed' ? 'Group closed' : 'Group archived',
+      heading: d.closeKind === 'completed' ? 'Group completed' : 'Group archived',
       greetingName: r.name,
       paragraphs: [
         `${d.actorName} ${verb} "${d.groupName}".`,

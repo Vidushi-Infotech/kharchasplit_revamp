@@ -88,6 +88,21 @@ const getExpense = async (req, res, next) => {
  * Create new expense
  * POST /api/v1/expenses
  */
+/**
+ * Archived (and completed) groups are read-only for expenses. Payments
+ * can still be recorded so open balances can be settled. Returns true
+ * when it has sent the 409.
+ */
+const rejectIfArchived = (group, res) => {
+  if (!group?.is_archived) return false;
+  res.status(409).json({
+    success: false,
+    code: 'GROUP_ARCHIVED',
+    error: 'This group is archived. Unarchive it to add or change expenses.',
+  });
+  return true;
+};
+
 const createExpense = async (req, res, next) => {
   try {
     const {
@@ -110,6 +125,7 @@ const createExpense = async (req, res, next) => {
 
     // Get group name for activity log
     const group = await Group.findById(groupId);
+    if (rejectIfArchived(group, res)) return;
 
     const expense = await Expense.create(
       {
@@ -211,6 +227,7 @@ const updateExpense = async (req, res, next) => {
 
     // Verify user has access
     await GroupService.validateGroupAccess(existingExpense.group_id, req.user.id);
+    if (rejectIfArchived(await Group.findById(existingExpense.group_id), res)) return;
 
     // Only the *original* payer may edit. Payer can be reassigned via
     // `paidById` in the body, but the caller must currently be the payer.
@@ -317,6 +334,7 @@ const deleteExpense = async (req, res, next) => {
         error: 'Only the person who added this expense can delete it.',
       });
     }
+    if (rejectIfArchived(await Group.findById(expense.group_id), res)) return;
 
     const deleted = await Expense.delete(id);
 

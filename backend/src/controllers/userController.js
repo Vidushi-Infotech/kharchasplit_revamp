@@ -1,4 +1,4 @@
-import { userPairNetsSql } from '../services/ledger.js';
+import { userPairNetsSql, toPaise, fromPaise } from '../services/ledger.js';
 import { query } from '../config/database.js';
 import User from '../models/User.js';
 import Group from '../models/Group.js';
@@ -856,6 +856,106 @@ const exportUserData = async (req, res, next) => {
  *   monthlySpending  — { 'YYYY-MM': amount } per calendar month in the window.
  *   topCategories    — categorySpending sorted desc, top 5, with categoryId.
  */
+/**
+ * Friends: everyone the user shares a group with, or still has a balance
+ * with (e.g. someone who has since left a shared group), with the net
+ * balance per friend across all groups and the per-group breakdown.
+ * GET /api/v1/users/:id/friends
+ *
+ * net > 0 = the friend owes the user; net < 0 = the user owes the friend.
+ * Balances come from the ledger (services/ledger.js), so they match the
+ * group Balances tab and the dashboard. Archived groups are included —
+ * their open balances are still real debts.
+ */
+const getFriends = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    if (id !== req.user.id) {
+      return res.status(403).json({ success: false, error: 'You can only fetch your own friends' });
+    }
+
+    const { rows: netRows } = await query(
+      `WITH my_groups AS (
+         SELECT g.id AS group_id, g.name, g.currency
+           FROM groups g
+           JOIN group_members gm ON gm.group_id = g.id
+          WHERE gm.user_id = $1 AND gm.deleted_at IS NULL AND g.deleted_at IS NULL
+       ),
+       pair_net AS (${userPairNetsSql('$1', 'IN (SELECT group_id FROM my_groups)')})
+       SELECT pn.other_user_id, pn.group_id, mg.name AS group_name, mg.currency, pn.net
+         FROM pair_net pn
+         JOIN my_groups mg ON mg.group_id = pn.group_id
+        WHERE pn.net <> 0`,
+      [id],
+    );
+
+    const { rows: shared } = await query(
+      `SELECT other.user_id, COUNT(DISTINCT other.group_id)::int AS shared_groups
+         FROM group_members me
+         JOIN groups g ON g.id = me.group_id AND g.deleted_at IS NULL
+         JOIN group_members other ON other.group_id = me.group_id
+                                 AND other.deleted_at IS NULL
+                                 AND other.user_id <> me.user_id
+        WHERE me.user_id = $1 AND me.deleted_at IS NULL
+        GROUP BY other.user_id`,
+      [id],
+    );
+
+    const friends = new Map();
+    const friend = (userId) => {
+      if (!friends.has(userId)) {
+        friends.set(userId, { userId, netPaise: 0, sharedGroupCount: 0, groups: [] });
+      }
+      return friends.get(userId);
+    };
+    for (const r of shared) friend(r.user_id).sharedGroupCount = r.shared_groups;
+    for (const r of netRows) {
+      const paise = toPaise(r.net);
+      if (paise === 0) continue;
+      const f = friend(r.other_user_id);
+      f.netPaise += paise;
+      f.groups.push({
+        groupId: r.group_id,
+        groupName: r.group_name,
+        currency: r.currency || 'INR',
+        net: Number(fromPaise(paise)),
+      });
+    }
+
+    const ids = [...friends.keys()];
+    const { rows: users } = ids.length === 0 ? { rows: [] } : await query(
+      `SELECT id, name, email, phone_number, profile_image_base64, is_placeholder
+         FROM users WHERE id = ANY($1::uuid[])`,
+      [ids],
+    );
+    const userById = new Map(users.map((u) => [u.id, u]));
+
+    const data = [...friends.values()]
+      .filter((f) => userById.has(f.userId))
+      .map((f) => {
+        const u = userById.get(f.userId);
+        f.groups.sort((a, b) => Math.abs(b.net) - Math.abs(a.net));
+        return {
+          userId: f.userId,
+          name: u.name || 'A member',
+          email: u.email || '',
+          phoneNumber: u.phone_number || '',
+          profileImageBase64: u.profile_image_base64 || null,
+          isPlaceholder: !!u.is_placeholder,
+          net: Number(fromPaise(f.netPaise)),
+          sharedGroupCount: f.sharedGroupCount,
+          groups: f.groups,
+        };
+      })
+      // Open balances first (largest first), then everyone else by name.
+      .sort((a, b) => (Math.abs(b.net) - Math.abs(a.net)) || a.name.localeCompare(b.name));
+
+    res.json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const getReports = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -1118,4 +1218,5 @@ export default {
   getDashboard,
   exportUserData,
   getReports,
+  getFriends,
 };

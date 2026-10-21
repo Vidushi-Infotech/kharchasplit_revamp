@@ -7,6 +7,9 @@ import settlementController from '../controllers/settlementController.js';
 
 const router = express.Router();
 
+// Also the settlements.method values (migration 018). NULL = not recorded.
+const SETTLEMENT_METHODS = ['cash', 'upi', 'bank_transfer', 'other'];
+
 router.get('/', authenticate, settlementController.getSettlements);
 
 router.post(
@@ -21,7 +24,9 @@ router.post(
       const num = typeof value === 'number' ? value : parseFloat(value);
       if (isNaN(num) || num < 0) throw new Error('amount must be a non-negative number');
       return true;
-    })
+    }),
+    body('method').optional({ values: 'null' }).isIn(SETTLEMENT_METHODS)
+      .withMessage(`method must be one of: ${SETTLEMENT_METHODS.join(', ')}`),
   ],
   validate,
   settlementController.createSettlement

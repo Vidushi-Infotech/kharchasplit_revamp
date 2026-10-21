@@ -337,6 +337,9 @@ const columnAdditions = [
   { table: 'groups', column: 'default_currency', type: "VARCHAR(10) DEFAULT 'INR'" },
   { table: 'groups', column: 'simplified_debts', type: 'BOOLEAN DEFAULT TRUE' },
   { table: 'groups', column: 'is_archived', type: 'BOOLEAN DEFAULT FALSE' },
+  { table: 'groups', column: 'archived_at', type: 'TIMESTAMP WITH TIME ZONE' },
+  // Set when a fully settled group is marked complete (it is archived too).
+  { table: 'groups', column: 'completed_at', type: 'TIMESTAMP WITH TIME ZONE' },
 
   // Expenses table columns
   { table: 'expenses', column: 'deleted_at', type: 'TIMESTAMP' },
@@ -357,6 +360,8 @@ const columnAdditions = [
   // Settlements columns
   { table: 'settlements', column: 'deleted_at', type: 'TIMESTAMP' },
   { table: 'settlements', column: 'notes', type: 'TEXT' },
+  // cash | upi | bank_transfer | other; NULL on older rows (shown as "Other").
+  { table: 'settlements', column: 'method', type: 'VARCHAR(20)' },
   { table: 'settlements', column: 'status', type: "VARCHAR(20) DEFAULT 'pending'" },
   { table: 'settlements', column: 'confirmed_at', type: 'TIMESTAMP' },
 

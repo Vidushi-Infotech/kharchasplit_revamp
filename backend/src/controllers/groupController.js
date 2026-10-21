@@ -1,4 +1,4 @@
-import { userPairNetsSql } from '../services/ledger.js';
+import { userPairNetsSql, groupNetPaise, fromPaise } from '../services/ledger.js';
 import ExcelJS from 'exceljs';
 
 import { query } from '../config/database.js';
@@ -99,6 +99,8 @@ const getGroups = async (req, res, next) => {
         createdAt: group.created_at,
         updatedAt: group.updated_at,
         isArchived: !!group.is_archived,
+        archivedAt: group.archived_at || null,
+        completedAt: group.completed_at || null,
         memberCount: parseInt(group.member_count) || 0,
         expenseCount: parseInt(group.expense_count) || 0,
         totalExpenses: parseFloat(group.total_expenses) || 0,
@@ -175,6 +177,8 @@ const getGroup = async (req, res, next) => {
         createdAt: group.created_at,
         updatedAt: group.updated_at,
         isArchived: !!group.is_archived,
+        archivedAt: group.archived_at || null,
+        completedAt: group.completed_at || null,
         memberCount: parseInt(group.member_count) || 0,
         expenseCount: parseInt(group.expense_count) || 0,
         totalExpenses: parseFloat(group.total_expenses) || 0,
@@ -1121,13 +1125,41 @@ const completeGroup = async (req, res, next) => {
       });
     }
 
-    const completed = await Group.archive(id);
+    // Complete means "all done": only a fully settled group qualifies.
+    // (Archive is the option for a group that still has open balances.)
+    const openBalance = async () => {
+      const net = await groupNetPaise(id);
+      let owed = 0;
+      for (const p of net.values()) if (p > 0) owed += p;
+      return owed;
+    };
+    const settleFirst = (owedPaise) => res.status(409).json({
+      success: false,
+      code: 'GROUP_NOT_SETTLED',
+      error: 'Settle all balances before marking this group complete',
+      openAmount: Number(fromPaise(owedPaise)),
+    });
+
+    const before = await openBalance();
+    if (before > 0) return settleFirst(before);
+
+    const completed = await Group.complete(id);
 
     if (!completed) {
       return res.status(404).json({
         success: false,
         error: 'Group not found or already completed',
       });
+    }
+
+    // An expense saved between the check and the update (before it could
+    // see the archived flag) would leave a "complete" group with a balance.
+    // Re-check and put the group back the way it was.
+    const after = await openBalance();
+    if (after > 0) {
+      if (group.is_archived) await Group.uncomplete(id);
+      else await Group.unarchive(id);
+      return settleFirst(after);
     }
 
     // Log activity
