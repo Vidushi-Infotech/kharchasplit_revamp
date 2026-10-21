@@ -87,17 +87,17 @@ class WhatsNewSheet extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               _Bullet(
-                icon: Icons.group_rounded,
+                icon: Icons.groups_rounded,
                 text: AppStrings.whatsNewGroups,
                 isDark: isDark,
               ),
               _Bullet(
-                icon: Icons.people_alt_rounded,
+                icon: Icons.person_rounded,
                 text: AppStrings.whatsNewFriends,
                 isDark: isDark,
               ),
               _Bullet(
-                icon: Icons.person_outline_rounded,
+                icon: Icons.account_circle_rounded,
                 text: AppStrings.whatsNewAccount,
                 isDark: isDark,
               ),

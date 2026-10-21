@@ -59,13 +59,13 @@ class TabletShell extends ConsumerWidget {
             ),
             destinations: [
               const NavigationRailDestination(
-                icon: Icon(Icons.group_rounded),
-                selectedIcon: Icon(Icons.group_rounded),
+                icon: Icon(Icons.groups_outlined),
+                selectedIcon: Icon(Icons.groups_rounded),
                 label: Text(AppStrings.groups),
               ),
               const NavigationRailDestination(
-                icon: Icon(Icons.people_alt_rounded),
-                selectedIcon: Icon(Icons.people_alt_rounded),
+                icon: Icon(Icons.person_outline_rounded),
+                selectedIcon: Icon(Icons.person_rounded),
                 label: Text(AppStrings.friends),
               ),
               NavigationRailDestination(
@@ -99,8 +99,8 @@ class TabletShell extends ConsumerWidget {
                 label: Text(AppStrings.activity),
               ),
               const NavigationRailDestination(
-                icon: Icon(Icons.person_outline_rounded),
-                selectedIcon: Icon(Icons.person_rounded),
+                icon: Icon(Icons.account_circle_outlined),
+                selectedIcon: Icon(Icons.account_circle_rounded),
                 label: Text(AppStrings.account),
               ),
             ],

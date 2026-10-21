@@ -32,7 +32,7 @@ class _NavDest {
 /// (Groups · Friends · Activity; the ➕ is the "Add expense" button above).
 const _primaryNav = <_NavDest>[
   _NavDest(
-    icon: Icons.group_rounded,
+    icon: Icons.groups_rounded,
     label: AppStrings.groups,
     location: '/home/groups',
     // Groups is the home tab now, so the old dashboard URL and the balance
@@ -46,7 +46,7 @@ const _primaryNav = <_NavDest>[
     ],
   ),
   _NavDest(
-    icon: Icons.people_alt_rounded,
+    icon: Icons.person_rounded,
     label: AppStrings.friends,
     location: '/home/friends',
     matches: ['/home/friends'],
@@ -77,7 +77,7 @@ const _secondaryNav = <_NavDest>[
 ];
 
 const _profileDest = _NavDest(
-  icon: Icons.person_rounded,
+  icon: Icons.account_circle_rounded,
   label: AppStrings.account,
   location: '/home/profile',
   matches: ['/home/profile'],

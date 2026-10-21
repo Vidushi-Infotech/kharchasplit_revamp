@@ -73,11 +73,12 @@ class MobileShell extends ConsumerWidget {
             },
             items: const [
               FloatingNavItem(
-                icon: Icons.group_rounded,
+                // Several people = a group; one person = a friend.
+                icon: Icons.groups_rounded,
                 label: AppStrings.groups,
               ),
               FloatingNavItem(
-                icon: Icons.people_alt_rounded,
+                icon: Icons.person_rounded,
                 label: AppStrings.friends,
               ),
               FloatingNavItem(
@@ -89,7 +90,7 @@ class MobileShell extends ConsumerWidget {
                 label: AppStrings.activity,
               ),
               FloatingNavItem(
-                icon: Icons.person_outline_rounded,
+                icon: Icons.account_circle_rounded,
                 label: AppStrings.account,
               ),
             ],
