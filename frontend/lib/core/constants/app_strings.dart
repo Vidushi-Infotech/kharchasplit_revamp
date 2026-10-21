@@ -151,6 +151,7 @@ abstract final class AppStrings {
   static const createGroup = 'Create a group';
   static const addPeople = 'Add people';
   static const invited = 'Invited';
+  static const invitedMember = 'Invited member';
   static const balances = 'Balances';
   static const totals = 'Totals';
   static const expenses = 'Expenses';
@@ -455,4 +456,111 @@ abstract final class AppStrings {
   static const editConflictOnline =
       'Someone else changed this expense just now. Close it, reopen and edit again.';
   static const upiNeedsInternet = 'UPI needs an internet connection';
+
+  // ── Group totals tab ────────────────────────────────────────────────
+  static const totalsTab = 'Totals';
+  static const periodThisMonth = 'This month';
+  static const periodLastMonth = 'Last month';
+  static const periodThisYear = 'This year';
+  static const periodAllTime = 'All time';
+  static const totalGroupSpending = 'Total group spending';
+  static const totalYouPaidFor = 'Total you paid for';
+  static const yourTotalShare = 'Your total share';
+  static const paymentsMadeReceived = 'Payments made / received';
+  static const totalsByCategory = 'By category';
+  static const totalsByMonth = 'By month';
+  static const totalsPaidVsShare = 'Paid vs share';
+  static const totalsPaid = 'Paid';
+  static const totalsShare = 'Share';
+  static const totalsYou = 'you';
+  static const totalsNoExpenses = 'No expenses in this period';
+  static const totalsNoExpensesHint = 'Pick another period or add an expense.';
+  static String totalsExpenseCount(int n) =>
+      n == 1 ? '1 expense' : '$n expenses';
+  static String totalsPendingExcluded(int n) => n == 1
+      ? '1 unsynced expense isn\'t included yet'
+      : '$n unsynced expenses aren\'t included yet';
+
+  // ── Search ──────────────────────────────────────────────────────────
+  static const search = 'Search';
+  static const searchHint = 'Search expenses, groups, friends';
+  static const searchStartHint = 'Find any expense, group or friend.';
+  static const searchTypeMore = 'Type at least 2 characters';
+  static const searchRecent = 'Recent searches';
+  static const searchClearRecent = 'Clear';
+  static String searchRemoveRecent(String q) => 'Remove "$q" from recent';
+  static const searchFailed = 'Could not search';
+  static const searchNeedsInternet = 'Search needs an internet connection';
+  static String searchNoResults(String q) => 'No results for "$q"';
+  static const searchNoResultsHint = 'Try a shorter or different word.';
+  static const searchClear = 'Clear search';
+
+  // ── Export (CSV, PDF statement) ─────────────────────────────────────
+  static const exportToExcel = 'Export to Excel';
+  static const exportToCsv = 'Export to CSV';
+  static const exportStatementPdf = 'Download group statement (PDF)';
+  static const exportMyExpensesCsv = 'Export my expenses (CSV)';
+  static const exportStatementPeriod = 'Statement period';
+  static const exportStatementPeriodHint =
+      'Balances are always as of today; the expense list follows the period.';
+  static const exportCreate = 'Create PDF';
+  static const exportPreparing = 'Preparing your file…';
+  static const exportFailed = 'Could not export';
+  static String exportShareSubject(String name) => 'KharchaSplit — $name';
+  static const statementTitle = 'Group statement';
+  static String statementGenerated(String date) => 'Generated on $date';
+  static String statementPeriod(String period) => 'Period: $period';
+  static const statementTotals = 'Totals';
+  static const statementBalances = 'Balances (as of today)';
+  static const statementWhoOwes = 'Who owes whom';
+  static const statementSimplified = 'Simplified debts are on for this group.';
+  static const statementAllSettled = 'Everyone is settled up.';
+  static const statementMember = 'Member';
+  static const statementNet = 'Net';
+  static const statementDate = 'Date';
+  static const statementDescription = 'Description';
+  static const statementAmount = 'Amount';
+  static const statementNoExpenses = 'No expenses in this period.';
+  static const statementPendingNote =
+      'Expenses still waiting to sync from this phone are not included.';
+  static String statementOwes(String from, String to) => '$from owes $to';
+
+  // ── Receipt scan & other currencies (add / edit expense form) ───────
+  static const receiptScanning = 'Reading the receipt…';
+  static String receiptUseTotal(String amount) =>
+      'Use $amount from the receipt?';
+  static const receiptFound = 'Found on the receipt';
+  static const receiptNoTotal = "Couldn't read the total";
+  static const receiptUnreadable = "Couldn't read this receipt";
+  static const receiptFieldAmount = 'Amount';
+  static const receiptFieldDate = 'Date';
+  static const receiptFieldTitle = 'Title';
+  static String receiptReplaces(String current) => 'Replaces $current';
+  static const receiptUse = 'Use';
+  static const receiptNotNow = 'Not now';
+  static const invalidReceipt =
+      "This receipt can't be uploaded. Use a photo or PDF under 8 MB.";
+  static const currencyTitle = 'Currency';
+  static const currencyGroupDefault = 'Group currency';
+  static const currencyRecent = 'Recent';
+  static String currencyTapToChange(String code) =>
+      'Currency $code. Tap to change';
+  static String fxApprox(String converted, String rateLine, String date) =>
+      '≈ $converted at $rateLine ($date)';
+  static const fxYourRate = 'your rate';
+  static const fxLoading = 'Getting the exchange rate…';
+  static const fxUnavailable = 'Exchange rate unavailable';
+  static const fxEnterRate = 'Enter rate';
+  static const fxChangeRate = 'Change';
+  static String fxRateQuestion(String from, String to) =>
+      'How much is 1 $from in $to?';
+  static const fxRateHint =
+      'Use the rate on your bank or card statement. Everyone in the group '
+      'sees this rate.';
+  static const fxUseRate = 'Use this rate';
+  static const fxUnavailableOnSave =
+      "Couldn't get the exchange rate. Tap Enter rate under the amount, "
+      'then save again.';
+  static String fxPaidOriginal(String amount, String rateLine, String date) =>
+      'Paid $amount · $rateLine on $date';
 }

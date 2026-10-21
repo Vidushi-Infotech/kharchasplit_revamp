@@ -23,9 +23,13 @@ class SplitAdjustmentBreakdown extends StatefulWidget {
     required this.onAdjustmentsChanged,
     required this.onIncludedMembersChanged,
     this.currentUserId,
+    this.currency = '₹',
   });
 
   final double totalAmount;
+
+  /// Symbol the amounts are in (the form's entry currency).
+  final String currency;
   final List<UserModel> members;
   final Map<String, double> adjustments;
   final Set<String> includedMemberIds;
@@ -129,12 +133,16 @@ class _SplitAdjustmentBreakdownState extends State<SplitAdjustmentBreakdown> {
                 controller: _controllers[m.id]!,
                 fieldLabel: AppStrings.adjustmentFor(m.name),
                 signed: true,
+                currency: widget.currency,
                 included: inSplit,
                 onIncludedChanged: (v) => _setIncluded(m.id, v),
                 onChanged: _pushAdjustments,
                 caption: inSplit && paise != null
                     ? AppStrings.owesAmount(
-                        CurrencyFormatter.format(paise / 100),
+                        CurrencyFormatter.format(
+                          paise / 100,
+                          currency: widget.currency,
+                        ),
                       )
                     : AppStrings.notInThisSplit,
                 captionColor: paise != null && paise < 0
@@ -151,7 +159,7 @@ class _SplitAdjustmentBreakdownState extends State<SplitAdjustmentBreakdown> {
                   ? AppStrings.nobodyInSplit
                   : tooLarge
                   ? AppStrings.adjustmentsTooLarge
-                  : '✓ ${CurrencyFormatter.format(widget.totalAmount)}',
+                  : '✓ ${CurrencyFormatter.format(widget.totalAmount, currency: widget.currency)}',
               style: AppTextStyles.body2(isDark).copyWith(
                 fontWeight: FontWeight.w700,
                 color: owed.isEmpty || tooLarge

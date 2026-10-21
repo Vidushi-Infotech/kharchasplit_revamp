@@ -21,6 +21,9 @@ class SplitBreakdownWidget extends StatefulWidget {
   /// "Name (Me)" so users can spot themselves at a glance.
   final String? currentUserId;
 
+  /// Symbol the amounts are in (the form's entry currency).
+  final String currency;
+
   const SplitBreakdownWidget({
     Key? key,
     required this.splitType,
@@ -31,6 +34,7 @@ class SplitBreakdownWidget extends StatefulWidget {
     required this.onSplitsChanged,
     required this.onIncludedMembersChanged,
     this.currentUserId,
+    this.currency = '₹',
   }) : super(key: key);
 
   @override
@@ -262,12 +266,12 @@ class _SplitBreakdownWidgetState extends State<SplitBreakdownWidget> {
           return (label: '✓ Balanced', color: AppColors.success);
         } else if (diff > 0) {
           return (
-            label: '₹${diff.toStringAsFixed(2)} remaining',
+            label: '${widget.currency}${diff.toStringAsFixed(2)} remaining',
             color: AppColors.warning,
           );
         } else {
           return (
-            label: 'Over by ₹${(-diff).toStringAsFixed(2)}',
+            label: 'Over by ${widget.currency}${(-diff).toStringAsFixed(2)}',
             color: AppColors.warning,
           );
         }
@@ -455,6 +459,7 @@ class _SplitBreakdownWidgetState extends State<SplitBreakdownWidget> {
               splitType: widget.splitType,
               totalAmount: widget.totalAmount,
               total: _getTotalIncluded(),
+              currency: widget.currency,
             ),
           ],
         ],
@@ -484,7 +489,7 @@ class _SplitBreakdownWidgetState extends State<SplitBreakdownWidget> {
             : '${pct.toStringAsFixed(1)}% of total';
       }
       statusCaption = value > 0
-          ? 'Owes ₹${value.toStringAsFixed(2)}'
+          ? 'Owes ${widget.currency}${value.toStringAsFixed(2)}'
           : 'Not yet assigned';
     } else if (!isIncluded) {
       statusCaption = AppStrings.notInThisSplit;
@@ -578,7 +583,9 @@ class _SplitBreakdownWidgetState extends State<SplitBreakdownWidget> {
                 ),
                 textAlign: TextAlign.center,
                 decoration: InputDecoration(
-                  prefixText: widget.splitType == SplitType.exact ? '₹' : null,
+                  prefixText: widget.splitType == SplitType.exact
+                      ? widget.currency
+                      : null,
                   suffixText: _getInputSuffix(widget.splitType),
                   hintText: _getInputHint(widget.splitType),
                   hintStyle: AppTextStyles.body2(

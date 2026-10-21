@@ -1,24 +1,26 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
-import '../../../core/utils/base64_async.dart';
 import '../state/add_expense_provider.dart';
 import 'add_expense_sheet_header.dart';
-import 'invoice_upload_widget.dart';
+import 'receipt_scan_panel.dart';
 
-/// Receipt upload bottom sheet. [context] and [ref] are the Add-expense
-/// screen's own.
+/// Receipt bottom sheet: attach a photo and, with the `receiptScan` flag,
+/// offer what the scan read (see [ReceiptScanPanel]). [context] and [ref]
+/// are the Add-expense screen's own; [onTitleScanned] fills its title field.
 void showReceiptSheet(
   BuildContext context,
   WidgetRef ref, {
   required bool isDark,
+  bool isEditing = false,
+  ValueChanged<String>? onTitleScanned,
 }) {
   showModalBottomSheet(
     context: context,
+    // Above the floating tab bar.
+    useRootNavigator: true,
     isScrollControlled: true,
     backgroundColor: AppColors.background(isDark),
     shape: const RoundedRectangleBorder(
@@ -27,35 +29,27 @@ void showReceiptSheet(
     builder: (ctx) {
       return SafeArea(
         top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AddExpenseSheetHandle(isDark: isDark),
-            AddExpenseSheetTitle(text: 'Receipt', isDark: isDark),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
-              child: InvoiceUploadWidget(
-                onImageSelected: (imagePath, file) async {
-                  try {
-                    final bytes = await File(imagePath).readAsBytes();
-                    // Off the main isolate — a full-size receipt is a
-                    // multi-MB encode that would freeze the sheet.
-                    final encoded = await base64EncodeAsync(bytes);
-                    ref.read(addExpenseProvider.notifier).state = ref
-                        .read(addExpenseProvider)
-                        .copyWith(
-                          invoiceImagePath: imagePath,
-                          receiptBase64: encoded,
-                        );
-                  } catch (_) {
-                    ref.read(addExpenseProvider.notifier).state = ref
-                        .read(addExpenseProvider)
-                        .copyWith(invoiceImagePath: imagePath);
-                  }
-                },
-              ),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(ctx).height * 0.9,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AddExpenseSheetHandle(isDark: isDark),
+                AddExpenseSheetTitle(text: 'Receipt', isDark: isDark),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
+                  child: ReceiptScanPanel(
+                    isDark: isDark,
+                    isEditing: isEditing,
+                    onTitleScanned: onTitleScanned,
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       );
     },
@@ -72,6 +66,8 @@ void showNotesSheet(
 }) {
   showModalBottomSheet(
     context: context,
+    // Above the floating tab bar.
+    useRootNavigator: true,
     isScrollControlled: true,
     backgroundColor: AppColors.background(isDark),
     shape: const RoundedRectangleBorder(

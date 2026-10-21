@@ -17,6 +17,13 @@ class AmountInputWidget extends StatefulWidget {
   /// save — render the underline and helper text in red.
   final bool hasError;
 
+  /// Opens the currency picker (`currencyConversion`); null = the symbol
+  /// is just a label.
+  final VoidCallback? onCurrencyTap;
+
+  /// Spoken for the currency button, e.g. "Currency USD. Tap to change".
+  final String? currencyTapLabel;
+
   const AmountInputWidget({
     Key? key,
     required this.amount,
@@ -24,6 +31,8 @@ class AmountInputWidget extends StatefulWidget {
     required this.onChanged,
     this.autoFocus = false,
     this.hasError = false,
+    this.onCurrencyTap,
+    this.currencyTapLabel,
   }) : super(key: key);
 
   @override
@@ -36,9 +45,7 @@ class _AmountInputWidgetState extends State<AmountInputWidget> {
   @override
   void initState() {
     super.initState();
-    _controller = TextEditingController(
-      text: widget.amount > 0 ? widget.amount.toInt().toString() : '',
-    );
+    _controller = TextEditingController(text: _text(widget.amount));
     // No controller listener: previously we did `setState({})` on every
     // keystroke just to flip `showCursor`. That fired a rebuild of this
     // widget AND the parent (via onChanged → provider write), so each char
@@ -54,14 +61,27 @@ class _AmountInputWidgetState extends State<AmountInputWidget> {
   @override
   void didUpdateWidget(AmountInputWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Update controller if amount changed externally (e.g., from invoice scan)
-    if (oldWidget.amount != widget.amount && widget.amount > 0) {
-      _controller.text = widget.amount.toInt().toString();
+    // Update controller if amount changed externally (e.g. from a receipt
+    // scan) — not when it is just what the user is typing ("12." is 12).
+    final typed = double.tryParse(_controller.text) ?? 0;
+    if (oldWidget.amount != widget.amount &&
+        widget.amount > 0 &&
+        (typed * 100).round() != (widget.amount * 100).round()) {
+      _controller.text = _text(widget.amount);
       // Position cursor at end of text to prevent auto-selection
       _controller.selection = TextSelection.fromPosition(
         TextPosition(offset: _controller.text.length),
       );
     }
+  }
+
+  /// "1234" for whole amounts, "1234.50" otherwise; "" for 0.
+  static String _text(double amount) {
+    if (amount <= 0) return '';
+    final paise = (amount * 100).round();
+    return paise % 100 == 0
+        ? (paise ~/ 100).toString()
+        : (paise / 100).toStringAsFixed(2);
   }
 
   @override
@@ -87,21 +107,19 @@ class _AmountInputWidgetState extends State<AmountInputWidget> {
           crossAxisAlignment: CrossAxisAlignment.baseline,
           textBaseline: TextBaseline.alphabetic,
           children: [
-            Text(
-              widget.currency,
-              style: TextStyle(
-                fontSize: 36,
-                fontWeight: FontWeight.bold,
-                color: AppColors.brand,
-              ),
-            ),
+            _currencyLabel(),
             const SizedBox(width: 4),
             Expanded(
               child: TextField(
                 controller: _controller,
                 autofocus: widget.autoFocus,
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                // Paise allowed (₹1,234.50 from a receipt, \$12.99).
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+                ],
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 48,
@@ -154,6 +172,39 @@ class _AmountInputWidgetState extends State<AmountInputWidget> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _currencyLabel() {
+    final symbol = Text(
+      widget.currency,
+      style: TextStyle(
+        fontSize: widget.currency.length > 2 ? 26 : 36,
+        fontWeight: FontWeight.bold,
+        color: AppColors.brand,
+      ),
+    );
+    final onTap = widget.onCurrencyTap;
+    if (onTap == null) return symbol;
+    return Semantics(
+      button: true,
+      label: widget.currencyTapLabel,
+      excludeSemantics: true,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              symbol,
+              Icon(Icons.arrow_drop_down_rounded, color: AppColors.brand),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

@@ -1,4 +1,4 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/state/feature_flags_provider.dart';
@@ -6,8 +6,10 @@ import '../../../data/expenses/expenses_repository.dart';
 import '../../../models/models.dart';
 import '../../groups/state/group_detail_provider.dart';
 import '../screens/add_expense_screen.dart';
+import '../widgets/receipt_notes_sheets.dart';
 import '../widgets/repeat_sheet.dart';
 import 'add_expense_category_suggest.dart';
+import 'add_expense_form_helpers.dart';
 import 'add_expense_provider.dart';
 import 'add_expense_split_math.dart';
 
@@ -76,6 +78,34 @@ mixin AddExpenseFormEffects on ConsumerState<AddExpenseScreen> {
   VoidCallback? repeatTapHandler(bool isDark) {
     if (widget.isEditing || !watchFeature(ref, 'recurring')) return null;
     return () => showRepeatSheet(context, ref, isDark: isDark);
+  }
+
+  /// Edit mode: the fetched expense as form state — in the currency it was
+  /// entered in when `currencyConversion` is on.
+  AddExpenseState hydratedStateFor(ExpenseModel expense) =>
+      addExpenseStateFromExpense(
+        expense,
+        inOriginalCurrency:
+            ref
+                .read(featureFlagsProvider)
+                .value
+                ?.contains('currencyConversion') ??
+            false,
+      );
+
+  /// Receipt sheet. A scanned merchant goes into [title] (the screen's
+  /// title field) and is run through the category suggester like typing.
+  void openReceiptSheet(bool isDark, TextEditingController title) {
+    showReceiptSheet(
+      context,
+      ref,
+      isDark: isDark,
+      isEditing: widget.isEditing,
+      onTitleScanned: (text) {
+        title.text = text;
+        suggestCategoryFor(text);
+      },
+    );
   }
 
   void disposeFormEffects() => _categorySuggester?.dispose();

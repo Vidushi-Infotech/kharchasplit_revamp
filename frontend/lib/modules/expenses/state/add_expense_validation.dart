@@ -10,6 +10,9 @@ import 'add_expense_split_math.dart';
 /// are exact to the paisa — the server rejects anything else
 /// (SPLIT_MISMATCH / PAYERS_MISMATCH).
 extension AddExpenseValidation on AddExpenseState {
+  /// In the currency the amounts are entered in.
+  String _money(double v) => CurrencyFormatter.format(v, currency: currency);
+
   bool get isValid {
     // Title is required so the expense list / detail / activity feed all
     // show a meaningful label. We require ≥1 non-whitespace character.
@@ -63,8 +66,8 @@ extension AddExpenseValidation on AddExpenseState {
         final diff = SplitCalculator.toPaise(amount) - assigned;
         if (diff == 0) return null;
         return diff > 0
-            ? '${CurrencyFormatter.format(diff / 100)} left to assign'
-            : AppStrings.amountOver(CurrencyFormatter.format(-diff / 100));
+            ? '${_money(diff / 100)} left to assign'
+            : AppStrings.amountOver(_money(-diff / 100));
       case SplitType.percentage:
         final diff = 100 - includedSum;
         if (diff.abs() < 0.01) return null;
@@ -92,13 +95,10 @@ extension AddExpenseValidation on AddExpenseState {
     if (isPayersValid) return null;
     final left = payersLeftPaise(amount, payers);
     if (left > 0) {
-      return AppStrings.amountOfTotalLeft(
-        CurrencyFormatter.format(left / 100),
-        CurrencyFormatter.format(amount),
-      );
+      return AppStrings.amountOfTotalLeft(_money(left / 100), _money(amount));
     }
     return left < 0
-        ? AppStrings.amountOver(CurrencyFormatter.format(-left / 100))
+        ? AppStrings.amountOver(_money(-left / 100))
         : AppStrings.payersDontAddUp;
   }
 }

@@ -10,6 +10,7 @@ import '../../../models/models.dart';
 import '../../../modules/dashboard/state/dashboard_provider.dart';
 import '../../../modules/groups/state/group_detail_provider.dart';
 import '../../../modules/groups/state/groups_provider.dart';
+import 'add_expense_fx.dart';
 import 'add_expense_provider.dart';
 import 'add_expense_split_math.dart';
 import 'expense_detail_provider.dart';
@@ -111,7 +112,9 @@ String backendSplitType(SplitType t) {
 
 /// PUTs to /expenses/:id when [expenseId] is non-null, else POSTs a new one
 /// (with the form's `repeat`, if any — the new expense is then the first
-/// occurrence of a recurring rule).
+/// occurrence of a recurring rule). Entered in another currency: amounts go
+/// in it with `originalCurrency` (+ `fxRate` when the user gave one) and
+/// the server converts them into [groupCurrency].
 Future<void> submitExpense(
   ExpensesRepository repo, {
   required String? expenseId,
@@ -119,18 +122,23 @@ Future<void> submitExpense(
   required AddExpenseState state,
   required UserModel paidBy,
   required List<ExpenseParticipant> participants,
+  String? groupCurrency,
 }) async {
   // Always send payers (built from the single payer when there's one): an
   // edit of a multi-payer expense without them is refused (UPDATE_APP).
   final payersPaise = addExpensePayersPaise(state, paidBy.id);
   final splitType = backendSplitTypeFor(state);
   final splitMeta = backendSplitMeta(state, participants);
+  final currency = state.entryCurrency != null
+      ? groupCurrencyCode(groupCurrency)
+      : state.currency;
+  final fxRate = addExpenseFxRateOverride(state);
   if (expenseId != null) {
     await repo.update(
       expenseId,
       description: state.title!.trim(),
       amount: state.amount,
-      currency: state.currency,
+      currency: currency,
       category: (state.category ?? CategoryModel.other).id,
       notes: state.notes,
       expenseDate: state.date,
@@ -142,13 +150,15 @@ Future<void> submitExpense(
       splitMeta: splitMeta,
       baseUpdatedAt: state.baseUpdatedAt,
       groupId: groupId,
+      originalCurrency: state.entryCurrency,
+      fxRate: fxRate,
     );
   } else {
     await repo.create(
       groupId: groupId,
       description: state.title!.trim(),
       amount: state.amount,
-      currency: state.currency,
+      currency: currency,
       category: (state.category ?? CategoryModel.other).id,
       paidById: paidBy.id,
       paidByName: paidBy.name,
@@ -160,6 +170,8 @@ Future<void> submitExpense(
       payersPaise: payersPaise,
       splitMeta: splitMeta,
       repeat: state.repeat.toJson(),
+      originalCurrency: state.entryCurrency,
+      fxRate: fxRate,
     );
   }
 }
@@ -192,10 +204,10 @@ Map<String, dynamic> buildRecurringTemplate({
 Future<String?> updateRecurringFuture(
   RecurringRepository repo, {
   required String ruleId,
-  required Map<String, dynamic> template,
+  required Future<Map<String, dynamic>> Function() template,
 }) async {
   try {
-    await repo.update(ruleId, template: template);
+    await repo.update(ruleId, template: await template());
     return null;
   } catch (e) {
     return recurringFutureErrorMessage(e);

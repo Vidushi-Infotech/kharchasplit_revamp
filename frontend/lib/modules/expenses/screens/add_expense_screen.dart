@@ -83,7 +83,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen>
       final expense = await ref.read(expensesRepositoryProvider).getById(id);
       if (!mounted) return;
 
-      final hydrated = addExpenseStateFromExpense(expense);
+      final hydrated = hydratedStateFor(expense);
       _titleController.text = expense.title;
       _notesController.text = expense.notes ?? '';
       ref.read(addExpenseProvider.notifier).state = hydrated;
@@ -270,8 +270,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen>
             AddExpenseMoreOptionsCard(
               isDark: isDark,
               state: state,
-              onReceiptTap: () =>
-                  showReceiptSheet(context, ref, isDark: isDark),
+              onReceiptTap: () => openReceiptSheet(isDark, _titleController),
               onNotesTap: () => showNotesSheet(
                 context,
                 ref,

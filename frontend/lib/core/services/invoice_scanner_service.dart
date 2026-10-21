@@ -1,107 +1,52 @@
-/// Mock invoice scanning service
-/// Simulates AI extraction of amount, category, and date from invoice images
-/// Backend API integration will replace this mock implementation
+import 'package:flutter/foundation.dart';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 
-class InvoiceScanResult {
-  final double amount;
-  final String category;
-  final DateTime date;
-  final String description;
-  final bool isConfident;
+import '../utils/receipt_scan_parser.dart';
+import '../utils/receipt_scan_rows.dart';
 
-  InvoiceScanResult({
-    required this.amount,
-    required this.category,
-    required this.date,
-    required this.description,
-    this.isConfident = false,
-  });
-}
-
+/// Reads a receipt photo on the device: Google ML Kit text recognition
+/// (Latin script, bundled model — no network, nothing leaves the phone),
+/// then [parseReceiptText] for the total, date and merchant.
+///
+/// Android and iOS only ([isSupported]); ML Kit runs off the UI thread on
+/// its own. Photos come from the receipt picker already downscaled to
+/// 1600 px wide, which is plenty for printed bills.
 class InvoiceScannerService {
-  /// Mock invoice scanning - simulates AI extraction from image
-  /// In production, this will call backend API for OCR + AI analysis
-  static Future<InvoiceScanResult> scanInvoiceImage(String imagePath) async {
-    // Simulate processing delay
-    await Future.delayed(const Duration(seconds: 2));
+  InvoiceScannerService._();
 
-    // Mock data - simulates different invoice types
-    final mockResults = [
-      InvoiceScanResult(
-        amount: 450.00,
-        category: 'Food & Dining',
-        date: DateTime.now(),
-        description: 'Restaurant Invoice',
-        isConfident: true,
-      ),
-      InvoiceScanResult(
-        amount: 120.50,
-        category: 'Groceries',
-        date: DateTime.now(),
-        description: 'Grocery Store',
-        isConfident: true,
-      ),
-      InvoiceScanResult(
-        amount: 299.99,
-        category: 'Transportation',
-        date: DateTime.now().subtract(const Duration(days: 1)),
-        description: 'Cab/Ride Share',
-        isConfident: false,
-      ),
-      InvoiceScanResult(
-        amount: 75.00,
-        category: 'Entertainment',
-        date: DateTime.now(),
-        description: 'Movie Tickets',
-        isConfident: true,
-      ),
-    ];
+  static bool get isSupported =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS);
 
-    // Return random mock result
-    final random = DateTime.now().millisecondsSinceEpoch;
-    return mockResults[random % mockResults.length];
-  }
-
-  /// Mock validation - checks if image is a valid invoice
-  static Future<bool> validateInvoiceImage(String imagePath) async {
-    // Simulate validation
-    await Future.delayed(const Duration(milliseconds: 500));
-    return true;
-  }
-
-  /// Get category suggestions based on description
-  static List<String> getCategorySuggestions(String description) {
-    const categories = {
-      'restaurant': 'Food & Dining',
-      'cafe': 'Food & Dining',
-      'hotel': 'Accommodation',
-      'flight': 'Travel',
-      'taxi': 'Transportation',
-      'uber': 'Transportation',
-      'grocery': 'Groceries',
-      'mall': 'Shopping',
-      'movie': 'Entertainment',
-      'cinema': 'Entertainment',
-      'medicine': 'Health & Medical',
-      'hospital': 'Health & Medical',
-      'gas': 'Transportation',
-      'petrol': 'Transportation',
-    };
-
-    final lowerDesc = description.toLowerCase();
-    final suggestions = categories.entries
-        .where((e) => lowerDesc.contains(e.key))
-        .map((e) => e.value)
-        .toList();
-
-    return suggestions.isNotEmpty
-        ? suggestions
-        : [
-            'Food & Dining',
-            'Transportation',
-            'Groceries',
-            'Entertainment',
-            'Shopping',
-          ];
+  /// The parsed receipt, or null when the photo couldn't be read at all.
+  /// [now] caps the date (never in the future).
+  static Future<ReceiptScanResult?> scan(
+    String imagePath, {
+    DateTime? now,
+  }) async {
+    if (!isSupported) return null;
+    final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
+    try {
+      final recognized = await recognizer.processImage(
+        InputImage.fromFilePath(imagePath),
+      );
+      final lines = [
+        for (final block in recognized.blocks)
+          for (final line in block.lines)
+            ReceiptOcrLine(
+              line.text,
+              left: line.boundingBox.left,
+              top: line.boundingBox.top,
+              bottom: line.boundingBox.bottom,
+            ),
+      ];
+      if (lines.isEmpty) return const ReceiptScanResult();
+      return parseReceiptText(receiptRowsText(lines), now: now);
+    } catch (_) {
+      return null;
+    } finally {
+      await recognizer.close();
+    }
   }
 }

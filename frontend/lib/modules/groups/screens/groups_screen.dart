@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import '../../../core/constants/app_strings.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -32,61 +30,21 @@ class GroupsScreen extends ConsumerStatefulWidget {
 }
 
 class _GroupsScreenState extends ConsumerState<GroupsScreen> {
-  final _searchController = TextEditingController();
-  final _searchFocus = FocusNode();
   _BalanceFilter _filter = _BalanceFilter.all;
-  String _query = '';
-  bool _isSearching = false;
   bool _showArchived = false;
-  Timer? _searchDebounce;
 
-  @override
-  void dispose() {
-    _searchDebounce?.cancel();
-    _searchController.dispose();
-    _searchFocus.dispose();
-    super.dispose();
-  }
-
-  void _openSearch() {
-    setState(() => _isSearching = true);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _searchFocus.requestFocus();
-    });
-  }
-
-  void _closeSearch() {
-    _searchDebounce?.cancel();
-    _searchController.clear();
-    _searchFocus.unfocus();
-    setState(() {
-      _isSearching = false;
-      _query = '';
-    });
-  }
-
-  /// 250 ms debounce on every keystroke. Cancels the previous pending
-  /// rebuild and only commits the latest query when typing settles. Cuts
-  /// rebuild count from one-per-keystroke down to one-per-pause.
-  void _onSearchChanged(String q) {
-    _searchDebounce?.cancel();
-    _searchDebounce = Timer(const Duration(milliseconds: 250), () {
-      if (!mounted) return;
-      setState(() => _query = q);
-    });
-  }
+  /// The search button opens the global search (expenses, groups and
+  /// friends) — it replaced the old in-place group-name filter.
+  void _openSearch() => context.push('/search');
 
   List<GroupModel> _applyFilters(List<GroupModel> groups) {
     return groups.where((g) {
-      final matchesQuery =
-          _query.isEmpty || g.name.toLowerCase().contains(_query.toLowerCase());
-      final matchesFilter = switch (_filter) {
+      return switch (_filter) {
         _BalanceFilter.all => true,
         _BalanceFilter.owed => g.myBalance > 0,
         _BalanceFilter.owe => g.myBalance < 0,
         _BalanceFilter.settled => g.myBalance == 0,
       };
-      return matchesQuery && matchesFilter;
     }).toList();
   }
 
@@ -110,15 +68,13 @@ class _GroupsScreenState extends ConsumerState<GroupsScreen> {
           ),
           data: (allGroups) {
             // Archived groups sit in a collapsed section at the end; the
-            // filters and search apply to both halves.
+            // filters apply to both halves.
             final active = allGroups.where((g) => !g.isArchived).toList();
             final visible = _applyFilters(active);
             final visibleArchived =
                 _applyFilters(allGroups.where((g) => g.isArchived).toList());
             final hasArchived = visibleArchived.isNotEmpty;
-            // A search reaches into archived groups, so open the section
-            // while there is a query.
-            final archivedOpen = _showArchived || _query.isNotEmpty;
+            final archivedOpen = _showArchived;
             final gridPad = _gridPadding(context);
             final side = gridPad.left;
             return RefreshIndicator(
@@ -136,13 +92,7 @@ class _GroupsScreenState extends ConsumerState<GroupsScreen> {
                         filter: _filter,
                         onFilter: (f) => setState(() => _filter = f),
                         onCreate: () => context.push('/home/create-group'),
-                        isSearching: _isSearching,
-                        query: _query,
-                        searchController: _searchController,
-                        searchFocus: _searchFocus,
                         onSearchTap: _openSearch,
-                        onSearchClose: _closeSearch,
-                        onSearchChanged: _onSearchChanged,
                       ),
                     ),
                     SliverPadding(
@@ -177,7 +127,7 @@ class _GroupsScreenState extends ConsumerState<GroupsScreen> {
                       SliverToBoxAdapter(
                         child: GroupsEmptyResultsCard(
                           isDark: isDark,
-                          query: _query,
+                          query: '',
                         ),
                       ),
                     if (visible.isNotEmpty)
@@ -276,13 +226,7 @@ class _CollapsibleHeader extends SliverPersistentHeaderDelegate {
     required this.filter,
     required this.onFilter,
     required this.onCreate,
-    required this.isSearching,
-    required this.query,
-    required this.searchController,
-    required this.searchFocus,
     required this.onSearchTap,
-    required this.onSearchClose,
-    required this.onSearchChanged,
   });
 
   final bool isDark;
@@ -290,13 +234,7 @@ class _CollapsibleHeader extends SliverPersistentHeaderDelegate {
   final _BalanceFilter filter;
   final ValueChanged<_BalanceFilter> onFilter;
   final VoidCallback onCreate;
-  final bool isSearching;
-  final String query;
-  final TextEditingController searchController;
-  final FocusNode searchFocus;
   final VoidCallback onSearchTap;
-  final VoidCallback onSearchClose;
-  final ValueChanged<String> onSearchChanged;
 
   // Tight enough to sit just below the status bar (no big empty band on
   // top), still tall enough for the 28pt headline + the GROUPS overline.
@@ -323,21 +261,13 @@ class _CollapsibleHeader extends SliverPersistentHeaderDelegate {
       child: Column(
         children: [
           Expanded(
-            child: isSearching
-                ? _SearchBar(
-                    controller: searchController,
-                    focusNode: searchFocus,
-                    isDark: isDark,
-                    onChanged: onSearchChanged,
-                    onClose: onSearchClose,
-                  )
-                : _TitleRow(
-                    isDark: isDark,
-                    totalCount: totalCount,
-                    onSearch: onSearchTap,
-                    onCreate: onCreate,
-                    collapseProgress: t,
-                  ),
+            child: _TitleRow(
+              isDark: isDark,
+              totalCount: totalCount,
+              onSearch: onSearchTap,
+              onCreate: onCreate,
+              collapseProgress: t,
+            ),
           ),
           SizedBox(
             height: _filterStripHeight,
@@ -360,9 +290,7 @@ class _CollapsibleHeader extends SliverPersistentHeaderDelegate {
   bool shouldRebuild(_CollapsibleHeader oldDelegate) {
     return oldDelegate.isDark != isDark ||
         oldDelegate.totalCount != totalCount ||
-        oldDelegate.filter != filter ||
-        oldDelegate.isSearching != isSearching ||
-        oldDelegate.query != query;
+        oldDelegate.filter != filter;
   }
 }
 
@@ -490,7 +418,7 @@ class _ExpandedTitle extends StatelessWidget {
               icon: Icons.search_rounded,
               isDark: isDark,
               onTap: onSearch,
-              label: 'Search groups',
+              label: AppStrings.search,
             ),
             const SizedBox(width: 4),
             _IconAction(
@@ -568,7 +496,7 @@ class _CollapsedTitle extends StatelessWidget {
               icon: Icons.search_rounded,
               isDark: isDark,
               onTap: onSearch,
-              label: 'Search groups',
+              label: AppStrings.search,
               compact: true,
             ),
             const SizedBox(width: 4),
@@ -630,68 +558,6 @@ class _IconAction extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _SearchBar extends StatelessWidget {
-  const _SearchBar({
-    required this.controller,
-    required this.focusNode,
-    required this.isDark,
-    required this.onChanged,
-    required this.onClose,
-  });
-
-  final TextEditingController controller;
-  final FocusNode focusNode;
-  final bool isDark;
-  final ValueChanged<String> onChanged;
-  final VoidCallback onClose;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-      child: Row(
-        children: [
-          IconButton(
-            onPressed: onClose,
-            icon: const Icon(Icons.arrow_back_rounded, size: 20),
-            color: AppColors.textPrimary(isDark),
-            tooltip: 'Close search',
-          ),
-          Expanded(
-            child: TextField(
-              controller: controller,
-              focusNode: focusNode,
-              onChanged: onChanged,
-              textInputAction: TextInputAction.search,
-              autofocus: false,
-              style: AppTextStyles.body1(isDark).copyWith(fontSize: 15),
-              decoration: InputDecoration(
-                isDense: true,
-                border: InputBorder.none,
-                hintText: 'Search groups',
-                hintStyle: AppTextStyles.body1(isDark).copyWith(
-                  color: AppColors.textSecondary(isDark),
-                  fontSize: 15,
-                ),
-                suffixIcon: controller.text.isEmpty
-                    ? null
-                    : IconButton(
-                        icon: const Icon(Icons.close_rounded, size: 18),
-                        color: AppColors.textSecondary(isDark),
-                        onPressed: () {
-                          controller.clear();
-                          onChanged('');
-                        },
-                      ),
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

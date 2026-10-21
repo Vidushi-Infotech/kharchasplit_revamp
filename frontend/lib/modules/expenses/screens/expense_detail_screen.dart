@@ -29,6 +29,7 @@ import '../widgets/expense_comments_section.dart';
 import '../widgets/expense_detail_history_row.dart';
 import '../widgets/expense_detail_paid_by.dart';
 import '../widgets/expense_detail_splits_card.dart';
+import '../widgets/expense_original_amount_line.dart';
 import '../widgets/recurring_info_card.dart';
 
 String _splitTypeLabel(ExpenseModel e) {
@@ -593,6 +594,8 @@ class _Hero extends StatelessWidget {
                       letterSpacing: -0.6,
                     ),
                   ),
+                  // Entered in another currency: what was paid, and the rate.
+                  ExpenseOriginalAmountLine(expense: expense as ExpenseModel),
                   const SizedBox(height: 4),
                   Text(
                     expense.title as String,

@@ -35,6 +35,8 @@ void showPaidBySheet(
   }
   showModalBottomSheet(
     context: context,
+    // Above the floating tab bar.
+    useRootNavigator: true,
     isScrollControlled: true,
     backgroundColor: AppColors.background(isDark),
     shape: const RoundedRectangleBorder(

@@ -28,6 +28,7 @@ import '../../modules/expenses/screens/expense_detail_screen.dart';
 import '../../modules/personal_expenses/screens/personal_expenses_screen.dart';
 import '../../modules/personal_expenses/screens/add_personal_expense_screen.dart';
 import '../../modules/reports/screens/reports_screen.dart';
+import '../../modules/search/screens/search_screen.dart';
 import '../../modules/settlements/screens/settle_all_screen.dart';
 import '../../modules/settlements/screens/settle_screen.dart';
 import '../../modules/settlements/screens/settlement_history_screen.dart';
@@ -303,6 +304,13 @@ final appRouter = GoRouter(
           path: '/reports',
           name: 'reports',
           builder: (context, state) => const ReportsScreen(),
+        ),
+        // Global search (expenses, groups, friends); `?q=` pre-fills it.
+        GoRoute(
+          path: '/search',
+          name: 'search',
+          builder: (context, state) =>
+              SearchScreen(initialQuery: state.uri.queryParameters['q']),
         ),
       ],
     ),

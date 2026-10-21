@@ -61,6 +61,20 @@ class AddExpenseState {
   /// offline) is refused (409 EDIT_CONFLICT) instead of overwriting.
   final String? baseUpdatedAt;
 
+  /// `currencyConversion`: the currency amount, payers and split are
+  /// entered in (ISO code) when it isn't the group's; null = the group's.
+  /// [currency] is then its symbol. The server converts on save.
+  final String? entryCurrency;
+
+  /// Rate typed by the user (1 [entryCurrency] = this much group currency)
+  /// when none could be looked up; sent as `fxRate`.
+  final double? manualFxRate;
+
+  /// Edit mode: the rate a converted expense was saved with. Kept (sent as
+  /// `fxRate`) while the currency and date are unchanged, so re-saving
+  /// never silently re-prices it.
+  final AddExpenseSavedFx? savedFx;
+
   const AddExpenseState({
     this.title,
     this.amount = 0,
@@ -88,7 +102,12 @@ class AddExpenseState {
     this.repeat = AddExpenseRepeat.never,
     this.recurringRuleId,
     this.baseUpdatedAt,
+    this.entryCurrency,
+    this.manualFxRate,
+    this.savedFx,
   });
+
+  static const _keep = Object();
 
   AddExpenseState copyWith({
     String? title,
@@ -115,6 +134,10 @@ class AddExpenseState {
     bool? categoryTouched,
     bool? usingGroupDefaultSplit,
     AddExpenseRepeat? repeat,
+    // Clearable (null = back to the group currency / no rate / no receipt).
+    Object? entryCurrency = _keep,
+    Object? manualFxRate = _keep,
+    bool clearReceipt = false,
   }) {
     return AddExpenseState(
       title: title ?? this.title,
@@ -131,10 +154,12 @@ class AddExpenseState {
       groupId: groupId ?? this.groupId,
       isLoading: isLoading ?? this.isLoading,
       error: error ?? this.error,
-      invoiceImagePath: invoiceImagePath ?? this.invoiceImagePath,
+      invoiceImagePath: clearReceipt
+          ? null
+          : invoiceImagePath ?? this.invoiceImagePath,
       isScanning: isScanning ?? this.isScanning,
       invoiceScanned: invoiceScanned ?? this.invoiceScanned,
-      receiptBase64: receiptBase64 ?? this.receiptBase64,
+      receiptBase64: clearReceipt ? null : receiptBase64 ?? this.receiptBase64,
       payers: payers ?? this.payers,
       adjustmentMode: adjustmentMode ?? this.adjustmentMode,
       adjustments: adjustments ?? this.adjustments,
@@ -144,11 +169,35 @@ class AddExpenseState {
       repeat: repeat ?? this.repeat,
       recurringRuleId: recurringRuleId,
       baseUpdatedAt: baseUpdatedAt,
+      entryCurrency: identical(entryCurrency, _keep)
+          ? this.entryCurrency
+          : entryCurrency as String?,
+      manualFxRate: identical(manualFxRate, _keep)
+          ? this.manualFxRate
+          : manualFxRate as double?,
+      savedFx: savedFx,
     );
   }
 
   // isValid / isSplitValid / splitError / payer checks live in
   // add_expense_validation.dart (AddExpenseValidation extension).
+}
+
+/// The conversion an expense being edited was saved with (see
+/// [AddExpenseState.savedFx]).
+class AddExpenseSavedFx {
+  const AddExpenseSavedFx({
+    required this.currency,
+    required this.rate,
+    required this.date,
+  });
+
+  /// ISO code of the original currency.
+  final String currency;
+  final double rate;
+
+  /// The expense date it was converted for (date only).
+  final DateTime date;
 }
 
 /// autoDispose so the form state is destroyed (and re-created fresh) whenever

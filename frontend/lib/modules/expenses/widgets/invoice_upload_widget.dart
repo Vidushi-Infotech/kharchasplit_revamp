@@ -9,9 +9,18 @@ import '../../../core/theme/app_text_styles.dart';
 class InvoiceUploadWidget extends StatefulWidget {
   final Function(String, File) onImageSelected;
 
+  /// "Remove image" tapped: the form drops the receipt too.
+  final VoidCallback? onRemoved;
+
+  /// A receipt already attached (reopened sheet): shown instead of the
+  /// pick buttons. Device paths only (not on web).
+  final String? initialImagePath;
+
   const InvoiceUploadWidget({
     Key? key,
     required this.onImageSelected,
+    this.onRemoved,
+    this.initialImagePath,
   }) : super(key: key);
 
   @override
@@ -21,8 +30,16 @@ class InvoiceUploadWidget extends StatefulWidget {
 class _InvoiceUploadWidgetState extends State<InvoiceUploadWidget> {
   File? _selectedImage;
   Uint8List? _selectedImageBytes;
-  String? _imagePath;
   final ImagePicker _picker = ImagePicker();
+
+  @override
+  void initState() {
+    super.initState();
+    final path = widget.initialImagePath;
+    if (!kIsWeb && path != null && File(path).existsSync()) {
+      _selectedImage = File(path);
+    }
+  }
 
   Future<void> _pickImage(ImageSource source) async {
     try {
@@ -40,13 +57,11 @@ class _InvoiceUploadWidgetState extends State<InvoiceUploadWidget> {
           final bytes = await pickedFile.readAsBytes();
           setState(() {
             _selectedImageBytes = bytes;
-            _imagePath = pickedFile.path;
           });
         } else {
           final file = File(pickedFile.path);
           setState(() {
             _selectedImage = file;
-            _imagePath = pickedFile.path;
           });
         }
         widget.onImageSelected(pickedFile.path, File(pickedFile.path));
@@ -118,11 +133,13 @@ class _InvoiceUploadWidgetState extends State<InvoiceUploadWidget> {
           width: double.infinity,
           height: 40,
           child: OutlinedButton(
-            onPressed: () => setState(() {
-              _selectedImage = null;
-              _selectedImageBytes = null;
-              _imagePath = null;
-            }),
+            onPressed: () {
+              setState(() {
+                _selectedImage = null;
+                _selectedImageBytes = null;
+              });
+              widget.onRemoved?.call();
+            },
             style: OutlinedButton.styleFrom(
               side: BorderSide(color: AppColors.warning),
             ),
@@ -218,46 +235,6 @@ class _InvoiceUploadWidgetState extends State<InvoiceUploadWidget> {
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildUploadButton(
-    bool isDark,
-    IconData icon,
-    String label,
-    VoidCallback onTap,
-  ) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: AppColors.surface(isDark),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: AppColors.divider(isDark),
-            width: 1,
-          ),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              color: AppColors.brand,
-              size: 24,
-            ),
-            const SizedBox(height: 6),
-            Text(
-              label,
-              style: AppTextStyles.caption(isDark).copyWith(
-                color: AppColors.brand,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
         ),
       ),
     );

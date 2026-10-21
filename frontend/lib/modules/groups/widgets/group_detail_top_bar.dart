@@ -3,6 +3,7 @@ import '../../../core/constants/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../components/buttons/donate_heart_button.dart';
+import 'export_group_menu.dart';
 
 class GroupDetailTopBar extends StatelessWidget implements PreferredSizeWidget {
   const GroupDetailTopBar({
@@ -136,7 +137,11 @@ class GroupDetailTopBar extends StatelessWidget implements PreferredSizeWidget {
                             onDeleteGroup();
                             break;
                           default:
-                            onLifecycleAction?.call(value);
+                            if (isGroupExportMenuValue(value)) {
+                              handleGroupExportMenuValue(context, value);
+                            } else {
+                              onLifecycleAction?.call(value);
+                            }
                         }
                       },
                       icon: Container(
@@ -255,10 +260,13 @@ class GroupDetailTopBar extends StatelessWidget implements PreferredSizeWidget {
                                   color: AppColors.textPrimary(isDark),
                                 ),
                                 const SizedBox(width: 10),
-                                const Text('Export to Excel'),
+                                const Text(AppStrings.exportToExcel),
                               ],
                             ),
                           ),
+                        // CSV + PDF statement sit with Excel (export_group_menu.dart).
+                        if (onExportGroup != null)
+                          ...buildGroupExportMenuItems(isDark),
                         // Delete group: admin only.
                         if (canManage && isAdmin)
                           PopupMenuItem(

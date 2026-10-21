@@ -136,6 +136,6 @@ Map<String, double> computePendingOutgoing({
   return out;
 }
 
-enum GroupTab { balances, expenses, activity }
+enum GroupTab { balances, expenses, activity, totals }
 
 final groupTabProvider = StateProvider<GroupTab>((ref) => GroupTab.expenses);

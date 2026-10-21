@@ -12,7 +12,11 @@ class SplitBreakdownFooter extends StatelessWidget {
     required this.splitType,
     required this.totalAmount,
     required this.total,
+    this.currency = '₹',
   });
+
+  /// Symbol the amounts are in (the form's entry currency).
+  final String currency;
 
   final SplitType splitType;
   final double totalAmount;
@@ -39,11 +43,11 @@ class SplitBreakdownFooter extends StatelessWidget {
         final pct = totalAmount > 0 ? (total / totalAmount * 100) : 0.0;
         totalLabel = 'Total assigned';
         totalValue =
-            '₹${total.toStringAsFixed(2)}  ·  ${pct.toStringAsFixed(1)}%';
+            '$currency${total.toStringAsFixed(2)}  ·  ${pct.toStringAsFixed(1)}%';
         break;
       case SplitType.equal:
         totalLabel = 'Total Included';
-        totalValue = '₹${total.toStringAsFixed(2)}';
+        totalValue = '$currency${total.toStringAsFixed(2)}';
         break;
     }
 
@@ -71,15 +75,15 @@ class SplitBreakdownFooter extends StatelessWidget {
       if (remaining.abs() < 0.01) {
         rowColor = AppColors.success;
         rowLabel = '✓ Balanced';
-        rowValue = '₹0.00';
+        rowValue = '${currency}0.00';
       } else if (remaining > 0) {
         rowColor = AppColors.warning;
         rowLabel = '⚠️ Remaining to assign';
-        rowValue = '₹${remaining.toStringAsFixed(2)}';
+        rowValue = '$currency${remaining.toStringAsFixed(2)}';
       } else {
         rowColor = AppColors.warning;
         rowLabel = '⚠️ Over by';
-        rowValue = '₹${(-remaining).toStringAsFixed(2)}';
+        rowValue = '$currency${(-remaining).toStringAsFixed(2)}';
       }
 
       children.addAll([
@@ -118,7 +122,7 @@ class SplitBreakdownFooter extends StatelessWidget {
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  'Manually assign each amount. Sum must equal ₹${totalAmount.toStringAsFixed(2)}.',
+                  'Manually assign each amount. Sum must equal $currency${totalAmount.toStringAsFixed(2)}.',
                   style: AppTextStyles.caption(isDark).copyWith(
                     color: AppColors.textSecondary(isDark),
                     fontSize: 11,

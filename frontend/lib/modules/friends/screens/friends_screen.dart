@@ -40,6 +40,12 @@ class FriendsScreen extends ConsumerWidget {
               elevation: 0,
               backgroundColor: AppColors.surface(isDark),
               actions: [
+                // Global search (expenses, groups, friends).
+                IconButton(
+                  tooltip: 'Search',
+                  icon: const Icon(Icons.search_rounded),
+                  onPressed: () => context.push('/search'),
+                ),
                 IconButton(
                   tooltip: AppStrings.addFriend,
                   icon: const Icon(Icons.person_add_alt_1_rounded),
@@ -96,6 +102,12 @@ class FriendsScreen extends ConsumerWidget {
                       ? '1 person'
                       : '${friends.length} people',
                   actions: [
+                    OutlinedButton.icon(
+                      onPressed: () => context.push('/search'),
+                      icon: const Icon(Icons.search_rounded),
+                      label: const Text('Search'),
+                    ),
+                    const SizedBox(width: 8),
                     FilledButton.icon(
                       style: FilledButton.styleFrom(
                         backgroundColor: AppColors.brand,

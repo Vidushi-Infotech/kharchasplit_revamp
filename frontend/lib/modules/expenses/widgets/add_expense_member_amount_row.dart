@@ -6,7 +6,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../models/models.dart';
 
-/// One member with a ₹ amount field — used by the "Multiple people" payer
+/// One member with an amount field — used by the "Multiple people" payer
 /// sheet and the "By adjustment" split. Optional tick box (who's in) and a
 /// ± button that flips the sign (signed amounts, e.g. adjustments; many
 /// phone keypads have no minus key).
@@ -23,6 +23,7 @@ class AddExpenseMemberAmountRow extends StatelessWidget {
     this.included,
     this.onIncludedChanged,
     this.signed = false,
+    this.currency = '₹',
   });
 
   final UserModel member;
@@ -41,6 +42,9 @@ class AddExpenseMemberAmountRow extends StatelessWidget {
   final bool? included;
   final ValueChanged<bool>? onIncludedChanged;
   final bool signed;
+
+  /// Symbol in front of the amount (the form's entry currency).
+  final String currency;
 
   void _flipSign() {
     final t = controller.text.trim();
@@ -137,7 +141,7 @@ class AddExpenseMemberAmountRow extends StatelessWidget {
                   ),
                   style: AppTextStyles.body2(isDark),
                   decoration: InputDecoration(
-                    prefixText: '₹',
+                    prefixText: currency,
                     hintText: '0',
                     isDense: true,
                     contentPadding: const EdgeInsets.symmetric(

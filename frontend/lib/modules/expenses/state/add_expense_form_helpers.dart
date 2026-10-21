@@ -1,7 +1,9 @@
 import 'package:flutter/painting.dart';
 
 import '../../../core/constants/app_strings.dart';
+import '../../../core/utils/currency_catalog.dart';
 import '../../../models/models.dart';
+import 'add_expense_fx.dart';
 import 'add_expense_provider.dart';
 import 'add_expense_validation.dart';
 
@@ -9,7 +11,12 @@ import 'add_expense_validation.dart';
 /// providers — just mapping and formatting of [AddExpenseState].
 
 /// Maps a fetched [ExpenseModel] onto the form state used in edit mode.
-AddExpenseState addExpenseStateFromExpense(ExpenseModel expense) {
+/// [inOriginalCurrency] (`currencyConversion` on): an expense entered in
+/// another currency reopens in it, with its original amounts.
+AddExpenseState addExpenseStateFromExpense(
+  ExpenseModel expense, {
+  bool inOriginalCurrency = false,
+}) {
   final splits = <String, double>{};
   final included = <String>{};
   for (final s in expense.splits) {
@@ -42,26 +49,37 @@ AddExpenseState addExpenseStateFromExpense(ExpenseModel expense) {
     included.addAll(expense.splits.map((s) => s.userId));
   }
 
+  // Never drop payers: a multi-payer expense always reopens with them,
+  // whatever the multiPayer flag says.
+  final payers = expense.hasMultiplePayers
+      ? {for (final p in expense.payers) p.userId: p.amount}
+      : const <String, double>{};
+  final original = inOriginalCurrency && expense.isConverted
+      ? addExpenseAmountsInOriginal(expense, splits, payers)
+      : null;
+
   return AddExpenseState(
     title: expense.title,
-    amount: expense.amount,
-    currency: expense.currency,
+    amount: original?.amount ?? expense.amount,
+    currency: original != null
+        ? CurrencyCatalog.symbolFor(expense.originalCurrency!)
+        : expense.currency,
+    entryCurrency: original != null ? expense.originalCurrency : null,
+    savedFx: original != null ? addExpenseSavedFxOf(expense) : null,
     category: expense.category,
     paidBy: expense.paidBy,
     splitType: expense.splitType,
-    splits: splits,
+    splits: original?.splits ?? splits,
     includedMemberIds: included,
     date: expense.date,
     notes: expense.notes,
     groupId: expense.groupId,
     receiptBase64: expense.receiptBase64,
-    // Never drop payers: a multi-payer expense always reopens with them,
-    // whatever the multiPayer flag says.
-    payers: expense.hasMultiplePayers
-        ? {for (final p in expense.payers) p.userId: p.amount}
-        : const {},
+    payers: original?.payers ?? payers,
     adjustmentMode: expense.isAdjustmentSplit,
-    adjustments: adjustments,
+    adjustments: original != null
+        ? adjustments
+        : addExpenseAdjustmentsInGroup(expense, adjustments),
     // Editing never auto-changes the category.
     categoryTouched: true,
     recurringRuleId: expense.recurringRuleId,

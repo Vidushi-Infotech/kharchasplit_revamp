@@ -6,6 +6,7 @@ import '../../../core/constants/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../outbox/state/outbox_provider.dart';
+import 'export_my_expenses_action.dart';
 
 /// "Tools" rows near the top of the Account tab. Personal expenses and
 /// Reports used to be primary tabs; with the Splitwise-style tab bar they
@@ -41,6 +42,12 @@ class AccountShortcutsSection extends ConsumerWidget {
         label: AppStrings.reports,
         isDark: isDark,
         onTap: () => context.push('/reports'),
+      ),
+      _ShortcutRow(
+        icon: Icons.file_download_outlined,
+        label: AppStrings.exportMyExpensesCsv,
+        isDark: isDark,
+        onTap: () => exportMyExpensesCsv(context, ref),
       ),
     ];
 

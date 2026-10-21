@@ -48,6 +48,20 @@ class ExpenseModel extends Equatable {
   /// offline outbox (shown with a badge), null otherwise.
   final String? syncState;
 
+  /// Entered in another currency (`original_currency`, ISO code, e.g.
+  /// "USD"): [amount], [splits] and [payers] are the converted
+  /// group-currency amounts; [originalAmount] is what was typed, converted
+  /// at [fxRate] (1 original = fxRate group currency) for [fxDate].
+  /// All null for an expense entered in the group's currency.
+  final double? originalAmount;
+  final String? originalCurrency;
+  final double? fxRate;
+  final DateTime? fxDate;
+
+  /// Has a receipt photo. Lists don't carry the photo itself
+  /// (`has_receipt`); the detail does ([receiptBase64]).
+  final bool hasReceipt;
+
   const ExpenseModel({
     required this.id,
     required this.title,
@@ -68,9 +82,18 @@ class ExpenseModel extends Equatable {
     this.recurringRuleId,
     this.updatedAtRaw,
     this.syncState,
+    this.originalAmount,
+    this.originalCurrency,
+    this.fxRate,
+    this.fxDate,
+    this.hasReceipt = false,
   });
 
   bool get isPendingSync => syncState != null;
+
+  /// Entered in another currency and converted (see [originalCurrency]).
+  bool get isConverted =>
+      originalCurrency != null && originalAmount != null && fxRate != null;
 
   bool get isRecurring => recurringRuleId != null;
 
@@ -134,6 +157,11 @@ class ExpenseModel extends Equatable {
               ExpensePayer(userId: paidBy.id, name: paidBy.name, amount: amount),
           ];
     final meta = json['split_meta'] ?? json['splitMeta'];
+    final receipt =
+        (json['receiptBase64'] ?? json['receipt_base64']) as String?;
+    final originalCurrency =
+        (json['original_currency'] ?? json['originalCurrency']) as String?;
+    final fxDateRaw = json['fx_date'] ?? json['fxDate'];
 
     return ExpenseModel(
       recurringRuleId:
@@ -152,8 +180,17 @@ class ExpenseModel extends Equatable {
       groupId: (json['groupId'] ?? json['group_id']) as String?,
       date: dateRaw is String ? DateTime.parse(dateRaw) : DateTime.now(),
       notes: json['notes'] as String?,
-      receiptBase64:
-          (json['receiptBase64'] ?? json['receipt_base64']) as String?,
+      receiptBase64: receipt,
+      hasReceipt: json['has_receipt'] == true ||
+          json['hasReceipt'] == true ||
+          (receipt != null && receipt.isNotEmpty),
+      originalCurrency: (originalCurrency?.isEmpty ?? true)
+          ? null
+          : originalCurrency,
+      originalAmount: _parseOptionalAmount(
+          json['original_amount'] ?? json['originalAmount']),
+      fxRate: _parseOptionalAmount(json['fx_rate'] ?? json['fxRate']),
+      fxDate: fxDateRaw is String ? DateTime.tryParse(fxDateRaw) : null,
       splitType: _parseSplitType(
           (json['splitType'] ?? json['split_type']) as String?),
       isSettled: (json['isSettled'] as bool?) ?? false,
@@ -167,6 +204,12 @@ class ExpenseModel extends Equatable {
     if (v is num) return v.toDouble();
     if (v is String) return double.tryParse(v) ?? 0;
     return 0;
+  }
+
+  static double? _parseOptionalAmount(dynamic v) {
+    if (v == null) return null;
+    final parsed = v is num ? v.toDouble() : double.tryParse('$v');
+    return parsed != null && parsed > 0 ? parsed : null;
   }
 
   static SplitType _parseSplitType(String? raw) {
@@ -202,6 +245,11 @@ class ExpenseModel extends Equatable {
     Map<String, dynamic>? splitMeta,
     String? recurringRuleId,
     String? syncState,
+    double? originalAmount,
+    String? originalCurrency,
+    double? fxRate,
+    DateTime? fxDate,
+    bool? hasReceipt,
   }) {
     return ExpenseModel(
       id: id ?? this.id,
@@ -223,6 +271,11 @@ class ExpenseModel extends Equatable {
       recurringRuleId: recurringRuleId ?? this.recurringRuleId,
       updatedAtRaw: updatedAtRaw,
       syncState: syncState ?? this.syncState,
+      originalAmount: originalAmount ?? this.originalAmount,
+      originalCurrency: originalCurrency ?? this.originalCurrency,
+      fxRate: fxRate ?? this.fxRate,
+      fxDate: fxDate ?? this.fxDate,
+      hasReceipt: hasReceipt ?? this.hasReceipt,
     );
   }
 
@@ -253,6 +306,11 @@ class ExpenseModel extends Equatable {
         recurringRuleId,
         updatedAtRaw,
         syncState,
+        originalAmount,
+        originalCurrency,
+        fxRate,
+        fxDate,
+        hasReceipt,
       ];
 }
 

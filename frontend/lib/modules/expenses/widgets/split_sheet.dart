@@ -32,6 +32,8 @@ void showSplitSheet(
   }
   showModalBottomSheet(
     context: context,
+    // Above the floating tab bar.
+    useRootNavigator: true,
     isScrollControlled: true,
     backgroundColor: AppColors.background(isDark),
     shape: const RoundedRectangleBorder(
@@ -133,6 +135,7 @@ void showSplitSheet(
                                   adjustments: s.adjustments,
                                   includedMemberIds: s.includedMemberIds,
                                   currentUserId: myId,
+                                  currency: s.currency,
                                   onAdjustmentsChanged: (a) => notifier.state =
                                       notifier.state.copyWith(adjustments: a),
                                   onIncludedMembersChanged: (ids) =>
@@ -152,6 +155,7 @@ void showSplitSheet(
                                   splits: s.splits,
                                   includedMemberIds: s.includedMemberIds,
                                   currentUserId: myId,
+                                  currency: s.currency,
                                   onSplitsChanged: (splits) {
                                     // Read the live state, not the captured `s`
                                     // snapshot. _toggleMember fires this right

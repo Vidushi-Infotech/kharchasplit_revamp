@@ -7,7 +7,9 @@ import '../../../data/recurring/recurring_repository.dart';
 /// split is no longer in the group) get fixed explanations; other API
 /// errors use the server's message, and anything else falls back to
 /// "[fallback]: error". Payer / split totals that are off by a paisa
-/// (PAYERS_MISMATCH / SPLIT_MISMATCH) and UPDATE_APP get their own text.
+/// (PAYERS_MISMATCH / SPLIT_MISMATCH) and UPDATE_APP get their own text,
+/// as do a missing exchange rate (503 FX_UNAVAILABLE — the form then offers
+/// "Enter rate") and a receipt the server won't take (400 INVALID_RECEIPT).
 String expenseErrorMessage(Object error, {required String fallback}) {
   if (error is ExpensesApiException) {
     if (error.isGroupArchived) return AppStrings.groupArchivedExpenseBlocked;
@@ -19,6 +21,8 @@ String expenseErrorMessage(Object error, {required String fallback}) {
     if (error.needsAppUpdate) return AppStrings.updateAppToEditExpense;
     if (error.isEditConflict) return AppStrings.editConflictOnline;
     if (error.isDeleted) return AppStrings.syncExpenseDeleted;
+    if (error.isFxUnavailable) return AppStrings.fxUnavailableOnSave;
+    if (error.isInvalidReceipt) return AppStrings.invalidReceipt;
     return error.message;
   }
   return '$fallback: $error';

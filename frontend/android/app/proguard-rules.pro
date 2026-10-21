@@ -56,6 +56,15 @@
 # ---- pdf / printing --------------------------------------------------
 -keep class net.nfet.flutter.** { *; }
 
+# ---- google_mlkit_text_recognition (receipt scan) ------------------
+# The plugin references the Chinese / Devanagari / Japanese / Korean
+# recognisers too; only the Latin model is bundled, so R8 must not fail
+# on those missing classes.
+-dontwarn com.google.mlkit.vision.text.chinese.**
+-dontwarn com.google.mlkit.vision.text.devanagari.**
+-dontwarn com.google.mlkit.vision.text.japanese.**
+-dontwarn com.google.mlkit.vision.text.korean.**
+
 # ---- Models serialized via dart:convert ------------------------------
 # We don't use Java-side reflection on model classes (Flutter handles JSON
 # in Dart), so no specific keep rules needed for models. If you ever add

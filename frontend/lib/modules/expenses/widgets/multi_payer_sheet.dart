@@ -24,6 +24,8 @@ void showMultiPayerSheet(
 }) {
   showModalBottomSheet(
     context: context,
+    // Above the floating tab bar.
+    useRootNavigator: true,
     isScrollControlled: true,
     backgroundColor: AppColors.background(isDark),
     shape: const RoundedRectangleBorder(
@@ -105,6 +107,8 @@ class _MultiPayerEditorState extends State<_MultiPayerEditor> {
   Widget build(BuildContext context) {
     final isDark = widget.isDark;
     final amount = widget.initial.amount;
+    final currency = widget.initial.currency;
+    String money(double v) => CurrencyFormatter.format(v, currency: currency);
     final left = payersLeftPaise(amount, _draft);
     final canSave =
         amount > 0 &&
@@ -112,13 +116,10 @@ class _MultiPayerEditorState extends State<_MultiPayerEditor> {
         _draft.values.every((v) => v >= 0) &&
         _draft.values.any((v) => v > 0);
     final status = left == 0
-        ? '✓ ${CurrencyFormatter.format(amount)}'
+        ? '✓ ${money(amount)}'
         : left > 0
-        ? AppStrings.amountOfTotalLeft(
-            CurrencyFormatter.format(left / 100),
-            CurrencyFormatter.format(amount),
-          )
-        : AppStrings.amountOver(CurrencyFormatter.format(-left / 100));
+        ? AppStrings.amountOfTotalLeft(money(left / 100), money(amount))
+        : AppStrings.amountOver(money(-left / 100));
 
     return Padding(
       // Keep the focused field above the keyboard.
@@ -185,6 +186,7 @@ class _MultiPayerEditorState extends State<_MultiPayerEditor> {
                     controller: _controllers[m.id]!,
                     fieldLabel: AppStrings.paidAmountFor(m.name),
                     onChanged: () => _onChanged(m.id),
+                    currency: widget.initial.currency,
                   );
                 },
               ),

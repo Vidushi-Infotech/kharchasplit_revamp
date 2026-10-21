@@ -31,6 +31,14 @@ class ExpensesApiException implements Exception {
   /// 410: the expense was deleted.
   bool get isDeleted => code == 'EXPENSE_DELETED';
 
+  /// 503: no exchange rate for an expense entered in another currency
+  /// (currency not covered / rate service down). Retry with `fxRate`.
+  bool get isFxUnavailable => code == 'FX_UNAVAILABLE';
+
+  /// 400: the receipt isn't a JPEG / PNG / WebP / HEIC / PDF or is over
+  /// 8 MB.
+  bool get isInvalidReceipt => code == 'INVALID_RECEIPT';
+
   @override
   String toString() => message;
 }
@@ -176,28 +184,38 @@ class ExpensesRepository {
     Map<String, int>? payersPaise,
     Map<String, dynamic>? splitMeta,
     Map<String, dynamic>? repeat,
+    String? originalCurrency,
+    double? fxRate,
   }) async {
-    final res = await _client.dio.post(
-      '/expenses',
-      data: {
-        'groupId': groupId,
-        'description': description,
-        'amount': amount,
-        'currency': normalizeCurrencyCode(currency),
-        if (category != null) 'category': category,
-        'paidById': paidById,
-        'paidByName': paidByName,
-        'splitType': splitType,
-        if (notes != null && notes.isNotEmpty) 'notes': notes,
-        if (expenseDate != null) 'expenseDate': expenseDate.toIso8601String(),
-        if (receiptBase64 != null) 'receiptBase64': receiptBase64,
-        'participants': participants.map((p) => p.toJson()).toList(),
-        if (payersPaise != null) 'payers': expensePayersJson(payersPaise),
-        'splitMeta': ?splitMeta,
-        // {frequency, endDate?}: this expense becomes the first occurrence
-        // of a new recurring rule (same transaction on the server).
-        'repeat': ?repeat,
-      },
+    final res = await _sendWrite(
+      () => _client.dio.post(
+        '/expenses',
+        options: _fxOptions(originalCurrency, fxRate),
+        data: {
+          'groupId': groupId,
+          'description': description,
+          'amount': amount,
+          'currency': normalizeCurrencyCode(currency),
+          if (category != null) 'category': category,
+          'paidById': paidById,
+          'paidByName': paidByName,
+          'splitType': splitType,
+          if (notes != null && notes.isNotEmpty) 'notes': notes,
+          if (expenseDate != null) 'expenseDate': expenseDate.toIso8601String(),
+          if (receiptBase64 != null) 'receiptBase64': receiptBase64,
+          'participants': participants.map((p) => p.toJson()).toList(),
+          if (payersPaise != null) 'payers': expensePayersJson(payersPaise),
+          'splitMeta': ?splitMeta,
+          // {frequency, endDate?}: this expense becomes the first occurrence
+          // of a new recurring rule (same transaction on the server).
+          'repeat': ?repeat,
+          // Entered in another currency: amount / payers / participants are
+          // in it and the server converts them (fxRate = the user's own rate
+          // when none could be looked up).
+          'originalCurrency': ?originalCurrency,
+          'fxRate': ?fxRate,
+        },
+      ),
     );
     final data = _ensureMap(res);
     return ExpenseModel.fromJson(data);
@@ -219,30 +237,39 @@ class ExpensesRepository {
     Map<String, dynamic>? splitMeta,
     String? baseUpdatedAt,
     String? groupId,
+    String? originalCurrency,
+    double? fxRate,
   }) async {
-    final res = await _client.dio.put(
-      '/expenses/$expenseId',
-      data: {
-        // Not used by the server; lets an edit queued offline be shown in
-        // its group straight away.
-        'groupId': ?groupId,
-        if (description != null) 'description': description,
-        if (amount != null) 'amount': amount,
-        if (currency != null) 'currency': normalizeCurrencyCode(currency),
-        if (category != null) 'category': category,
-        if (notes != null) 'notes': notes,
-        if (expenseDate != null) 'expenseDate': expenseDate.toIso8601String(),
-        if (receiptBase64 != null) 'receiptBase64': receiptBase64,
-        if (paidById != null) 'paidById': paidById,
-        if (splitType != null) 'splitType': splitType,
-        if (participants != null)
-          'participants': participants.map((p) => p.toJson()).toList(),
-        if (payersPaise != null) 'payers': expensePayersJson(payersPaise),
-        'splitMeta': ?splitMeta,
-        // The version this edit was made against (409 EDIT_CONFLICT if the
-        // expense changed since).
-        'baseUpdatedAt': ?baseUpdatedAt,
-      },
+    final res = await _sendWrite(
+      () => _client.dio.put(
+        '/expenses/$expenseId',
+        options: _fxOptions(originalCurrency, fxRate),
+        data: {
+          // Not used by the server; lets an edit queued offline be shown in
+          // its group straight away.
+          'groupId': ?groupId,
+          if (description != null) 'description': description,
+          if (amount != null) 'amount': amount,
+          if (currency != null) 'currency': normalizeCurrencyCode(currency),
+          if (category != null) 'category': category,
+          if (notes != null) 'notes': notes,
+          if (expenseDate != null) 'expenseDate': expenseDate.toIso8601String(),
+          if (receiptBase64 != null) 'receiptBase64': receiptBase64,
+          if (paidById != null) 'paidById': paidById,
+          if (splitType != null) 'splitType': splitType,
+          if (participants != null)
+            'participants': participants.map((p) => p.toJson()).toList(),
+          if (payersPaise != null) 'payers': expensePayersJson(payersPaise),
+          'splitMeta': ?splitMeta,
+          // The version this edit was made against (409 EDIT_CONFLICT if the
+          // expense changed since).
+          'baseUpdatedAt': ?baseUpdatedAt,
+          // Without these an edit that sends the amount drops the
+          // original-currency record (see [create]).
+          'originalCurrency': ?originalCurrency,
+          'fxRate': ?fxRate,
+        },
+      ),
     );
     final data = _ensureMap(res);
     return ExpenseModel.fromJson(data);
@@ -271,6 +298,33 @@ class ExpensesRepository {
       queryParameters: {'groupId': ?groupId},
     );
     _ensureSuccess(res);
+  }
+
+  /// A save that makes the server look up an exchange rate isn't retried:
+  /// 503 FX_UNAVAILABLE won't pass in seconds, and the form offers "Enter
+  /// rate" instead.
+  static Options? _fxOptions(String? originalCurrency, double? fxRate) =>
+      originalCurrency != null && fxRate == null
+      ? Options(extra: {'noRetry': true})
+      : null;
+
+  /// A create / edit. 5xx arrive as [DioException]s (see ApiClient); one
+  /// with the server's `{code, error}` body — 503 FX_UNAVAILABLE — becomes
+  /// an [ExpensesApiException] like the 4xx ones.
+  Future<Response> _sendWrite(Future<Response> Function() send) async {
+    try {
+      return await send();
+    } on DioException catch (e) {
+      final body = e.response?.data;
+      if (body is Map && body['code'] is String) {
+        throw ExpensesApiException(
+          body['error']?.toString() ?? 'Request failed',
+          statusCode: e.response?.statusCode,
+          code: body['code'] as String,
+        );
+      }
+      rethrow;
+    }
   }
 
   Map<String, dynamic> _ensureSuccess(Response res) {

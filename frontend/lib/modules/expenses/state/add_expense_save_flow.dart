@@ -15,6 +15,7 @@ import '../../../modules/groups/state/group_detail_provider.dart';
 import '../../../modules/groups/state/groups_provider.dart';
 import '../screens/add_expense_screen.dart';
 import '../widgets/repeat_edit_scope_sheet.dart';
+import 'add_expense_fx.dart';
 import 'add_expense_provider.dart';
 import 'add_expense_submit.dart';
 import 'expense_error_message.dart';
@@ -89,6 +90,7 @@ mixin AddExpenseSaveFlow on ConsumerState<AddExpenseScreen> {
         state: state,
         paidBy: paidBy,
         participants: participants,
+        groupCurrency: group?.currency,
       );
     } catch (e) {
       if (!mounted) return;
@@ -115,10 +117,13 @@ mixin AddExpenseSaveFlow on ConsumerState<AddExpenseScreen> {
       futureWarning = await updateRecurringFuture(
         ref.read(recurringRepositoryProvider),
         ruleId: ruleId!,
-        template: buildRecurringTemplate(
+        template: () => recurringTemplateAfterSave(
+          ref.read(expensesRepositoryProvider),
+          expenseId: widget.expenseId!,
           state: state,
           paidBy: paidBy,
           participants: participants,
+          groupCurrency: group?.currency,
         ),
       );
     }

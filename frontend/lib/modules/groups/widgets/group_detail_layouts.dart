@@ -17,6 +17,7 @@ import 'group_archived_banner.dart';
 import 'group_expenses_list.dart';
 import 'group_lifecycle_actions.dart';
 import 'group_sticky_tab_bar_delegate.dart';
+import 'group_totals_tab.dart';
 
 /// Opens Add expense for the group. When [archived], explains why instead —
 /// the backend would reject the save with 409 GROUP_ARCHIVED anyway.
@@ -72,7 +73,7 @@ Widget buildGroupCompactLayout(
   );
 }
 
-/// Invalidate every provider that feeds any of the 3 tabs on this screen,
+/// Invalidate every provider that feeds any of the tabs on this screen,
 /// then await the main fetch so the [RefreshIndicator] hides at the
 /// moment fresh data lands. Called from:
 ///   * the outer RefreshIndicator (top-of-header pull)
@@ -138,6 +139,12 @@ Widget buildGroupTabBody(
       // shared callback so all 3 tabs behave identically.
       return GroupActivityTab(
         groupId: groupId,
+        onRefresh: () => refreshAllGroupTabs(groupId, ref),
+      );
+    case GroupTab.totals:
+      return GroupTotalsTab(
+        groupId: groupId,
+        currency: detail.group.currency,
         onRefresh: () => refreshAllGroupTabs(groupId, ref),
       );
   }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/constants/app_strings.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../auth/state/auth_provider.dart';
 import '../state/group_balance_helpers.dart';
@@ -76,6 +77,19 @@ Widget buildGroupTabs(
               if (tab != GroupTab.activity) {
                 HapticService.instance.selection();
                 ref.read(groupTabProvider.notifier).state = GroupTab.activity;
+              }
+            },
+          ),
+          const SizedBox(width: 6),
+          GroupTabButton(
+            label: AppStrings.totalsTab,
+            icon: Icons.pie_chart_outline_rounded,
+            selected: tab == GroupTab.totals,
+            isDark: isDark,
+            onTap: () {
+              if (tab != GroupTab.totals) {
+                HapticService.instance.selection();
+                ref.read(groupTabProvider.notifier).state = GroupTab.totals;
               }
             },
           ),

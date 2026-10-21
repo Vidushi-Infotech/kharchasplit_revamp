@@ -98,6 +98,10 @@ dependencies:
   crop_your_image: ^2.0.0
   qr_flutter: ^4.1.0
 
+  # On-device receipt OCR (Android + iOS only; Latin script, bundled model).
+  # iOS needs deployment target 15.5+ (see ios/Podfile).
+  google_mlkit_text_recognition: ^0.16.0
+
 
 dev_dependencies:
   flutter_test:
@@ -143,3 +147,5 @@ flutter:
   assets:
     - assets/images/
     - assets/icons/
+    # Noto Sans (OFL) — used by the PDF group statement for ₹ and Hindi.
+    - assets/fonts/
