@@ -4,6 +4,7 @@ import { authenticate  } from '../middleware/auth.js';
 import { validate  } from '../middleware/validation.js';
 import { idempotent } from '../middleware/idempotency.js';
 import groupController from '../controllers/groupController.js';
+import recurringController from '../controllers/recurringController.js';
 
 const router = express.Router();
 
@@ -96,6 +97,7 @@ router.post(
 
 // Archive/Unarchive routes
 router.put('/:id/archive', authenticate, groupController.rejectDirect, groupController.archiveGroup);
+router.get('/:id/recurring', authenticate, recurringController.listForGroup);
 router.put('/:id/default-split', authenticate, groupController.rejectDirect, groupController.setDefaultSplit);
 router.put('/:id/simplify', authenticate, groupController.rejectDirect, groupController.setSimplifyDebts);
 router.put('/:id/unarchive', authenticate, groupController.rejectDirect, groupController.unarchiveGroup);

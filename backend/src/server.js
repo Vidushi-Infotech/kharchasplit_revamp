@@ -19,6 +19,7 @@ import { startEmailVerifyReminderScheduler } from './jobs/emailVerifyReminderJob
 import { startEmailOutboxWorker } from './services/emailOutbox.js';
 import { startSettlementReminderScheduler } from './jobs/settlementReminderJob.js';
 import { startWeeklySummaryScheduler } from './jobs/weeklySummaryJob.js';
+import { startRecurringExpenseScheduler } from './jobs/recurringExpenseJob.js';
 
 // Import routes
 import authRoutes from './routes/authRoutes.js';
@@ -26,6 +27,7 @@ import userRoutes from './routes/userRoutes.js';
 import groupRoutes from './routes/groupRoutes.js';
 import expenseRoutes from './routes/expenseRoutes.js';
 import settlementRoutes from './routes/settlementRoutes.js';
+import recurringRoutes from './routes/recurringRoutes.js';
 import personalExpenseRoutes from './routes/personalExpenseRoutes.js';
 import syncRoutes from './routes/syncRoutes.js';
 import activityRoutes from './routes/activityRoutes.js';
@@ -154,6 +156,7 @@ app.use(`/api/${API_VERSION}/users`, userRoutes);
 app.use(`/api/${API_VERSION}/groups`, groupRoutes);
 app.use(`/api/${API_VERSION}/expenses`, expenseRoutes);
 app.use(`/api/${API_VERSION}/settlements`, settlementRoutes);
+app.use(`/api/${API_VERSION}/recurring`, recurringRoutes);
 app.use(`/api/${API_VERSION}/personal-expenses`, personalExpenseRoutes);
 app.use(`/api/${API_VERSION}/sync`, syncRoutes);
 app.use(`/api/${API_VERSION}/activities`, activityRoutes);
@@ -240,6 +243,8 @@ const startServer = async () => {
     // Daily automatic settle-up reminders + Monday weekly summary (opt-in).
     startSettlementReminderScheduler();
     startWeeklySummaryScheduler();
+    // Daily: creates due recurring expenses.
+    startRecurringExpenseScheduler();
     // Expires Idempotency-Key replay rows after 24h.
     startIdempotencyCleanup();
 

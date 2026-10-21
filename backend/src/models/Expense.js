@@ -8,7 +8,7 @@ class Expense {
   static async findById(id) {
     const expenseResult = await query(
       `SELECT e.id, e.group_id, e.description, e.amount, e.currency, e.category,
-              e.paid_by, e.split_type, e.split_meta, e.receipt_base64, e.notes, e.expense_date,
+              e.paid_by, e.split_type, e.split_meta, e.recurring_rule_id, e.receipt_base64, e.notes, e.expense_date,
               e.created_at, e.updated_at, u.name as paid_by_name
        FROM expenses e
        LEFT JOIN users u ON e.paid_by = u.id
@@ -48,7 +48,7 @@ class Expense {
     // No receipt_base64 in list view — saves potentially MBs per response
     const expensesResult = await query(
       `SELECT e.id, e.group_id, e.description, e.amount, e.currency, e.category,
-              e.paid_by, e.split_type, e.split_meta, e.notes, e.expense_date,
+              e.paid_by, e.split_type, e.split_meta, e.recurring_rule_id, e.notes, e.expense_date,
               e.created_at, e.updated_at, u.name as paid_by_name
        FROM expenses e
        LEFT JOIN users u ON e.paid_by = u.id
@@ -253,16 +253,27 @@ class Expense {
    * Create new expense with participants
    */
   static async create(expenseData, participants, payers = null) {
-    return transaction(async (client) => {
+    return transaction((client) => this.insertWith(client, expenseData, participants, payers));
+  }
+
+  /**
+   * Insert an expense (+ splits, payers) inside the caller's transaction —
+   * used by create() and by recurring expenses, which add their own rows in
+   * the same transaction.
+   */
+  static async insertWith(client, expenseData, participants, payers = null) {
+    {
       // Create expense
       const expenseResult = await client.query(
         `INSERT INTO expenses (
           group_id, description, amount, currency, category,
-          paid_by, split_type, receipt_base64, notes, expense_date, split_meta
+          paid_by, split_type, receipt_base64, notes, expense_date, split_meta,
+          recurring_rule_id
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         RETURNING id, group_id, description, amount, currency, category,
-                  paid_by, split_type, split_meta, notes, expense_date, created_at, updated_at`,
+                  paid_by, split_type, split_meta, notes, expense_date, recurring_rule_id,
+                  created_at, updated_at`,
         [
           expenseData.groupId,
           expenseData.description,
@@ -275,6 +286,7 @@ class Expense {
           expenseData.notes || null,
           expenseData.expenseDate || new Date(),
           expenseData.splitMeta ? JSON.stringify(expenseData.splitMeta) : null,
+          expenseData.recurringRuleId || null,
         ]
       );
       const expense = expenseResult.rows[0];
@@ -317,7 +329,7 @@ class Expense {
       );
 
       return expense;
-    });
+    }
   }
 
   /**

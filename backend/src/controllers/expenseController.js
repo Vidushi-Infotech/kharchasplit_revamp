@@ -5,7 +5,9 @@ import GroupService from '../services/groupService.js';
 import ActivityService from '../services/activityService.js';
 import { NotificationService } from '../services/notificationService.js';
 import { cache } from '../services/cacheService.js';
-import { query } from '../config/database.js';
+import { query, transaction } from '../config/database.js';
+import { FREQUENCIES, isDateString, toDateOnly } from '../utils/recurrence.js';
+import { templateFrom, insertRuleWithFirstExpense } from '../services/recurringService.js';
 import { parsePayers, largestPayer, checkTotals, splitInput } from '../utils/expenseInput.js';
 
 /**
@@ -177,24 +179,54 @@ const createExpense = async (req, res, next) => {
       res,
     )) return;
 
-    const expense = await Expense.create(
-      {
-        groupId,
-        description,
-        amount,
-        currency,
-        category,
-        paidById: payerId,
-        paidByName,
+    const expenseData = {
+      groupId,
+      description,
+      amount,
+      currency,
+      category,
+      paidById: payerId,
+      paidByName,
+      splitType: split.splitType,
+      splitMeta: split.splitMeta,
+      receiptBase64,
+      notes,
+      expenseDate,
+    };
+
+    // "Repeat": this expense is the first occurrence of a new recurring
+    // rule — both are written in one transaction.
+    // The response's expense carries recurring_rule_id.
+    let expense;
+    if (req.body.repeat) {
+      const { frequency, endDate } = req.body.repeat;
+      const anchorDate = toDateOnly(expenseDate);
+      if (!FREQUENCIES.includes(frequency)) {
+        return res.status(400).json({ success: false, error: `repeat.frequency must be one of: ${FREQUENCIES.join(', ')}` });
+      }
+      if (endDate != null && (!isDateString(endDate) || endDate < anchorDate)) {
+        return res.status(400).json({ success: false, error: 'repeat.endDate must be a date on or after the expense date' });
+      }
+      const template = templateFrom({
+        description, amount, currency, category, notes,
         splitType: split.splitType,
         splitMeta: split.splitMeta,
-        receiptBase64,
-        notes,
-        expenseDate,
-      },
-      participants,
-      payers,
-    );
+        payers: payers || [{ userId: payerId, amount }],
+        participants,
+      });
+      const created = await transaction((client) => insertRuleWithFirstExpense(client, {
+        groupId,
+        createdBy: req.user.id,
+        template,
+        frequency,
+        anchorDate,
+        endDate,
+        expenseData,
+      }));
+      expense = created.expense;
+    } else {
+      expense = await Expense.create(expenseData, participants, payers);
+    }
 
     // Invalidate group expense/balance caches
     Expense.invalidateGroupExpenses(groupId);

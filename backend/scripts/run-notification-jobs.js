@@ -5,6 +5,7 @@
  * Usage:
  *   node scripts/run-notification-jobs.js --job=reminders [--dry-run]
  *   node scripts/run-notification-jobs.js --job=weekly    [--dry-run]
+ *   node scripts/run-notification-jobs.js --job=recurring   (no dry run)
  *
  * --dry-run logs who would be notified without sending or writing state.
  * Emails queued by a real run are sent by this process before it exits.
@@ -26,12 +27,13 @@ const dryRun = args['dry-run'] === 'true';
 
 const { runSettlementReminders } = await import('../src/jobs/settlementReminderJob.js');
 const { runWeeklySummaries } = await import('../src/jobs/weeklySummaryJob.js');
+const { runRecurringExpenses } = await import('../src/jobs/recurringExpenseJob.js');
 const { processBatch } = await import('../src/services/emailOutbox.js');
 
-const jobs = { reminders: runSettlementReminders, weekly: runWeeklySummaries };
+const jobs = { reminders: runSettlementReminders, weekly: runWeeklySummaries, recurring: runRecurringExpenses };
 const run = jobs[args.job];
-if (!run) {
-  console.error('Usage: node scripts/run-notification-jobs.js --job=reminders|weekly [--dry-run]');
+if (!run || (args.job === 'recurring' && dryRun)) {
+  console.error('Usage: node scripts/run-notification-jobs.js --job=reminders|weekly [--dry-run] | --job=recurring');
   process.exit(1);
 }
 

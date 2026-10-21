@@ -164,6 +164,19 @@ const NOTIFICATION_TYPES = {
     channelId: 'expenses',
     prefKey: 'new_expense',
   },
+  RECURRING_EXPENSE_ADDED: {
+    title: 'Recurring expense added',
+    getBody: (data) => `"${data.description}" (${data.currency}${data.amount}) was added in "${data.groupName}"`
+      + (data.yourShare ? ` · you owe ${data.currency}${data.yourShare}` : ''),
+    channelId: 'expenses',
+    prefKey: 'new_expense',
+  },
+  RECURRING_PAUSED: {
+    title: 'Recurring expense paused',
+    getBody: (data) => `"${data.description}" in "${data.groupName}" stopped repeating: ${data.reason}`,
+    channelId: 'expenses',
+    prefKey: null,
+  },
   EXPENSE_COMMENT: {
     title: 'New comment',
     getBody: (data) => `${data.authorName} on "${data.description}": ${data.comment}`,
@@ -873,7 +886,7 @@ class NotificationService {
    *
    * @param {Array<{userId: string, amount: number}>} [participants]
    */
-  static async notifyExpenseAdded(groupId, expense, paidByName, groupName, currencyCode, excludeUserId, participants = []) {
+  static async notifyExpenseAdded(groupId, expense, paidByName, groupName, currencyCode, excludeUserId, participants = [], type = 'EXPENSE_ADDED') {
     const base = {
       paidByName,
       description: expense.description,
@@ -888,12 +901,12 @@ class NotificationService {
         .filter((p) => p.userId && p.userId !== excludeUserId && Number(p.amount) > 0)
         .map((p) => [p.userId, Number(p.amount).toFixed(2)]),
     );
-    const memberIds = await this._groupMemberIds(groupId, [excludeUserId]);
+    const memberIds = await this._groupMemberIds(groupId, excludeUserId ? [excludeUserId] : []);
     const others = memberIds.filter((id) => !shares.has(id));
     await Promise.all([
       ...[...shares].filter(([id]) => memberIds.includes(id)).map(([id, share]) =>
-        this.sendToUser(id, 'EXPENSE_ADDED', { ...base, yourShare: share }, extra)),
-      others.length ? this.sendToUsers(others, 'EXPENSE_ADDED', base, extra) : null,
+        this.sendToUser(id, type, { ...base, yourShare: share }, extra)),
+      others.length ? this.sendToUsers(others, type, base, extra) : null,
     ]);
   }
 
