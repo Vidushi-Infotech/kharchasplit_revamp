@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_strings.dart';
 import '../../../core/services/haptic_service.dart';
@@ -144,7 +145,7 @@ Future<void> confirmCompleteGroup(
 ) async {
   final open = groupOpenAmount(detail);
   if (open > 0.01) {
-    return showSettleUpFirstDialog(context, ref, open);
+    return showSettleUpFirstDialog(context, detail.group.id, open);
   }
   final go = await _confirm(
     context,
@@ -162,7 +163,7 @@ Future<void> confirmCompleteGroup(
     _snack(context, 'Group marked as complete');
   } on GroupNotSettledException catch (e) {
     if (!context.mounted) return;
-    await showSettleUpFirstDialog(context, ref, e.openAmount);
+    await showSettleUpFirstDialog(context, detail.group.id, e.openAmount);
   } catch (e) {
     if (!context.mounted) return;
     _snack(context, _message(e));
@@ -170,10 +171,10 @@ Future<void> confirmCompleteGroup(
 }
 
 /// "Settle up first" — the group can't be completed while [openAmount] is
-/// still owed. Offers a jump to the Balances tab.
+/// still owed. Offers a jump to the Balances page.
 Future<void> showSettleUpFirstDialog(
   BuildContext context,
-  WidgetRef ref,
+  String groupId,
   double openAmount,
 ) async {
   final goToBalances = await showDialog<bool>(
@@ -195,8 +196,8 @@ Future<void> showSettleUpFirstDialog(
       ],
     ),
   );
-  if (goToBalances == true) {
-    ref.read(groupTabProvider.notifier).state = GroupTab.balances;
+  if (goToBalances == true && context.mounted) {
+    context.push('/home/groups/$groupId/balances');
   }
 }
 

@@ -1,27 +1,26 @@
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../components/buttons/primary_button.dart';
-import '../../../components/inputs/app_text_field.dart';
 import '../../../core/constants/app_strings.dart';
+import '../../../core/services/haptic_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
-import '../../../data/settlements/settlements_repository.dart';
 import '../../../models/group_model.dart';
 import '../../../models/settlement_model.dart';
 import '../../../models/user_model.dart';
 import '../../auth/state/auth_provider.dart';
-import '../../dashboard/state/dashboard_provider.dart';
-import '../../groups/state/group_detail_provider.dart';
-import '../state/pending_settlements_provider.dart';
+import '../../expenses/widgets/add_expense_top_bar.dart';
+import '../state/record_payment_controller.dart';
 import '../state/settle_group_options_provider.dart';
-import '../../groups/state/groups_provider.dart';
-import '../widgets/payment_method_selector.dart';
+import '../widgets/record_payment_header.dart';
+import '../widgets/record_payment_options.dart';
 import '../widgets/settle_upi_section.dart';
 
+/// "Record a payment" (Splitwise style): ✕ title ✓ Save, (you) → (them),
+/// "You paid Asha K.", the big green amount, then Today / group / method /
+/// note chips and — with `upiPay` — the Pay with UPI block.
 class SettleScreen extends ConsumerStatefulWidget {
   const SettleScreen({
     super.key,
@@ -77,7 +76,8 @@ class _SettleScreenState extends ConsumerState<SettleScreen> {
     final group = _selectedGroup;
     final me = ref.read(authProvider).user;
     if (group == null) {
-      _toast('Pick a group first.');
+      HapticService.instance.error();
+      _toast(AppStrings.pickGroupFirst);
       return;
     }
     if (me == null) {
@@ -88,26 +88,18 @@ class _SettleScreenState extends ConsumerState<SettleScreen> {
     setState(() => _submitting = true);
     try {
       await ref
-          .read(settlementsRepositoryProvider)
-          .create(
-            groupId: group.id,
+          .read(recordPaymentControllerProvider)
+          .record(
+            group: group,
             fromUserId: me.id,
             toUserId: widget.recipientUserId,
             amount: double.parse(_amountController.text.trim()),
-            currency: group.currency,
             notes: _notesController.text.trim().isEmpty
                 ? null
                 : _notesController.text.trim(),
             method: method ?? _method,
           );
-      ref.invalidate(dashboardProvider);
-      ref.invalidate(groupDetailProvider(group.id));
-      // Group cards' balances; friendsProvider refetches off this too.
-      ref.invalidate(groupsProvider);
-      // Settlements are final on creation; refresh the pending sections too
-      // so any legacy pending entries stay in sync.
-      ref.invalidate(pendingOutgoingSettlementsProvider(group.id));
-      ref.invalidate(pendingIncomingSettlementsProvider(group.id));
+      HapticService.instance.success();
       if (!mounted) return;
       final recipientName = group.members
           .firstWhereOrNull((m) => m.id == widget.recipientUserId)
@@ -121,6 +113,7 @@ class _SettleScreenState extends ConsumerState<SettleScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _submitting = false);
+      HapticService.instance.error();
       _toast('Could not record payment: $e');
     }
   }
@@ -142,11 +135,13 @@ class _SettleScreenState extends ConsumerState<SettleScreen> {
     );
     final me = ref.watch(authProvider).user;
 
-    // Apply initialGroupId once, after groups have loaded.
-    if (!_initialGroupApplied && widget.initialGroupId != null) {
-      final preselect = shared.firstWhereOrNull(
-        (g) => g.id == widget.initialGroupId,
-      );
+    // Apply initialGroupId once, after groups have loaded — or the only
+    // shared group, so the group chip already reads right.
+    if (!_initialGroupApplied &&
+        (widget.initialGroupId != null || shared.length == 1)) {
+      final preselect = widget.initialGroupId == null
+          ? shared.single
+          : shared.firstWhereOrNull((g) => g.id == widget.initialGroupId);
       if (preselect != null) {
         _initialGroupApplied = true;
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -158,113 +153,69 @@ class _SettleScreenState extends ConsumerState<SettleScreen> {
     }
 
     final recipient = _findRecipient(shared, widget.recipientUserId);
+    final width = MediaQuery.sizeOf(context).width;
+    // Compact < 600 / standard 600–1100 / large > 1100.
+    final pad = width < 600 ? 16.0 : (width < 1100 ? 24.0 : 32.0);
+    final group = _selectedGroup;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(AppStrings.recordPayment),
-        elevation: 0,
-        backgroundColor: AppColors.surface(isDark),
+      backgroundColor: AppColors.background(isDark),
+      appBar: AddExpenseTopBar(
+        title: AppStrings.recordAPayment,
+        isDark: isDark,
+        onClose: () => context.pop(),
+        saveEnabled: shared.isNotEmpty,
+        saving: _submitting,
+        onSave: _handleSubmit,
+        onSaveBlocked: () => _toast(AppStrings.noSharedGroups),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 480),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    recipient == null
-                        ? AppStrings.recordPayment
-                        : 'You’re paying ${recipient.name}',
-                    style: AppTextStyles.headline2(isDark),
-                  ),
-                  if (me != null) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      'From: ${me.name}',
-                      style: AppTextStyles.body2(isDark),
-                    ),
-                  ],
-                  const SizedBox(height: 24),
-                  if (shared.isEmpty)
-                    Text(
-                      'You don’t share any groups with this person yet.',
-                      style: AppTextStyles.body2(isDark),
-                    )
-                  else
-                    DropdownButtonFormField<GroupModel>(
-                      initialValue: _selectedGroup,
-                      decoration: const InputDecoration(
-                        labelText: 'In which group?',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: shared
-                          .map(
-                            (g) =>
-                                DropdownMenuItem(value: g, child: Text(g.name)),
-                          )
-                          .toList(),
-                      onChanged: (g) => setState(() => _selectedGroup = g),
-                      validator: (v) => v == null ? 'Pick a group' : null,
-                    ),
-                  const SizedBox(height: 16),
-                  AppTextField(
-                    label: 'Amount',
-                    hint: '0.00',
-                    controller: _amountController,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    prefixIcon: Icons.currency_rupee_rounded,
-                    inputFormatters: [
-                      FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-                    ],
-                    validator: (v) {
-                      final n = double.tryParse((v ?? '').trim());
-                      if (n == null || n <= 0) {
-                        return 'Enter an amount greater than 0';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  PaymentMethodSelector(
-                    selected: _method,
-                    onChanged: (m) => setState(() => _method = m),
-                  ),
-                  const SizedBox(height: 16),
-                  AppTextField(
-                    label: 'Notes (optional)',
-                    hint: 'e.g. Dinner share',
-                    controller: _notesController,
-                    maxLines: 3,
-                    minLines: 2,
-                  ),
-                  const SizedBox(height: 24),
-                  if (_selectedGroup != null && !_submitting)
-                    SettleUpiSection(
-                      recipientUserId: widget.recipientUserId,
-                      recipientName: recipient?.name ?? '',
-                      currency: _selectedGroup!.currency,
-                      groupName: _selectedGroup!.name,
+          padding: EdgeInsets.symmetric(horizontal: pad, vertical: 12),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    RecordPaymentHeader(
+                      isDark: isDark,
+                      me: me,
+                      recipient: recipient,
+                      currency: group?.currency ?? '₹',
                       amountController: _amountController,
-                      onConfirmedPaid: () =>
-                          _handleSubmit(method: SettlementMethod.upi),
                     ),
-                  SizedBox(
-                    width: double.infinity,
-                    child: PrimaryButton(
-                      label: AppStrings.recordPayment,
-                      onPressed: (_submitting || shared.isEmpty)
-                          ? null
-                          : _handleSubmit,
-                      isLoading: _submitting,
+                    const SizedBox(height: 24),
+                    RecordPaymentOptions(
+                      isDark: isDark,
+                      groups: shared,
+                      selectedGroup: group,
+                      method: _method,
+                      notesController: _notesController,
+                      onGroupChanged: (g) => setState(() => _selectedGroup = g),
+                      onMethodChanged: (m) => setState(() => _method = m),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 24),
+                    if (shared.isEmpty)
+                      Text(
+                        AppStrings.noSharedGroups,
+                        textAlign: TextAlign.center,
+                        style: AppTextStyles.body2(isDark),
+                      ),
+                    if (group != null && !_submitting)
+                      SettleUpiSection(
+                        recipientUserId: widget.recipientUserId,
+                        recipientName: recipient?.name ?? '',
+                        currency: group.currency,
+                        groupName: group.name,
+                        amountController: _amountController,
+                        onConfirmedPaid: () =>
+                            _handleSubmit(method: SettlementMethod.upi),
+                      ),
+                  ],
+                ),
               ),
             ),
           ),

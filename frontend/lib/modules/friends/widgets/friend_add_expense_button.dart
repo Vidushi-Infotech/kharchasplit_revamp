@@ -5,23 +5,30 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
 import '../state/friend_detail_provider.dart';
+import '../state/friend_detail_view.dart';
 import '../state/friends_provider.dart';
+
+/// How [FriendAddExpenseButton] looks.
+enum FriendAddExpenseStyle {
+  /// Extended floating button (phones and tablets), as on group detail.
+  fab,
+
+  /// Filled pill, for the empty state and the desktop list header.
+  pill,
+}
 
 /// "Add expense" with this friend, outside any group: gets (or creates) the
 /// hidden non-group group, opens the normal add-expense screen for it, and
 /// refreshes balances + shared expenses on return.
-///
-/// [prominent] = filled brand button (nothing else to do with this friend);
-/// otherwise a tonal one, so it doesn't compete with a filled Settle up.
 class FriendAddExpenseButton extends ConsumerStatefulWidget {
   const FriendAddExpenseButton({
     super.key,
     required this.friend,
-    this.prominent = true,
+    this.style = FriendAddExpenseStyle.fab,
   });
 
   final FriendBalance friend;
-  final bool prominent;
+  final FriendAddExpenseStyle style;
 
   @override
   ConsumerState<FriendAddExpenseButton> createState() =>
@@ -34,6 +41,7 @@ class _FriendAddExpenseButtonState
   bool _opening = false;
 
   Future<void> _open() async {
+    if (_opening) return;
     final friendId = widget.friend.user.id;
     final actions = ref.read(friendActionsProvider);
     setState(() => _opening = true);
@@ -68,49 +76,44 @@ class _FriendAddExpenseButtonState
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final icon = _opening
-        ? SizedBox(
+        ? const SizedBox(
             width: 18,
             height: 18,
             child: CircularProgressIndicator(
               strokeWidth: 2,
-              color: widget.prominent ? Colors.white : AppColors.brand,
+              color: Colors.white,
             ),
           )
         : const Icon(Icons.receipt_long_rounded);
-    final shape = RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(12),
-    );
+    final label =
+        '${AppStrings.addExpense} with ${friendDisplayName(widget.friend.user.name)}';
 
     return Semantics(
       button: true,
-      label: '${AppStrings.addExpense} with ${widget.friend.user.name}',
-      child: widget.prominent
-          ? FilledButton.icon(
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.brand,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: shape,
-              ),
-              icon: icon,
-              label: const Text(AppStrings.addExpense),
-              onPressed: _opening ? null : _open,
-            )
-          : FilledButton.tonalIcon(
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.brand.withValues(
-                  alpha: isDark ? 0.22 : 0.12,
-                ),
-                foregroundColor: AppColors.brand,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: shape,
-              ),
-              icon: icon,
-              label: const Text(AppStrings.addExpense),
-              onPressed: _opening ? null : _open,
+      label: label,
+      excludeSemantics: true,
+      onTap: _open,
+      child: switch (widget.style) {
+        FriendAddExpenseStyle.fab => FloatingActionButton.extended(
+            heroTag: null,
+            onPressed: _open,
+            backgroundColor: AppColors.brand,
+            foregroundColor: Colors.white,
+            icon: icon,
+            label: const Text(AppStrings.addExpense),
+          ),
+        FriendAddExpenseStyle.pill => FilledButton.icon(
+            onPressed: _open,
+            icon: icon,
+            label: const Text(AppStrings.addExpense),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.brand,
+              foregroundColor: Colors.white,
+              shape: const StadiumBorder(),
             ),
+          ),
+      },
     );
   }
 }

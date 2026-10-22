@@ -10,6 +10,13 @@ class AppColors {
   static const Color orange = Color(0xFFF4872A);
   static const Color warningOrange = Color(0xFFF4872A);
   static const Color gray = Color(0xFFB0B0B0);
+
+  // ── Balance colors (Splitwise-style: green = you get money back,
+  // orange = you owe, gray = settled / not involved). Use [BalanceTone]
+  // in widgets instead of picking these by hand.
+  static const Color owed = Color(0xFF1FA971);
+  static const Color owe = Color(0xFFF26B21);
+  static const Color settled = Color(0xFF8E9A98);
   static const Color greyLight = Color(0xFFE0E0E0);
 
   // ── Dark Theme Color Tokens ───────────────────────────────────────────────
@@ -25,7 +32,7 @@ class AppColors {
   static const Color darkErrorText = Color(0xFFFF8B7B);
 
   // ── Light Theme Color Tokens ──────────────────────────────────────────────
-  static const Color lightBackground = Color(0xFFEBF2F1);
+  static const Color lightBackground = Color(0xFFFFFFFF);
   static const Color lightSurface = Color(0xFFFFFFFF);
   static const Color lightCardBg = Color(0xFFFAFEFD);
   static const Color lightTextPrimary = Color(0xFF0D1F1D);
@@ -77,7 +84,7 @@ class AppColors {
   static const Color brand = tealDark;
 
   /// Success (positive balance, money received)
-  static const Color success = greenLight;
+  static const Color success = owed;
 
   /// Warning (pending, attention needed)
   static const Color warning = orange;

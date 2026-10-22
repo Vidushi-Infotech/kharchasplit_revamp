@@ -3,71 +3,44 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_text_styles.dart';
+import '../state/friend_detail_view.dart';
 import '../state/friends_provider.dart';
-import 'friend_balance_label.dart';
 
-/// Per-group breakdown as a sliver: "In Goa trip: Asha owes you ₹500" /
-/// "In Flat: you owe ₹200" / "Non-group expenses: you owe ₹100". Tapping a
-/// row opens the group (the hidden non-group one too).
-class FriendGroupBalancesSliver extends StatelessWidget {
-  const FriendGroupBalancesSliver({super.key, required this.friend});
+/// Gray per-group lines under the overall balance: "In Goa trip, Test F.
+/// owes you ₹200.00" / "In non-group expenses, you owe Test F. ₹50.00".
+/// Every group with an open balance is listed (the server sends only those)
+/// and each line opens its group — the hidden non-group one too.
+class FriendGroupBalanceLines extends StatelessWidget {
+  const FriendGroupBalanceLines({super.key, required this.friend});
 
   final FriendBalance friend;
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final groups = friend.groups;
-    if (groups.isEmpty) {
-      return const SliverToBoxAdapter(child: SizedBox.shrink());
-    }
-
-    return SliverList.builder(
-      itemCount: groups.length + 1,
-      itemBuilder: (context, index) {
-        if (index == 0) {
-          return Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-            child: Text(
-              AppStrings.balances,
-              style: AppTextStyles.headline3(isDark).copyWith(fontSize: 18),
-            ),
-          );
-        }
-        final g = groups[index - 1];
-        final amount = formatFriendAmount(g.net, g.currency);
-        final String text;
-        if (g.isDirect) {
-          text = g.net > 0
-              ? AppStrings.nonGroupNameOwesYou(friend.user.name, amount)
-              : AppStrings.nonGroupYouOwe(amount);
-        } else {
-          text = g.net > 0
-              ? AppStrings.inGroupNameOwesYou(
-                  g.groupName, friend.user.name, amount)
-              : AppStrings.inGroupYouOwe(g.groupName, amount);
-        }
-        return Semantics(
-          button: true,
-          label: '$text. Open group',
-          child: ListTile(
-            leading: Icon(
-              g.isDirect ? Icons.person_outline_rounded : Icons.group_outlined,
-              color: AppColors.textSecondary(isDark),
-            ),
-            title: Text(
-              text,
-              style: AppTextStyles.body2(isDark).copyWith(
-                color: friendBalanceColor(g.net, isDark),
-                fontWeight: FontWeight.w600,
+    final style = Theme.of(context).textTheme.bodyMedium?.copyWith(
+          color: AppColors.textSecondary(isDark),
+          height: 1.35,
+        );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final g in friend.groups)
+          Semantics(
+            button: true,
+            label: '${friendGroupLine(g, friend.user.name)}. '
+                '${AppStrings.friendOpenGroup}',
+            excludeSemantics: true,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: () => context.push('/home/groups/${g.groupId}'),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: Text(friendGroupLine(g, friend.user.name), style: style),
               ),
             ),
-            trailing: const Icon(Icons.chevron_right_rounded),
-            onTap: () => context.push('/home/groups/${g.groupId}'),
           ),
-        );
-      },
+      ],
     );
   }
 }

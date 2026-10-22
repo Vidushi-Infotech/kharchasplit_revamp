@@ -9,10 +9,17 @@ enum ActivityType {
   expenseEdited,
   expenseDeleted,
   settled,
+  settlementConfirmed,
+  settlementDeleted,
   groupCreated,
+  groupUpdated,
+  groupArchived,
+  groupDeleted,
   memberAdded,
   memberRemoved,
+  memberRoleUpdated,
   commentAdded,
+  other,
 }
 
 /// Activity model representing an event in the app
@@ -27,6 +34,25 @@ class ActivityModel extends Equatable {
   final DateTime timestamp;
   final bool isRead;
 
+  /// Who did it (`userId` on the feed row). The personal feed only lists
+  /// your own actions today, but the sentence builder doesn't assume that.
+  final String? actorId;
+
+  /// What the row points at: `expense`, `settlement`, `group` or `member`,
+  /// and that thing's id (an expense id for expense rows).
+  final String? entityType;
+  final String? entityId;
+
+  /// Server `metadata`: expenseDescription, amount, currency, fromName,
+  /// toName, memberName, newRole, changes… — whatever the event logged.
+  final Map<String, dynamic> metadata;
+
+  /// Expense rows only: the expense's category id and the viewer's net on
+  /// it (paid − share; positive = you get back). Null when the server
+  /// didn't send it or you're not involved.
+  final String? category;
+  final double? yourNet;
+
   const ActivityModel({
     required this.id,
     required this.type,
@@ -37,6 +63,12 @@ class ActivityModel extends Equatable {
     required this.description,
     required this.timestamp,
     this.isRead = false,
+    this.actorId,
+    this.entityType,
+    this.entityId,
+    this.metadata = const {},
+    this.category,
+    this.yourNet,
   });
 
   factory ActivityModel.fromJson(Map<String, dynamic> json) {
@@ -68,11 +100,20 @@ class ActivityModel extends Equatable {
       type: type,
       actorUser: actorUser,
       group: group,
-      description: ((json['description'] as String?)?.trim().isNotEmpty ?? false)
+      description:
+          ((json['description'] as String?)?.trim().isNotEmpty ?? false)
           ? json['description'] as String
           : (json['title'] as String? ?? ''),
       timestamp: created is String ? DateTime.parse(created) : DateTime.now(),
       isRead: (json['isRead'] as bool?) ?? false,
+      actorId: (json['userId'] ?? json['user_id']) as String?,
+      entityType: (json['entityType'] ?? json['entity_type']) as String?,
+      entityId: (json['entityId'] ?? json['entity_id']) as String?,
+      metadata: json['metadata'] is Map
+          ? Map<String, dynamic>.from(json['metadata'] as Map)
+          : const {},
+      category: json['category'] as String?,
+      yourNet: (json['yourNet'] as num?)?.toDouble(),
     );
   }
 
@@ -87,19 +128,32 @@ class ActivityModel extends Equatable {
         return ActivityType.expenseDeleted;
       case 'settled':
       case 'settlement_added':
+      case 'settlement_created':
         return ActivityType.settled;
+      case 'settlement_confirmed':
+        return ActivityType.settlementConfirmed;
+      case 'settlement_deleted':
+        return ActivityType.settlementDeleted;
       case 'group_created':
         return ActivityType.groupCreated;
       case 'group_updated':
-        return ActivityType.groupCreated;
+        return ActivityType.groupUpdated;
+      case 'group_archived':
+        return ActivityType.groupArchived;
+      case 'group_deleted':
+        return ActivityType.groupDeleted;
       case 'member_added':
         return ActivityType.memberAdded;
       case 'member_removed':
         return ActivityType.memberRemoved;
+      case 'member_role_updated':
+        return ActivityType.memberRoleUpdated;
       case 'comment_added':
         return ActivityType.commentAdded;
       default:
-        return ActivityType.expenseAdded;
+        // Unknown events used to read as "Expense added"; show the
+        // server's own description instead.
+        return ActivityType.other;
     }
   }
 
@@ -113,6 +167,12 @@ class ActivityModel extends Equatable {
     String? description,
     DateTime? timestamp,
     bool? isRead,
+    String? actorId,
+    String? entityType,
+    String? entityId,
+    Map<String, dynamic>? metadata,
+    String? category,
+    double? yourNet,
   }) {
     return ActivityModel(
       id: id ?? this.id,
@@ -124,6 +184,12 @@ class ActivityModel extends Equatable {
       description: description ?? this.description,
       timestamp: timestamp ?? this.timestamp,
       isRead: isRead ?? this.isRead,
+      actorId: actorId ?? this.actorId,
+      entityType: entityType ?? this.entityType,
+      entityId: entityId ?? this.entityId,
+      metadata: metadata ?? this.metadata,
+      category: category ?? this.category,
+      yourNet: yourNet ?? this.yourNet,
     );
   }
 
@@ -138,14 +204,28 @@ class ActivityModel extends Equatable {
         return 'Expense Deleted';
       case ActivityType.settled:
         return 'Settled';
+      case ActivityType.settlementConfirmed:
+        return 'Payment Confirmed';
+      case ActivityType.settlementDeleted:
+        return 'Payment Deleted';
       case ActivityType.groupCreated:
         return 'Group Created';
+      case ActivityType.groupUpdated:
+        return 'Group Updated';
+      case ActivityType.groupArchived:
+        return 'Group Archived';
+      case ActivityType.groupDeleted:
+        return 'Group Deleted';
       case ActivityType.memberAdded:
         return 'Member Added';
       case ActivityType.memberRemoved:
         return 'Member Removed';
+      case ActivityType.memberRoleUpdated:
+        return 'Member Role Updated';
       case ActivityType.commentAdded:
         return 'Comment Added';
+      case ActivityType.other:
+        return 'Activity';
     }
   }
 
@@ -156,29 +236,43 @@ class ActivityModel extends Equatable {
       case ActivityType.expenseEdited:
         return '💸';
       case ActivityType.expenseDeleted:
+      case ActivityType.settlementDeleted:
+      case ActivityType.groupDeleted:
         return '🗑️';
       case ActivityType.settled:
+      case ActivityType.settlementConfirmed:
         return '✅';
       case ActivityType.groupCreated:
+      case ActivityType.groupUpdated:
+      case ActivityType.groupArchived:
         return '👥';
       case ActivityType.memberAdded:
       case ActivityType.memberRemoved:
+      case ActivityType.memberRoleUpdated:
         return '👤';
       case ActivityType.commentAdded:
         return '💬';
+      case ActivityType.other:
+        return '•';
     }
   }
 
   @override
   List<Object?> get props => [
-        id,
-        type,
-        actorUser,
-        targetUser,
-        group,
-        expense,
-        description,
-        timestamp,
-        isRead,
-      ];
+    id,
+    type,
+    actorUser,
+    targetUser,
+    group,
+    expense,
+    description,
+    timestamp,
+    isRead,
+    actorId,
+    entityType,
+    entityId,
+    metadata,
+    category,
+    yourNet,
+  ];
 }

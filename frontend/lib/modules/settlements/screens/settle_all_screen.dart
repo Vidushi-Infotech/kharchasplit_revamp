@@ -8,6 +8,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../models/settlement_model.dart';
+import '../../expenses/widgets/add_expense_top_bar.dart';
 import '../../friends/state/friends_provider.dart';
 import '../state/settle_all_controller.dart';
 import '../widgets/payment_method_selector.dart';
@@ -106,10 +107,12 @@ class _SettleAllScreenState extends ConsumerState<SettleAllScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background(isDark),
-      appBar: AppBar(
-        title: const Text(AppStrings.settleAllBalances),
-        elevation: 0,
-        backgroundColor: AppColors.surface(isDark),
+      // Same flat "✕ title" bar as Record a payment; the total's own
+      // button below records it.
+      appBar: AddExpenseTopBar(
+        title: AppStrings.settleAllBalances,
+        isDark: isDark,
+        onClose: () => context.pop(),
       ),
       body: linesAsync.when(
         loading: () => Padding(

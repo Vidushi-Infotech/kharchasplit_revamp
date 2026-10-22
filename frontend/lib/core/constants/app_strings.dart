@@ -32,6 +32,15 @@ abstract final class AppStrings {
   // Lower-case variants for the trailing balance on list rows.
   static const youOweLower = 'you owe';
   static const settledUpLower = 'settled up';
+  static const youAreOwedLower = 'you are owed';
+  // Trailing label on an expense row (from the viewer's side).
+  static const youLent = 'you lent';
+  static const youBorrowed = 'you borrowed';
+  static const notInvolved = 'not involved';
+  static const noExpenses = 'no expenses';
+  static String youPaidAmount(String amount) => 'You paid $amount';
+  static String plusMoreBalances(int n) =>
+      'Plus $n more balance${n == 1 ? '' : 's'}';
   static String inGroupNameOwesYou(String group, String name, String amount) =>
       'In $group: $name owes you $amount';
   static String inGroupYouOwe(String group, String amount) =>
@@ -206,6 +215,8 @@ abstract final class AppStrings {
       'Friends shows what each person owes you across groups';
   static const whatsNewAccount =
       'Personal expenses and Reports are under Account';
+  static const whatsNewAddExpense =
+      'Tap Add expense at the bottom right to add a bill';
   static const gotIt = 'Got it';
 
   // ── UPI (pay by UPI, UPI ID on the profile) ─────────────────────────
@@ -563,4 +574,278 @@ abstract final class AppStrings {
       'then save again.';
   static String fxPaidOriginal(String amount, String rateLine, String date) =>
       'Paid $amount · $rateLine on $date';
+
+  // ── Tabs redesign (U2) ──
+  // Groups tab
+  static const createGroupTooltip = 'Create group';
+  static const filterGroups = 'Filter groups';
+  static const groupsFilterAll = 'All groups';
+  static const groupsFilterOutstanding = 'Outstanding balances';
+  static const groupsFilterYouOwe = 'Groups you owe';
+  static const groupsFilterOweYou = 'Groups that owe you';
+  static const startNewGroup = 'Start a new group';
+  static String showArchivedGroups(int n) =>
+      'Show $n archived ${n == 1 ? 'group' : 'groups'}';
+  static const hideArchivedGroups = 'Hide archived groups';
+  static const groupsFilteredNote = 'Showing only some of your groups';
+
+  // Friends tab
+  static String inGroupYouOweName(String group, String name, String amount) =>
+      'In $group: you owe $name $amount';
+  static String plusMoreGroups(int n) =>
+      'Plus $n more ${n == 1 ? 'group' : 'groups'}';
+  static const addMoreFriends = 'Add more friends';
+
+  // Activity tab — sentence pieces ("You added "Dinner" in "Trip".")
+  static const activityYou = 'You';
+  static const activityYouLower = 'you';
+  static const activitySomeone = 'Someone';
+  static const activityAnExpense = 'an expense';
+  static const activityAdded = 'added';
+  static const activityUpdated = 'updated';
+  static const activityDeleted = 'deleted';
+  static const activityIn = 'in';
+  static const activityFrom = 'from';
+  static const activityTo = 'to';
+  static const activityPaid = 'paid';
+  static const activityConfirmedPaymentFrom = 'confirmed a payment from';
+  static const activityDeletedPaymentFrom = 'deleted a payment from';
+  static const activityCreatedGroup = 'created the group';
+  static const activityUpdatedGroup = 'updated the group';
+  static const activityArchivedGroup = 'archived the group';
+  static const activityDeletedGroup = 'deleted the group';
+  static const activityTurnedOnSimplify = 'turned on simplify debts in';
+  static const activityTurnedOffSimplify = 'turned off simplify debts in';
+  static const activityJoined = 'joined';
+  static const activityLeft = 'left';
+  static const activityRemoved = 'removed';
+  static const activityMade = 'made';
+  static const activityCommentedOn = 'commented on';
+  static String activityTotal(String amount) => 'Total $amount';
+  static String activityYouReceived(String amount) => 'You received $amount';
+  static String activityYouGetBack(String amount) => 'You get back $amount';
+  static String activityYouOwe(String amount) => 'You owe $amount';
+  static const activityYouOweNothing = 'You do not owe anything';
+  static const activityToday = 'Today';
+  static const activityYesterday = 'Yesterday';
+  static const markAllRead = 'Mark all read';
+  static const unread = 'Unread';
+  static const noActivityYet = 'No activity yet';
+  static const noActivityHint =
+      'Expenses, payments and group events will appear here.';
+  static const couldNotLoadActivity = "Couldn't load activity";
+  static const activityFilterAll = 'All';
+  static const activityFilterExpenses = 'Expenses';
+  static const activityFilterSettled = 'Payments';
+  static const activityFilterGroups = 'Groups';
+
+  // Account tab
+  static const preferences = 'Preferences';
+  static const tools = 'Tools';
+  static const feedback = 'Feedback';
+  static const editProfile = 'Edit profile';
+  static const security = 'Security';
+  static const appearance = 'Appearance';
+  static const themeSystem = 'System default';
+  static const themeLight = 'Light';
+  static const themeDark = 'Dark';
+  static const supportUsDonate = 'Support us / Donate';
+  static const contactUs = 'Contact us';
+  static const privacyPolicy = 'Privacy policy';
+  static const termsOfService = 'Terms of service';
+  static const logOut = 'Log out';
+
+  // ── Group detail redesign (U3) ──
+  // Expense / payment rows
+  static String namePaid(String name, String amount) => '$name paid $amount';
+  static String youPaidNameAmount(String name, String amount) =>
+      'You paid $name $amount';
+  static String namePaidYou(String name, String amount) =>
+      '$name paid you $amount';
+  static String namePaidName(String from, String to, String amount) =>
+      '$from paid $to $amount';
+  static const paymentAwaitingConfirmation = 'Waiting for confirmation';
+  static const paymentNotReceived = 'Marked as not received';
+  static const expenseNoBalance = 'no balance';
+  static const noExpensesHereYet = 'No expenses here yet';
+  static const noExpensesHereHint =
+      'Add an expense to start splitting with this group.';
+  static const addExpenseArchived = 'Add expense unavailable, group archived';
+  // Header
+  static String groupOverallOwed(String amount) =>
+      'You are owed $amount overall';
+  static String groupOverallOwe(String amount) => 'You owe $amount overall';
+  static const groupAllSettled = 'You are all settled up in this group';
+  static const groupExport = 'Export';
+  static const groupRecurring = 'Recurring';
+  static const groupSettings = 'Group settings';
+  static const groupMoreOptions = 'More options';
+  static const groupBack = 'Back';
+  static String groupCoverOf(String name) => 'Cover of $name';
+  // Balances screen
+  static const balanceYou = 'You';
+  static const balanceYouObject = 'you';
+  static String balanceGetsBackTotal(String name, String amount) =>
+      '$name gets back $amount in total';
+  static String balanceOwesTotal(String name, String amount) =>
+      '$name owes $amount in total';
+  static String balanceYouGetBackTotal(String amount) =>
+      'You get back $amount in total';
+  static String balanceYouOweTotal(String amount) =>
+      'You owe $amount in total';
+  static String balanceIsSettled(String name) => '$name is settled up';
+  static String balanceOwesTo(String from, String amount, String to) =>
+      '$from owes $amount to $to';
+  static String balanceYouOweTo(String amount, String to) =>
+      'You owe $amount to $to';
+  static const remindEllipsis = 'Remind…';
+  static const balancePending = 'Payment pending';
+  // Totals screen
+  static const paymentsMade = 'Payments made';
+  static const paymentsReceived = 'Payments received';
+  static const totalChangeInBalance = 'Total change in balance';
+  // Group settings screen
+  static const groupMembers = 'Group members';
+  static const addPeopleToGroup = 'Add people to group';
+  static const advancedSettings = 'Advanced settings';
+  static const editGroupDetails = 'Edit group';
+  static const editGroupHint = 'Name and cover photo';
+  static const leaveGroup = 'Leave group';
+  static const deleteGroup = 'Delete group';
+  static const memberGetsBack = 'gets back';
+  static const memberOwes = 'owes';
+  static const adminOnlySetting = 'Only the group admin can change this';
+
+  // ── Expense & settle redesign (U4/U5) ──
+  static const addAnExpense = 'Add an expense';
+  static const withYouAnd = 'With you and:';
+  static const chooseGroupOrFriend = 'Choose a group or friend';
+  static const addExpenseTo = 'Add expense to';
+  static const expenseGroupLocked =
+      "An expense can't be moved to another group.";
+  static const enterDescription = 'Enter a description';
+  static const descriptionRequired = 'Add a description';
+  static const amountMustBePositive = 'Enter an amount greater than 0';
+  static const chooseCategory = 'Choose a category';
+  static String paidSplitSentence(String paidBy, String split) =>
+      'Paid by $paidBy and split $split.';
+  static const paidByWord = 'Paid by';
+  static const andSplitWord = 'and split';
+  static const youLower = 'you';
+  static const splitPillEqually = 'equally';
+  static const splitPillExact = 'unequally';
+  static const splitPillPercent = 'by percentages';
+  static const splitPillShares = 'by shares';
+  static const splitPillAdjustment = 'by adjustment';
+  static const splitPillGroupDefault = 'by group default';
+  static String changePayerLabel(String paidBy) =>
+      'Paid by $paidBy. Tap to change who paid';
+  static String changeSplitLabel(String split) =>
+      'Split $split. Tap to change the split';
+  static const saveLabel = 'Save';
+  static const savingLabel = 'Saving';
+  static String dateTapLabel(String date) => 'Date $date. Tap to change';
+  static const addOrScanReceipt = 'Add or scan a receipt';
+  static const addNotesLabel = 'Add notes';
+  static const receiptAdded = 'Receipt added';
+  static const splitOptions = 'Split options';
+  static const splitTabEqually = 'Equally';
+  static const splitTabExact = 'Exact';
+  static const splitTabPercent = 'Percent';
+  static const splitTabShares = 'Shares';
+  static const splitTabAdjust = 'Adjust';
+  static const splitHeadEqually = 'Split equally';
+  static const splitHeadExact = 'Split by exact amounts';
+  static const splitHeadPercent = 'Split by percentages';
+  static const splitHeadShares = 'Split by shares';
+  static const splitHeadAdjustment = 'Split by adjustment';
+  static const splitDescEqually = 'Select which people owe an equal share.';
+  static const splitDescExact = 'Specify exactly how much each person owes.';
+  static const splitDescPercent =
+      "Enter the percentage split that's fair for your situation.";
+  static const splitDescShares =
+      'Great for time-based splitting (2 nights → 2 shares) and splitting '
+      'across families (family of 3 → 3 shares).';
+  static String perPerson(String amount) => '$amount/person';
+  static String peopleInSplit(int n) => n == 1 ? '(1 person)' : '($n people)';
+  static String amountOfTotal(String part, String total) => '$part of $total';
+  static String amountOverShort(String amount) => '$amount over';
+  static String totalShares(String n) => '$n total shares';
+  static String totalAmountShort(String amount) => '$amount total';
+  static const selectAllShort = 'All';
+  static const selectAtLeastOne = 'Select at least one person';
+  static String personPaidAndOwes(String name, String paid, String owes) =>
+      '$name paid $paid and owes $owes';
+  static String personPaid(String name, String paid) => '$name paid $paid';
+  static String personOwes(String name, String owes) => '$name owes $owes';
+  static String youPaidAndOwe(String paid, String owe) =>
+      'You paid $paid and owe $owe';
+  static String youOweAmount(String owe) => 'You owe $owe';
+  static String addedOnDate(String date) => 'Added on $date';
+  static String updatedByOn(String name, String date) =>
+      'Updated by $name on $date';
+  static const deleteLabel = 'Delete';
+  static const moreOptions = 'More options';
+  static const showWorking = 'Show working';
+  static const hideWorking = 'Hide working';
+  static const viewReceipt = 'View receipt';
+  static const recordAPayment = 'Record a payment';
+  static String youPaidName(String name) => 'You paid $name';
+  static const todayLabel = 'Today';
+  static const methodLabel = 'Method';
+  static const noteLabel = 'Note';
+  static const pickGroupFirst = 'Pick a group first.';
+  static const inWhichGroup = 'In which group?';
+  static const noSharedGroups =
+      "You don't share any groups with this person yet.";
+  static const paymentAmountLabel = 'Amount paid';
+  static const choosePayer = 'Choose payer';
+  static const paymentDateToday =
+      "Payments are recorded with today's date.";
+
+  // ── Friend detail redesign ──
+  static String friendOverallOwesYou(String name, String amount) =>
+      '$name owes you $amount overall';
+  static String friendOverallYouOwe(String name, String amount) =>
+      'You owe $name $amount overall';
+  static String friendInGroupOwesYou(String group, String name, String amount) =>
+      'In $group, $name owes you $amount';
+  static String friendInGroupYouOwe(String group, String name, String amount) =>
+      'In $group, you owe $name $amount';
+  static const friendNonGroupLower = 'non-group expenses';
+  static const friendOpenGroup = 'Open group';
+  static const friendNoSharedExpenses = 'No shared expenses yet';
+  static String friendNoSharedExpensesHint(String name) =>
+      'Add an expense to start splitting with $name.';
+  static const friendSharedExpensesError = "Couldn't load shared expenses";
+  static const friendLoadError = 'Failed to load friend details';
+  static const friendNotFound = 'Friend not found';
+  static const friendNotFoundHint =
+      "You don't share any groups or balances with this person.";
+  static const backToFriends = 'Back to friends';
+  static const friendFallbackTitle = 'Friend';
+  static String totalsPaidShareLine(String paid, String share) =>
+      'Paid $paid · Share $share';
+
+  // ── Payments history redesign ──
+  static String historyOwesYouIn(String name, String amount, String group) =>
+      '$name owes you $amount in $group';
+  static String historyYouOweIn(String name, String amount, String group) =>
+      'You owe $name $amount in $group';
+  static String historySettledIn(String name, String group) =>
+      'You and $name are settled up in $group';
+  static String historySettledWith(String name) =>
+      'You and $name are settled up';
+  static String historyPendingFromMe(String amount, String name) =>
+      'You paid $amount, waiting for $name to confirm';
+  static String historyPendingFromThem(String name, String amount) =>
+      '$name paid you $amount, waiting for you to confirm';
+  static const historyCoveredByPending =
+      'Your pending payment covers this balance';
+  static const historyPaymentConfirmed = 'Confirmed';
+  static const historyNoPayments = 'No payments yet';
+  static String historyNoPaymentsHint(String name) =>
+      'When you settle up with $name, payments will appear here.';
+  static String historyBetween(String from, String to) =>
+      'Money flows from $from to $to';
 }

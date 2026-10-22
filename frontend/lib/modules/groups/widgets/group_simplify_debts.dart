@@ -1,69 +1,33 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../components/web/adaptive_sheet.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../data/groups/groups_repository.dart';
-import '../../../models/group_model.dart';
 import '../state/group_detail_provider.dart';
 import '../state/group_lifecycle_controller.dart';
 
-/// ⋮-menu value for the admin-only "Simplify group debts" entry. Routed
-/// through the top bar's lifecycle callback like the archive entries.
-const simplifyDebtsMenuValue = 'settings_simplify_debts';
+/// "Simplify group debts" switch row for Group settings. Only an admin can
+/// flip it ([canEdit]); everyone else sees the current state.
+class GroupSimplifyDebtsTile extends ConsumerStatefulWidget {
+  const GroupSimplifyDebtsTile({
+    super.key,
+    required this.groupId,
+    required this.canEdit,
+  });
 
-/// "Simplify group debts · On/Off" entry for the ⋮ menu (admins only, and
-/// only while the `simplifyDebts` flag is on — the caller decides).
-PopupMenuEntry<String> buildSimplifyDebtsMenuItem(
-  bool isDark,
-  GroupModel group,
-) {
-  return PopupMenuItem(
-    value: simplifyDebtsMenuValue,
-    child: Row(
-      children: [
-        Icon(
-          Icons.auto_fix_high_rounded,
-          size: 18,
-          color: AppColors.textPrimary(isDark),
-        ),
-        const SizedBox(width: 10),
-        const Flexible(child: Text(AppStrings.simplifyGroupDebts)),
-        const SizedBox(width: 8),
-        Text(
-          group.simplifyDebts ? AppStrings.on : AppStrings.off,
-          style: AppTextStyles.caption(
-            isDark,
-          ).copyWith(color: AppColors.textSecondary(isDark)),
-        ),
-      ],
-    ),
-  );
-}
-
-/// Opens the switch sheet for [groupId].
-Future<void> showSimplifyDebtsSheet(BuildContext context, String groupId) {
-  return showAdaptiveSheet<void>(
-    context: context,
-    size: AdaptiveSheetSize.small,
-    useRootNavigator: true,
-    builder: (_) => _SimplifyDebtsSheet(groupId: groupId),
-  );
-}
-
-class _SimplifyDebtsSheet extends ConsumerStatefulWidget {
-  const _SimplifyDebtsSheet({required this.groupId});
   final String groupId;
+  final bool canEdit;
 
   @override
-  ConsumerState<_SimplifyDebtsSheet> createState() =>
-      _SimplifyDebtsSheetState();
+  ConsumerState<GroupSimplifyDebtsTile> createState() =>
+      _GroupSimplifyDebtsTileState();
 }
 
-class _SimplifyDebtsSheetState extends ConsumerState<_SimplifyDebtsSheet> {
+class _GroupSimplifyDebtsTileState
+    extends ConsumerState<GroupSimplifyDebtsTile> {
   // Local UI flag only — the switch is disabled while the PUT is in flight.
   bool _saving = false;
 
@@ -101,51 +65,36 @@ class _SimplifyDebtsSheetState extends ConsumerState<_SimplifyDebtsSheet> {
       ).select((d) => d.value?.group.simplifyDebts ?? false),
     );
 
-    return Material(
-      color: AppColors.surface(isDark),
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(8, 16, 8, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Semantics(
-                toggled: enabled,
-                label: AppStrings.simplifyGroupDebts,
-                child: SwitchListTile.adaptive(
-                  value: enabled,
-                  activeTrackColor: AppColors.brand,
-                  onChanged: _saving ? null : _toggle,
-                  secondary: _saving
-                      ? const SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(
-                          Icons.auto_fix_high_rounded,
-                          color: AppColors.brand,
-                        ),
-                  title: Text(
-                    AppStrings.simplifyGroupDebts,
-                    style: AppTextStyles.body1(
-                      isDark,
-                    ).copyWith(fontWeight: FontWeight.w600),
-                  ),
-                  subtitle: Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Text(
-                      AppStrings.simplifyGroupDebtsHint,
-                      style: AppTextStyles.caption(
-                        isDark,
-                      ).copyWith(color: AppColors.textSecondary(isDark)),
-                    ),
-                  ),
-                ),
-              ),
-            ],
+    return Semantics(
+      toggled: enabled,
+      label: AppStrings.simplifyGroupDebts,
+      child: SwitchListTile.adaptive(
+        value: enabled,
+        activeTrackColor: AppColors.brand,
+        onChanged: _saving || !widget.canEdit ? null : _toggle,
+        secondary: _saving
+            ? const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.auto_fix_high_rounded, color: AppColors.brand),
+        title: Text(
+          AppStrings.simplifyGroupDebts,
+          style: AppTextStyles.body1(
+            isDark,
+          ).copyWith(fontWeight: FontWeight.w600),
+        ),
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Text(
+            widget.canEdit
+                ? AppStrings.simplifyGroupDebtsHint
+                : '${AppStrings.simplifyGroupDebtsHint}\n'
+                      '${AppStrings.adminOnlySetting}',
+            style: AppTextStyles.caption(
+              isDark,
+            ).copyWith(color: AppColors.textSecondary(isDark)),
           ),
         ),
       ),

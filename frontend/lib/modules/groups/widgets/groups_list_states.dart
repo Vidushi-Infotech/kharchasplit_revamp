@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/responsive/breakpoints.dart';
-import '../../../core/responsive/content_width.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 
@@ -19,12 +17,7 @@ class GroupsEmptyResultsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.fromLTRB(
-        20,
-        32,
-        20,
-        bottomNavReserve(context.widthTier),
-      ),
+      padding: const EdgeInsets.fromLTRB(20, 32, 20, 16),
       child: Column(
         children: [
           Icon(

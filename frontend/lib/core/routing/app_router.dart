@@ -12,6 +12,9 @@ import '../../modules/groups/screens/groups_screen.dart';
 import '../../modules/groups/screens/group_detail_screen.dart';
 import '../../modules/groups/screens/create_group_screen.dart';
 import '../../modules/groups/screens/recurring_expenses_screen.dart';
+import '../../modules/groups/screens/group_settings_screen.dart';
+import '../../modules/groups/screens/group_balances_screen.dart';
+import '../../modules/groups/screens/group_totals_screen.dart';
 import '../../modules/friends/screens/friends_screen.dart';
 import '../../modules/friends/screens/friend_detail_screen.dart';
 import '../../modules/activity/screens/activity_screen.dart';
@@ -169,6 +172,29 @@ final appRouter = GoRouter(
           path: '/home/groups/:groupId/recurring',
           name: 'group-recurring',
           builder: (context, state) => RecurringExpensesScreen(
+            groupId: state.pathParameters['groupId']!,
+          ),
+        ),
+        // Group detail sub-pages: ⚙ settings, and the Balances / Totals
+        // action chips.
+        GoRoute(
+          path: '/home/groups/:groupId/settings',
+          name: 'group-settings',
+          builder: (context, state) => GroupSettingsScreen(
+            groupId: state.pathParameters['groupId']!,
+          ),
+        ),
+        GoRoute(
+          path: '/home/groups/:groupId/balances',
+          name: 'group-balances',
+          builder: (context, state) => GroupBalancesScreen(
+            groupId: state.pathParameters['groupId']!,
+          ),
+        ),
+        GoRoute(
+          path: '/home/groups/:groupId/totals',
+          name: 'group-totals',
+          builder: (context, state) => GroupTotalsScreen(
             groupId: state.pathParameters['groupId']!,
           ),
         ),

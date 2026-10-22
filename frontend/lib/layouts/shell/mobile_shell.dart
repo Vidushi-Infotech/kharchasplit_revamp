@@ -2,17 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../core/constants/app_strings.dart';
 import '../../core/lifecycle/app_lifecycle_refresher.dart';
-import 'floating_bottom_bar.dart';
 import 'pick_group_for_expense_sheet.dart';
+import 'shell_bottom_bar.dart';
 import 'shell_state.dart';
 import 'whats_new_sheet.dart';
 
-/// Mobile shell with the floating bottom bar.
-///
-/// Tabs (Splitwise-style): Groups · Friends · ➕ · Activity · Account — see
-/// [ShellTab] for the index ↔ route mapping shared with the tablet rail.
+/// Mobile shell: flat bottom tabs (Groups · Friends · Activity · Account)
+/// plus a floating "Add expense" button — see [ShellTab] for the index ↔
+/// route mapping shared with the tablet rail.
 class MobileShell extends ConsumerWidget {
   final Widget child;
 
@@ -62,43 +60,31 @@ class MobileShell extends ConsumerWidget {
           }
         },
         child: Scaffold(
-          extendBody: true,
           body: child,
-          bottomNavigationBar: FloatingBottomBar(
-            selectedIndex: selectedIndex,
-            fabIndex: ShellTab.create,
-            onItemSelected: (index) {
+          floatingActionButton: _showsAddExpense(routerState.uri.path)
+              ? ShellAddExpenseButton(
+                  onPressed: () => PickGroupForExpenseSheet.show(context),
+                )
+              : null,
+          bottomNavigationBar: ShellBottomBar(
+            selectedTab: selectedIndex,
+            onTabSelected: (index) {
               ref.read(selectedNavIndexProvider.notifier).state = index;
               _navigateToTab(context, index);
             },
-            items: const [
-              FloatingNavItem(
-                // Several people = a group; one person = a friend.
-                icon: Icons.groups_rounded,
-                label: AppStrings.groups,
-              ),
-              FloatingNavItem(
-                icon: Icons.person_rounded,
-                label: AppStrings.friends,
-              ),
-              FloatingNavItem(
-                icon: Icons.add_rounded,
-                label: AppStrings.addExpense,
-              ),
-              FloatingNavItem(
-                icon: Icons.timeline_rounded,
-                label: AppStrings.activity,
-              ),
-              FloatingNavItem(
-                icon: Icons.account_circle_rounded,
-                label: AppStrings.account,
-              ),
-            ],
           ),
         ),
       ),
     );
   }
+
+  /// The floating "Add expense" button shows on the Groups, Friends and
+  /// Activity tab roots only — screens pushed inside the shell (group
+  /// detail…) have their own add button, and Account has nothing to add.
+  static bool _showsAddExpense(String path) =>
+      path == ShellTab.locations[ShellTab.groups] ||
+      path == ShellTab.locations[ShellTab.friends] ||
+      path == ShellTab.locations[ShellTab.activity];
 
   void _navigateToTab(BuildContext context, int index) {
     if (index == ShellTab.create) {

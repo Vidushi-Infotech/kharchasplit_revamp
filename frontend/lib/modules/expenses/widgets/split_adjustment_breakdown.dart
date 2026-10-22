@@ -91,25 +91,12 @@ class _SplitAdjustmentBreakdownState extends State<SplitAdjustmentBreakdown> {
     );
     final tooLarge = owed.values.any((p) => p < 0);
 
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 12),
-      decoration: BoxDecoration(
-        color: AppColors.surface(isDark),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.divider(isDark)),
-      ),
+    // Flat, like the other Split options tabs.
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
-            child: Text(
-              AppStrings.adjustmentHint,
-              style: AppTextStyles.caption(
-                isDark,
-              ).copyWith(color: AppColors.textSecondary(isDark)),
-            ),
-          ),
           SplitPeopleToggle(
             members: widget.members,
             includedMemberIds: widget.includedMemberIds,

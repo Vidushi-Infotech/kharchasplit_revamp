@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/constants/app_strings.dart';
@@ -18,31 +17,40 @@ import '../state/group_totals_provider.dart';
 import 'export_statement_period_sheet.dart';
 import 'group_totals_cards.dart';
 
-/// "Export to CSV" and "Download group statement (PDF)" in the group ⋮
-/// menu, next to "Export to Excel".
-///
-/// The top bar has no group id or ref, so the handler takes both from the
-/// context: the id from the `/home/groups/:groupId` route, providers from
-/// the enclosing ProviderScope. Only shown once the detail has loaded.
+/// The group's export options — Excel (server ledger), CSV (server) and
+/// the PDF statement (built on the phone) — used by the Export chip's
+/// sheet and the ⋮ menu on group detail.
+const exportExcelMenuValue = 'export_excel';
 const exportCsvMenuValue = 'export_csv';
 const exportPdfMenuValue = 'export_pdf';
 
 bool isGroupExportMenuValue(String value) =>
-    value == exportCsvMenuValue || value == exportPdfMenuValue;
+    value == exportExcelMenuValue ||
+    value == exportCsvMenuValue ||
+    value == exportPdfMenuValue;
 
-List<PopupMenuEntry<String>> buildGroupExportMenuItems(bool isDark) => [
-  _item(
-    exportCsvMenuValue,
-    Icons.table_chart_outlined,
-    AppStrings.exportToCsv,
-    isDark,
+/// (value, icon, label) for each export, Excel first.
+const _exportOptions = [
+  (
+    exportExcelMenuValue,
+    Icons.file_download_outlined,
+    AppStrings.exportToExcel,
   ),
-  _item(
+  (exportCsvMenuValue, Icons.table_chart_outlined, AppStrings.exportToCsv),
+  (
     exportPdfMenuValue,
     Icons.picture_as_pdf_outlined,
     AppStrings.exportStatementPdf,
-    isDark,
   ),
+];
+
+List<PopupMenuEntry<String>> buildGroupExportMenuItems(
+  bool isDark, {
+  bool includeExcel = false,
+}) => [
+  for (final (value, icon, label) in _exportOptions)
+    if (includeExcel || value != exportExcelMenuValue)
+      _item(value, icon, label, isDark),
 ];
 
 PopupMenuItem<String> _item(
@@ -61,12 +69,43 @@ PopupMenuItem<String> _item(
   ),
 );
 
+/// Bottom sheet listing the exports (the Export chip). Resolves to the
+/// picked value, or null when dismissed.
+Future<String?> showGroupExportSheet(BuildContext context) {
+  final isDark = Theme.of(context).brightness == Brightness.dark;
+  return showModalBottomSheet<String>(
+    context: context,
+    useRootNavigator: true,
+    backgroundColor: AppColors.surface(isDark),
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (ctx) => SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final (value, icon, label) in _exportOptions)
+              ListTile(
+                leading: Icon(icon, color: AppColors.brand),
+                title: Text(label),
+                onTap: () => Navigator.of(ctx).pop(value),
+              ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+/// Runs the CSV or PDF export for [groupId] (Excel goes through
+/// exportGroup in group_admin_actions.dart).
 Future<void> handleGroupExportMenuValue(
   BuildContext context,
-  String value,
-) async {
-  final groupId = GoRouterState.of(context).pathParameters['groupId'];
-  if (groupId == null) return;
+  String value, {
+  required String groupId,
+}) async {
   final container = ProviderScope.containerOf(context, listen: false);
   final detail = container.read(groupDetailProvider(groupId)).value;
   if (detail == null) return;
@@ -149,7 +188,11 @@ Future<StatementFonts?> loadStatementFonts() async {
       rootBundle.load('assets/fonts/NotoSans-Bold.ttf'),
       rootBundle.load('assets/fonts/NotoSansDevanagari-Regular.ttf'),
     ]);
-    return StatementFonts(regular: loaded[0], bold: loaded[1], devanagari: loaded[2]);
+    return StatementFonts(
+      regular: loaded[0],
+      bold: loaded[1],
+      devanagari: loaded[2],
+    );
   } catch (_) {
     return null;
   }

@@ -13,10 +13,14 @@ class PaymentMethodSelector extends StatelessWidget {
     super.key,
     required this.selected,
     required this.onChanged,
+    this.showLabel = true,
   });
 
   final SettlementMethod? selected;
   final ValueChanged<SettlementMethod?> onChanged;
+
+  /// Off when the surrounding sheet already has a "Paid with" title.
+  final bool showLabel;
 
   static const _order = [
     SettlementMethod.cash,
@@ -36,15 +40,18 @@ class PaymentMethodSelector extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Column(
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          '${AppStrings.paymentMethod} (optional)',
-          style: AppTextStyles.caption(
-            isDark,
-          ).copyWith(color: AppColors.textSecondary(isDark)),
-        ),
-        const SizedBox(height: 8),
+        if (showLabel) ...[
+          Text(
+            '${AppStrings.paymentMethod} (optional)',
+            style: AppTextStyles.caption(
+              isDark,
+            ).copyWith(color: AppColors.textSecondary(isDark)),
+          ),
+          const SizedBox(height: 8),
+        ],
         Wrap(
           spacing: 8,
           runSpacing: 8,

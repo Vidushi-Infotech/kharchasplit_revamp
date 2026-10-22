@@ -122,6 +122,12 @@ class GroupTotals {
 
   bool get hasActivity =>
       expenseCount > 0 || paymentsMade > 0 || paymentsReceived > 0;
+
+  /// How much the viewer's balance moved in the period: what they paid
+  /// minus their share, plus payments they made, minus payments they got.
+  /// > 0 → they are owed more (or owe less) than before.
+  double get balanceChange =>
+      youPaid - yourShare + paymentsMade - paymentsReceived;
 }
 
 /// Most month bars shown for "This year" / "All time".

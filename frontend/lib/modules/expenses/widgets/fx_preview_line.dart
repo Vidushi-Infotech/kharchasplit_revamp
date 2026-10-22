@@ -107,15 +107,15 @@ class FxPreviewLine extends ConsumerWidget {
     return Semantics(
       liveRegion: true,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+        // Left-aligned under the amount field (Splitwise-style form).
+        padding: EdgeInsets.zero,
         child: Wrap(
-          alignment: WrapAlignment.center,
+          alignment: WrapAlignment.start,
           crossAxisAlignment: WrapCrossAlignment.center,
           spacing: 4,
           children: [
             Text(
               text,
-              textAlign: TextAlign.center,
               style: AppTextStyles.caption(isDark).copyWith(
                 color: color,
                 fontWeight: muted ? FontWeight.w400 : FontWeight.w600,

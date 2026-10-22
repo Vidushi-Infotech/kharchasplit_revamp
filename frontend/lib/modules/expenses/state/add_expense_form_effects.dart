@@ -6,11 +6,13 @@ import '../../../data/expenses/expenses_repository.dart';
 import '../../../models/models.dart';
 import '../../groups/state/group_detail_provider.dart';
 import '../screens/add_expense_screen.dart';
+import '../widgets/add_expense_group_picker_sheet.dart';
 import '../widgets/receipt_notes_sheets.dart';
 import '../widgets/repeat_sheet.dart';
 import 'add_expense_category_suggest.dart';
 import 'add_expense_form_helpers.dart';
 import 'add_expense_provider.dart';
+import 'add_expense_sentence.dart';
 import 'add_expense_split_math.dart';
 
 /// Things the Add expense form does on its own while the user fills it in:
@@ -104,6 +106,25 @@ mixin AddExpenseFormEffects on ConsumerState<AddExpenseScreen> {
       onTitleScanned: (text) {
         title.text = text;
         suggestCategoryFor(text);
+      },
+    );
+  }
+
+  /// New expense: move the draft to another group or friend (the "With
+  /// you and:" chip). Member-bound choices (payers, split) start over — see
+  /// [addExpenseStateForGroup].
+  void pickGroupForNewExpense(bool isDark) {
+    final current = ref.read(addExpenseProvider).groupId;
+    showAddExpenseGroupPicker(
+      context,
+      isDark: isDark,
+      currentGroupId: current,
+      onPicked: (id) {
+        if (!mounted || id == current) return;
+        ref.read(addExpenseProvider.notifier).state = addExpenseStateForGroup(
+          ref.read(addExpenseProvider),
+          id,
+        );
       },
     );
   }

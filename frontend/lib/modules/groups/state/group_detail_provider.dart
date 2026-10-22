@@ -1,5 +1,4 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_riverpod/legacy.dart';
 
 import '../../../core/outbox/outbox_store.dart';
 import '../../../core/state/keep_alive_for.dart';
@@ -135,7 +134,3 @@ Map<String, double> computePendingOutgoing({
   }
   return out;
 }
-
-enum GroupTab { balances, expenses, activity, totals }
-
-final groupTabProvider = StateProvider<GroupTab>((ref) => GroupTab.expenses);

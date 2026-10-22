@@ -38,6 +38,7 @@ void showPaidBySheet(
     // Above the floating tab bar.
     useRootNavigator: true,
     isScrollControlled: true,
+    useSafeArea: true,
     backgroundColor: AppColors.background(isDark),
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -50,7 +51,7 @@ void showPaidBySheet(
           mainAxisSize: MainAxisSize.min,
           children: [
             AddExpenseSheetHandle(isDark: isDark),
-            AddExpenseSheetTitle(text: AppStrings.whoPaid, isDark: isDark),
+            AddExpenseSheetTitle(text: AppStrings.choosePayer, isDark: isDark),
             Flexible(
               child: ListView.builder(
                 padding: const EdgeInsets.symmetric(vertical: 4),

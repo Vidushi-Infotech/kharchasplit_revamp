@@ -1,193 +1,124 @@
 import 'package:flutter/material.dart';
+
+import '../../../core/constants/app_strings.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
-import '../../../core/constants/app_strings.dart';
 import '../state/add_expense_split_math.dart';
 
-/// Compact 2-column grid of split options: the 4 SplitTypes plus "By
-/// adjustment" (equal shares ± an amount per person). Hairline borders,
-/// subtle tints, no brand-color fills.
+/// The five split methods as a row of icon tabs (Splitwise style):
+/// `=` equally, `1.23` exact amounts, `%` percentages, shares (bars) and
+/// `+/−` adjustment. The selected tab is filled with the brand color.
 class SplitSelectorWidget extends StatelessWidget {
   const SplitSelectorWidget({
     super.key,
     required this.mode,
-    required this.amount,
     required this.onModeChanged,
   });
 
   final AddExpenseSplitMode mode;
-  final double amount;
   final ValueChanged<AddExpenseSplitMode> onModeChanged;
 
-  static const _options = <_OptionData>[
-    _OptionData(
-      mode: AddExpenseSplitMode.equal,
-      icon: Icons.balance_rounded,
-      label: 'Equally',
-      description: 'Same share',
-    ),
-    _OptionData(
-      mode: AddExpenseSplitMode.exact,
-      icon: Icons.tune_rounded,
-      label: 'Unequally',
-      description: 'Amount each',
-    ),
-    _OptionData(
-      mode: AddExpenseSplitMode.percentage,
-      icon: Icons.percent_rounded,
-      label: 'By %',
-      description: 'Percent each',
-    ),
-    _OptionData(
-      mode: AddExpenseSplitMode.shares,
-      icon: Icons.pie_chart_outline_rounded,
-      label: 'By shares',
-      description: 'Weight-based',
-    ),
-    _OptionData(
-      mode: AddExpenseSplitMode.adjustment,
-      icon: Icons.exposure_rounded,
-      label: AppStrings.splitAdjustment,
-      description: AppStrings.splitAdjustmentShort,
-    ),
+  static const _tabs = <_TabData>[
+    _TabData(AddExpenseSplitMode.equal, '=', AppStrings.splitTabEqually),
+    _TabData(AddExpenseSplitMode.exact, '1.23', AppStrings.splitTabExact),
+    _TabData(AddExpenseSplitMode.percentage, '%', AppStrings.splitTabPercent),
+    _TabData(AddExpenseSplitMode.shares, null, AppStrings.splitTabShares),
+    _TabData(AddExpenseSplitMode.adjustment, '+/−', AppStrings.splitTabAdjust),
   ];
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Row(
       children: [
-        Text(
-          'HOW TO SPLIT',
-          style: AppTextStyles.caption(isDark).copyWith(
-            color: AppColors.textSecondary(isDark),
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.3,
-            fontSize: 11,
+        for (final t in _tabs)
+          Expanded(
+            child: _Tab(
+              data: t,
+              isDark: isDark,
+              selected: t.mode == mode,
+              onTap: () {
+                if (t.mode == mode) return;
+                HapticService.instance.selection();
+                onModeChanged(t.mode);
+              },
+            ),
           ),
-        ),
-        const SizedBox(height: 10),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            // 2-column grid; on very narrow screens fall back to a single column.
-            final crossAxisCount = constraints.maxWidth < 320 ? 1 : 2;
-            return GridView.count(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisCount: crossAxisCount,
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 10,
-              childAspectRatio: crossAxisCount == 1 ? 4.6 : 2.6,
-              children: [
-                for (final opt in _options)
-                  _OptionCard(
-                    isDark: isDark,
-                    data: opt,
-                    selected: mode == opt.mode,
-                    onTap: () {
-                      if (mode != opt.mode) {
-                        HapticService.instance.selection();
-                        onModeChanged(opt.mode);
-                      }
-                    },
-                  ),
-              ],
-            );
-          },
-        ),
       ],
     );
   }
 }
 
-class _OptionCard extends StatelessWidget {
-  const _OptionCard({
-    required this.isDark,
+class _Tab extends StatelessWidget {
+  const _Tab({
     required this.data,
+    required this.isDark,
     required this.selected,
     required this.onTap,
   });
 
+  final _TabData data;
   final bool isDark;
-  final _OptionData data;
   final bool selected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final accent = AppColors.tealDark;
-    final bg = selected
-        ? accent.withValues(alpha: isDark ? 0.16 : 0.08)
-        : AppColors.cardBg(isDark);
-    final borderColor = selected
-        ? accent.withValues(alpha: 0.55)
-        : AppColors.divider(isDark);
-    final textColor = selected ? accent : AppColors.textPrimary(isDark);
-
+    final fg = selected ? Colors.white : AppColors.textPrimary(isDark);
+    final glyph = data.glyph;
     return Semantics(
       button: true,
-      label: '${data.label} split${selected ? ', selected' : ''}',
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 160),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: bg,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: borderColor, width: selected ? 1.4 : 1),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: accent.withValues(alpha: selected ? 0.18 : 0.10),
-                    borderRadius: BorderRadius.circular(10),
+      selected: selected,
+      label: '${data.label} split',
+      excludeSemantics: true,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 160),
+                width: 52,
+                height: 40,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: selected ? AppColors.tealDark : Colors.transparent,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: selected
+                        ? AppColors.tealDark
+                        : AppColors.divider(isDark),
                   ),
-                  child: Icon(data.icon, size: 17, color: accent),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        data.label,
+                child: glyph == null
+                    ? Icon(Icons.bar_chart_rounded, size: 22, color: fg)
+                    : Text(
+                        glyph,
+                        maxLines: 1,
                         style: AppTextStyles.body1(isDark).copyWith(
-                          color: textColor,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13.5,
-                          height: 1.1,
+                          color: fg,
+                          fontWeight: FontWeight.w800,
+                          fontSize: glyph.length > 2 ? 14 : 20,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        data.description,
-                        style: AppTextStyles.caption(isDark).copyWith(
-                          color: AppColors.textSecondary(isDark),
-                          fontSize: 11,
-                          height: 1.2,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                data.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.caption(isDark).copyWith(
+                  color: selected
+                      ? AppColors.tealDark
+                      : AppColors.textSecondary(isDark),
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -195,16 +126,12 @@ class _OptionCard extends StatelessWidget {
   }
 }
 
-class _OptionData {
-  const _OptionData({
-    required this.mode,
-    required this.icon,
-    required this.label,
-    required this.description,
-  });
+class _TabData {
+  const _TabData(this.mode, this.glyph, this.label);
 
   final AddExpenseSplitMode mode;
-  final IconData icon;
+
+  /// Text drawn in the tab; null = the shares bar icon.
+  final String? glyph;
   final String label;
-  final String description;
 }

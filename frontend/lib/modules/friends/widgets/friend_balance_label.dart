@@ -18,32 +18,6 @@ Color friendBalanceColor(double net, bool isDark) {
 String formatFriendAmount(double amount, String currency) =>
     CurrencyFormatter.format(amount.abs(), currency: currency);
 
-/// "In Goa trip ₹500 · Flat ₹200 · +1 more" — only when the friend has
-/// balances in more than one group; `null` otherwise. When the groups go
-/// both ways each one says which: "Goa trip: you owe ₹500 · Flat: owes
-/// you ₹200". The non-group balance reads "Non-group", and alone it is the
-/// whole subtitle.
-String? friendGroupsSubtitle(FriendBalance f) {
-  if (f.groups.length == 1 && f.groups.first.isDirect) {
-    return AppStrings.nonGroup;
-  }
-  if (f.groups.length < 2) return null;
-  final mixed = f.groups.any((g) => g.net > 0) && f.groups.any((g) => g.net < 0);
-  final shown = f.groups
-      .take(2)
-      .map((g) {
-        final amount = formatFriendAmount(g.net, g.currency);
-        if (!mixed) return '${g.shortName} $amount';
-        return g.net > 0
-            ? '${g.shortName}: ${AppStrings.owesYou} $amount'
-            : '${g.shortName}: ${AppStrings.youOweLower} $amount';
-      })
-      .join(' · ');
-  final more = f.groups.length - 2;
-  final prefix = mixed ? '' : 'In ';
-  return '$prefix$shown${more > 0 ? ' · +$more more' : ''}';
-}
-
 /// Right-aligned "owes you ₹X" / "you owe ₹X" / "settled up" for a friend
 /// row. Mixed currencies get one line per currency — never converted.
 class FriendBalanceLabel extends StatelessWidget {

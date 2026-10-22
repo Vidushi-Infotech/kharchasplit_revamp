@@ -18,11 +18,17 @@ class AppTheme {
       cardColor: AppColors.lightCardBg,
 
       // AppBar
-      appBarTheme: const AppBarTheme(
+      appBarTheme: AppBarTheme(
         backgroundColor: AppColors.lightSurface,
         foregroundColor: AppColors.lightTextPrimary,
         elevation: 0,
-        centerTitle: true,
+        // Left-aligned bold titles, the same on every tab and page.
+        centerTitle: false,
+        titleTextStyle: TextStyle(
+          color: AppColors.lightTextPrimary,
+          fontSize: 22,
+          fontWeight: FontWeight.w700,
+        ),
         systemOverlayStyle: SystemUiOverlayStyle(
           statusBarColor: Colors.transparent,
           statusBarIconBrightness: Brightness.dark,
@@ -117,11 +123,17 @@ class AppTheme {
       cardColor: AppColors.darkCardBg,
 
       // AppBar
-      appBarTheme: const AppBarTheme(
+      appBarTheme: AppBarTheme(
         backgroundColor: AppColors.darkSurface,
         foregroundColor: AppColors.darkTextPrimary,
         elevation: 0,
-        centerTitle: true,
+        // Left-aligned bold titles, the same on every tab and page.
+        centerTitle: false,
+        titleTextStyle: TextStyle(
+          color: AppColors.darkTextPrimary,
+          fontSize: 22,
+          fontWeight: FontWeight.w700,
+        ),
         systemOverlayStyle: SystemUiOverlayStyle(
           statusBarColor: Colors.transparent,
           statusBarIconBrightness: Brightness.light,

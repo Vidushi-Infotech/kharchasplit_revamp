@@ -1,12 +1,9 @@
 import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import '../../../components/avatar/avatar_widget.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_text_styles.dart';
-import '../../../core/constants/app_strings.dart';
 import '../../../models/models.dart';
-import 'split_breakdown_footer.dart';
+import 'split_member_row.dart';
 
 class SplitBreakdownWidget extends StatefulWidget {
   final SplitType splitType;
@@ -43,14 +40,12 @@ class SplitBreakdownWidget extends StatefulWidget {
 
 class _SplitBreakdownWidgetState extends State<SplitBreakdownWidget> {
   late Map<String, TextEditingController> _controllers;
-  late bool _isExpanded;
   late TextEditingController _searchController;
   late Set<String> _localIncludedMembers;
 
   @override
   void initState() {
     super.initState();
-    _isExpanded = true;
     _searchController = TextEditingController();
     _controllers = {};
 
@@ -78,6 +73,12 @@ class _SplitBreakdownWidgetState extends State<SplitBreakdownWidget> {
       _localIncludedMembers = widget.includedMemberIds.isEmpty
           ? Set<String>.from(widget.members.map((m) => m.id))
           : Set<String>.from(widget.includedMemberIds);
+      // e.g. the "All" box on the Split options bar: refresh the per-head
+      // amounts for the new count.
+      if (widget.splitType == SplitType.equal &&
+          old.splitType == SplitType.equal) {
+        _applyEqualShares();
+      }
     }
     // When the user switches split method, the per-member inputs must not
     // carry the previous method's numbers (e.g. the equal-split ₹ amounts
@@ -183,30 +184,6 @@ class _SplitBreakdownWidgetState extends State<SplitBreakdownWidget> {
     super.dispose();
   }
 
-  String _getInputHint(SplitType type) {
-    switch (type) {
-      case SplitType.exact:
-        return '0.00';
-      case SplitType.percentage:
-        return '0';
-      case SplitType.shares:
-        return '1';
-      default:
-        return '';
-    }
-  }
-
-  String _getInputSuffix(SplitType type) {
-    switch (type) {
-      case SplitType.percentage:
-        return '%';
-      case SplitType.shares:
-        return 'shares';
-      default:
-        return '';
-    }
-  }
-
   void _updateSplits() {
     final newSplits = <String, double>{};
     for (final member in widget.members) {
@@ -236,393 +213,67 @@ class _SplitBreakdownWidgetState extends State<SplitBreakdownWidget> {
     _updateSplits();
   }
 
-  void _selectAll() {
-    setState(() {
-      _localIncludedMembers = Set<String>.from(widget.members.map((m) => m.id));
-      if (widget.splitType == SplitType.equal) _applyEqualShares();
-    });
-    widget.onIncludedMembersChanged(_localIncludedMembers);
-    _updateSplits();
-  }
-
-  void _deselectAll() {
-    setState(() {
-      _localIncludedMembers.clear();
-      if (widget.splitType == SplitType.equal) _applyEqualShares();
-    });
-    widget.onIncludedMembersChanged(_localIncludedMembers);
-    _updateSplits();
-  }
-
-  ({String label, Color color}) _getValidationStatus() {
-    final includedSum = widget.splits.entries
-        .where((e) => _localIncludedMembers.contains(e.key))
-        .fold<double>(0, (sum, e) => sum + e.value);
-
-    switch (widget.splitType) {
-      case SplitType.exact:
-        final diff = widget.totalAmount - includedSum;
-        if ((diff).abs() < 0.01) {
-          return (label: '✓ Balanced', color: AppColors.success);
-        } else if (diff > 0) {
-          return (
-            label: '${widget.currency}${diff.toStringAsFixed(2)} remaining',
-            color: AppColors.warning,
-          );
-        } else {
-          return (
-            label: 'Over by ${widget.currency}${(-diff).toStringAsFixed(2)}',
-            color: AppColors.warning,
-          );
-        }
-      case SplitType.percentage:
-        final diff = 100 - includedSum;
-        if ((diff).abs() < 0.01) {
-          return (label: '✓ Balanced (100%)', color: AppColors.success);
-        } else if (diff > 0) {
-          return (
-            label: '${diff.toStringAsFixed(1)}% remaining',
-            color: AppColors.warning,
-          );
-        } else {
-          return (
-            label: 'Over by ${(-diff).toStringAsFixed(1)}%',
-            color: AppColors.warning,
-          );
-        }
-      case SplitType.shares:
-        if (includedSum > 0) {
-          return (label: '✓ Valid', color: AppColors.success);
-        } else {
-          return (label: 'No shares set', color: AppColors.warning);
-        }
-      default:
-        return (label: '✓ Balanced', color: AppColors.success);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final status = _getValidationStatus();
     final searchQuery = _searchController.text.toLowerCase();
     final filteredMembers = widget.members
         .where((m) => m.name.toLowerCase().contains(searchQuery))
         .toList();
-    final includedMembers = _localIncludedMembers.length;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface(isDark),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.divider(isDark)),
-      ),
-      margin: const EdgeInsets.symmetric(vertical: 12),
-      child: Column(
-        children: [
-          // Header (collapsible)
-          GestureDetector(
-            onTap: () => setState(() => _isExpanded = !_isExpanded),
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.background(isDark),
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(12),
+    // Flat rows (Splitwise style); the running total / "left" lives in the
+    // Split options bottom bar. Search only pays off in big groups.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (widget.members.length > 8)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Search members...',
+                hintStyle: TextStyle(color: AppColors.textSecondary(isDark)),
+                prefixIcon: Icon(
+                  Icons.search,
+                  color: AppColors.brand,
+                  size: 20,
+                ),
+                isDense: true,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: AppColors.inputBorder(isDark)),
                 ),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Split Breakdown ($includedMembers members)',
-                          style: AppTextStyles.body2(
-                            isDark,
-                          ).copyWith(fontWeight: FontWeight.w600),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: status.color.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      status.label,
-                      style: AppTextStyles.caption(isDark).copyWith(
-                        color: status.color,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Icon(
-                    _isExpanded
-                        ? Icons.expand_less_rounded
-                        : Icons.expand_more_rounded,
-                    color: AppColors.brand,
-                  ),
-                ],
-              ),
+              onChanged: (_) => setState(() {}),
             ),
           ),
-
-          // Content (expandable)
-          if (_isExpanded) ...[
-            const Divider(height: 1),
-            // Search box
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: TextField(
-                controller: _searchController,
-                decoration: InputDecoration(
-                  hintText: 'Search members...',
-                  hintStyle: TextStyle(color: AppColors.textSecondary(isDark)),
-                  prefixIcon: Icon(
-                    Icons.search,
-                    color: AppColors.brand,
-                    size: 20,
-                  ),
-                  suffixIcon: _searchController.text.isNotEmpty
-                      ? GestureDetector(
-                          onTap: () {
-                            _searchController.clear();
-                            setState(() {});
-                          },
-                          child: Icon(
-                            Icons.close,
-                            color: AppColors.brand,
-                            size: 20,
-                          ),
-                        )
-                      : null,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(
-                      color: AppColors.inputBorder(isDark),
-                    ),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
-                ),
-                onChanged: (_) => setState(() {}),
-              ),
-            ),
-            const Divider(height: 1),
-            // Select All / Deselect All buttons
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  TextButton.icon(
-                    onPressed: _selectAll,
-                    icon: const Icon(Icons.done_all_rounded, size: 18),
-                    label: const Text('Select All'),
-                    style: TextButton.styleFrom(
-                      foregroundColor: AppColors.brand,
-                    ),
-                  ),
-                  TextButton.icon(
-                    onPressed: _deselectAll,
-                    icon: const Icon(Icons.clear_all_rounded, size: 18),
-                    label: const Text('Deselect All'),
-                    style: TextButton.styleFrom(
-                      foregroundColor: AppColors.brand,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
-            // Filtered members list
-            Column(
-              children: filteredMembers
-                  .map((member) => _buildMemberRow(isDark, member))
-                  .toList(),
-            ),
-            const Divider(height: 1),
-            // Footer with total + (Unequally only) remaining + helper hint
-            SplitBreakdownFooter(
+        ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: filteredMembers.length,
+          itemBuilder: (_, i) {
+            final m = filteredMembers[i];
+            return SplitMemberRow(
+              member: m,
+              controller: _controllers[m.id]!,
+              included: _localIncludedMembers.contains(m.id),
+              value: widget.splits[m.id] ?? 0,
               splitType: widget.splitType,
               totalAmount: widget.totalAmount,
-              total: _getTotalIncluded(),
               currency: widget.currency,
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  double _getTotalIncluded() {
-    return widget.splits.entries
-        .where((e) => _localIncludedMembers.contains(e.key))
-        .fold<double>(0, (sum, e) => sum + e.value);
-  }
-
-  Widget _buildMemberRow(bool isDark, UserModel member) {
-    final isIncluded = _localIncludedMembers.contains(member.id);
-    final controller = _controllers[member.id]!;
-    final value = widget.splits[member.id] ?? 0;
-
-    // For Unequally (Exact): show % of total + "Owes ₹X" caption under name.
-    String? statusCaption;
-    String? percentCaption;
-    if (widget.splitType == SplitType.exact && isIncluded) {
-      if (widget.totalAmount > 0) {
-        final pct = value / widget.totalAmount * 100;
-        percentCaption = pct == pct.roundToDouble()
-            ? '${pct.toStringAsFixed(0)}% of total'
-            : '${pct.toStringAsFixed(1)}% of total';
-      }
-      statusCaption = value > 0
-          ? 'Owes ${widget.currency}${value.toStringAsFixed(2)}'
-          : 'Not yet assigned';
-    } else if (!isIncluded) {
-      statusCaption = AppStrings.notInThisSplit;
-    }
-
-    return GestureDetector(
-      onTap: () => _toggleMember(member.id),
-      child: Container(
-        color: isIncluded
-            ? Colors.transparent
-            : AppColors.textSecondary(isDark).withValues(alpha: 0.05),
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Checkbox(
-              value: isIncluded,
-              tristate: false,
-              onChanged: (_) => _toggleMember(member.id),
-              activeColor: AppColors.brand,
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-            const SizedBox(width: 8),
-            // Avatar
-            AvatarWidget(
-              name: member.name,
-              imageUrl: member.avatarUrl,
-              radius: 16,
-            ),
-            const SizedBox(width: 8),
-            // Name + (Unequally only) status caption
-            Expanded(
-              flex: 1,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.currentUserId != null &&
-                            member.id == widget.currentUserId
-                        ? '${member.name} (Me)'
-                        : member.name,
-                    style: AppTextStyles.body2(isDark).copyWith(
-                      color: isIncluded
-                          ? AppColors.textPrimary(isDark)
-                          : AppColors.textSecondary(isDark),
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (statusCaption != null) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      statusCaption,
-                      style: AppTextStyles.caption(isDark).copyWith(
-                        color: value > 0
-                            ? AppColors.success
-                            : AppColors.textSecondary(isDark),
-                        fontSize: 11,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                  if (percentCaption != null) ...[
-                    const SizedBox(height: 1),
-                    Text(
-                      percentCaption,
-                      style: AppTextStyles.caption(isDark).copyWith(
-                        color: AppColors.textSecondary(isDark),
-                        fontSize: 10,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            // Input field
-            Expanded(
-              flex: 1,
-              child: TextField(
-                controller: controller,
-                enabled: isIncluded,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                style: AppTextStyles.body2(isDark).copyWith(
-                  color: isIncluded
-                      ? AppColors.textPrimary(isDark)
-                      : AppColors.textSecondary(isDark),
-                ),
-                textAlign: TextAlign.center,
-                decoration: InputDecoration(
-                  prefixText: widget.splitType == SplitType.exact
-                      ? widget.currency
-                      : null,
-                  suffixText: _getInputSuffix(widget.splitType),
-                  hintText: _getInputHint(widget.splitType),
-                  hintStyle: AppTextStyles.body2(
-                    isDark,
-                  ).copyWith(color: AppColors.textSecondary(isDark)),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 8,
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(6),
-                    borderSide: BorderSide(
-                      color: AppColors.inputBorder(isDark),
-                    ),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(6),
-                    borderSide: BorderSide(
-                      color: AppColors.inputBorder(isDark),
-                    ),
-                  ),
-                  disabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(6),
-                    borderSide: BorderSide(color: AppColors.divider(isDark)),
-                  ),
-                ),
-                onChanged: (value) {
-                  if (widget.splitType == SplitType.percentage) {
-                    _autofillPercentage(editedMemberId: member.id);
-                  }
-                  _updateSplits();
-                },
-              ),
-            ),
-          ],
+              isMe: m.id == widget.currentUserId,
+              onToggle: () => _toggleMember(m.id),
+              onChanged: () {
+                if (widget.splitType == SplitType.percentage) {
+                  _autofillPercentage(editedMemberId: m.id);
+                }
+                _updateSplits();
+              },
+            );
+          },
         ),
-      ),
+      ],
     );
   }
 }

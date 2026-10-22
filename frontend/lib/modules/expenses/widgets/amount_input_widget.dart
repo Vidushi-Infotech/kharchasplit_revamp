@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../../core/constants/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 
@@ -14,7 +15,7 @@ class AmountInputWidget extends StatefulWidget {
   final bool autoFocus;
 
   /// When true, the amount is invalid (e.g. zero) and the user has tried to
-  /// save — render the underline and helper text in red.
+  /// save — render the underline and the hint under it in red.
   final bool hasError;
 
   /// Opens the currency picker (`currencyConversion`); null = the symbol
@@ -98,17 +99,21 @@ class _AmountInputWidgetState extends State<AmountInputWidget> {
         ? errorColor
         : AppColors.inputBorder(isDark);
     final focusedBorderColor = widget.hasError ? errorColor : AppColors.brand;
+    final big = TextStyle(
+      fontSize: 34,
+      fontWeight: FontWeight.w700,
+      color: AppColors.textPrimary(isDark),
+      letterSpacing: -0.5,
+    );
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.baseline,
-          textBaseline: TextBaseline.alphabetic,
+          crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            _currencyLabel(),
-            const SizedBox(width: 4),
+            _currencyButton(isDark),
+            const SizedBox(width: 14),
             Expanded(
               child: TextField(
                 controller: _controller,
@@ -120,35 +125,23 @@ class _AmountInputWidgetState extends State<AmountInputWidget> {
                 inputFormatters: [
                   FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
                 ],
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 48,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary(isDark),
-                ),
+                style: big,
                 decoration: InputDecoration(
-                  hintText: '0',
-                  hintStyle: TextStyle(
-                    fontSize: 48,
-                    fontWeight: FontWeight.bold,
+                  hintText: '0.00',
+                  hintStyle: big.copyWith(
                     color: AppColors.textSecondary(isDark),
                   ),
-                  border: UnderlineInputBorder(
-                    borderSide: BorderSide(
-                      color: AppColors.inputBorder(isDark),
-                      width: 2,
-                    ),
-                  ),
+                  isDense: true,
                   enabledBorder: UnderlineInputBorder(
                     borderSide: BorderSide(
                       color: enabledBorderColor,
-                      width: 1.5,
+                      width: 1.2,
                     ),
                   ),
                   focusedBorder: UnderlineInputBorder(
                     borderSide: BorderSide(color: focusedBorderColor, width: 2),
                   ),
-                  contentPadding: EdgeInsets.zero,
+                  contentPadding: const EdgeInsets.only(bottom: 4),
                 ),
                 onChanged: (value) {
                   final amount = double.tryParse(value) ?? 0;
@@ -158,51 +151,55 @@ class _AmountInputWidgetState extends State<AmountInputWidget> {
             ),
           ],
         ),
-        const SizedBox(height: 4),
-        Text(
-          widget.hasError
-              ? 'Enter an amount greater than 0'
-              : 'Tap to enter amount',
-          style: AppTextStyles.caption(isDark).copyWith(
-            color: widget.hasError
-                ? errorColor
-                : AppColors.textSecondary(isDark),
-            fontSize: 11,
-            fontWeight: widget.hasError ? FontWeight.w600 : FontWeight.w400,
+        if (widget.hasError)
+          Padding(
+            padding: const EdgeInsets.only(left: 58, top: 4),
+            child: Text(
+              AppStrings.amountMustBePositive,
+              style: AppTextStyles.caption(isDark).copyWith(
+                color: errorColor,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
-        ),
       ],
     );
   }
 
-  Widget _currencyLabel() {
-    final symbol = Text(
-      widget.currency,
-      style: TextStyle(
-        fontSize: widget.currency.length > 2 ? 26 : 36,
-        fontWeight: FontWeight.bold,
-        color: AppColors.brand,
+  /// Square currency button left of the amount (Splitwise style). Opens
+  /// the currency picker when [AmountInputWidget.onCurrencyTap] is set.
+  Widget _currencyButton(bool isDark) {
+    final onTap = widget.onCurrencyTap;
+    final box = Container(
+      width: 44,
+      height: 44,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: AppColors.surface(isDark),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.divider(isDark)),
+      ),
+      child: Text(
+        widget.currency,
+        maxLines: 1,
+        style: TextStyle(
+          fontSize: widget.currency.length > 2 ? 13 : 20,
+          fontWeight: FontWeight.w700,
+          color: AppColors.textPrimary(isDark),
+        ),
       ),
     );
-    final onTap = widget.onCurrencyTap;
-    if (onTap == null) return symbol;
+    if (onTap == null) return box;
     return Semantics(
       button: true,
       label: widget.currencyTapLabel,
       excludeSemantics: true,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              symbol,
-              Icon(Icons.arrow_drop_down_rounded, color: AppColors.brand),
-            ],
-          ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(8),
+          child: box,
         ),
       ),
     );

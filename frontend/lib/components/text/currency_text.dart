@@ -31,9 +31,9 @@ class CurrencyText extends StatelessWidget {
     if (overrideColor != null) return overrideColor!;
 
     if (amount > 0) {
-      return AppColors.greenLight;
+      return AppColors.owed;
     } else if (amount < 0) {
-      return AppColors.warningOrange;
+      return AppColors.owe;
     }
     return AppColors.textSecondary(isDark);
   }
@@ -106,7 +106,7 @@ class CompactCurrencyText extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final color = amount > 0 ? AppColors.greenLight : AppColors.warningOrange;
+    final color = amount > 0 ? AppColors.owed : AppColors.owe;
 
     return Text(
       CurrencyFormatter.compact(amount, currency: currency),

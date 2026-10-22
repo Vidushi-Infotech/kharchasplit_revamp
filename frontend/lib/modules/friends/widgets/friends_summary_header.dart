@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../components/list/list_components.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_text_styles.dart';
 import '../state/friends_provider.dart';
 import 'friend_balance_label.dart';
 
 /// "Overall, you are owed ₹X" / "Overall, you owe ₹X" / "You are all
-/// settled up", one line per currency, plus the hide-settled filter.
+/// settled up" with the hide-settled filter on the right, then a hairline.
+/// Mixed currencies are never converted, so they get one line each.
 class FriendsSummaryHeader extends ConsumerWidget {
   const FriendsSummaryHeader({super.key});
 
@@ -16,61 +17,74 @@ class FriendsSummaryHeader extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final totals = ref.watch(friendsTotalsProvider).value ?? const {};
-    final hideSettled = ref.watch(hideSettledFriendsProvider);
+    const filter = _HideSettledButton();
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: totals.isEmpty
-                  ? [_line(AppStrings.youAreAllSettledUp, 0, isDark)]
-                  : [
-                      for (final e in totals.entries)
-                        _line(
-                          e.value > 0
-                              ? AppStrings.overallYouAreOwed(
-                                  formatFriendAmount(e.value, e.key))
-                              : AppStrings.overallYouOwe(
-                                  formatFriendAmount(e.value, e.key)),
-                          e.value,
-                          isDark,
-                        ),
-                    ],
+    final Widget summary;
+    if (totals.length <= 1) {
+      final e = totals.entries.firstOrNull;
+      summary = OverallBalanceHeader(
+        net: e?.value ?? 0,
+        currency: e?.key ?? 'INR',
+        trailing: filter,
+      );
+    } else {
+      summary = Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final e in totals.entries)
+                    Text(
+                      e.value > 0
+                          ? AppStrings.overallYouAreOwed(
+                              formatFriendAmount(e.value, e.key),
+                            )
+                          : AppStrings.overallYouOwe(
+                              formatFriendAmount(e.value, e.key),
+                            ),
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: BalanceTone.fromAmount(e.value).color(isDark),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                ],
+              ),
             ),
-          ),
-          Semantics(
-            toggled: hideSettled,
-            label: AppStrings.hideSettledUpFriends,
-            child: IconButton(
-              tooltip: AppStrings.hideSettledUpFriends,
-              isSelected: hideSettled,
-              icon: const Icon(Icons.filter_list_rounded),
-              selectedIcon: const Icon(Icons.filter_list_off_rounded),
-              color: hideSettled
-                  ? AppColors.brand
-                  : AppColors.textSecondary(isDark),
-              onPressed: () =>
-                  ref.read(hideSettledFriendsProvider.notifier).toggle(),
-            ),
-          ),
-        ],
-      ),
+            filter,
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        summary,
+        Divider(height: 1, color: AppColors.divider(isDark)),
+      ],
     );
   }
+}
 
-  Widget _line(String text, double net, bool isDark) {
-    return Text(
-      text,
-      style: AppTextStyles.body1(isDark).copyWith(
-        fontWeight: FontWeight.w600,
-        color: net == 0
-            ? AppColors.textSecondary(isDark)
-            : friendBalanceColor(net, isDark),
+class _HideSettledButton extends ConsumerWidget {
+  const _HideSettledButton();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final hideSettled = ref.watch(hideSettledFriendsProvider);
+    return Semantics(
+      toggled: hideSettled,
+      label: AppStrings.hideSettledUpFriends,
+      child: IconButton(
+        tooltip: AppStrings.hideSettledUpFriends,
+        isSelected: hideSettled,
+        icon: const Icon(Icons.tune_rounded),
+        selectedIcon: const Icon(Icons.filter_alt_rounded),
+        color: hideSettled ? AppColors.brand : AppColors.textSecondary(isDark),
+        onPressed: () => ref.read(hideSettledFriendsProvider.notifier).toggle(),
       ),
     );
   }

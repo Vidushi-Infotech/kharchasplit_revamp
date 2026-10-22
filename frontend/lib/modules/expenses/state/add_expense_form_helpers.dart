@@ -87,51 +87,6 @@ AddExpenseState addExpenseStateFromExpense(
   );
 }
 
-/// Value of the "Paid by" row: "You", a name, "You and Asha" or "3 people".
-String addExpensePaidBySummary(
-  AddExpenseState state,
-  List<UserModel> members,
-  String? myId,
-) {
-  String nameOf(String id) =>
-      members.where((m) => m.id == id).map((m) => m.name).firstOrNull ?? '';
-  if (state.payers.length == 2 &&
-      myId != null &&
-      state.payers.containsKey(myId)) {
-    final other = state.payers.keys.firstWhere((id) => id != myId);
-    return AppStrings.youAndName(nameOf(other));
-  }
-  if (state.payers.length > 1) {
-    return AppStrings.peopleCount(state.payers.length);
-  }
-  final payerId = state.payers.keys.firstOrNull ?? state.paidBy?.id ?? myId;
-  if (payerId == null || payerId == myId) return 'You';
-  return state.paidBy?.id == payerId ? state.paidBy!.name : nameOf(payerId);
-}
-
-String addExpenseSplitSummary(AddExpenseState state, List<UserModel> members) {
-  final count = state.includedMemberIds.isEmpty
-      ? members.length
-      : state.includedMemberIds.length;
-  if (count == 0) return 'Equally';
-  if (state.adjustmentMode) return '${AppStrings.splitAdjustment} · $count';
-  switch (state.splitType) {
-    case SplitType.equal:
-      return 'Equally · $count ${count == 1 ? 'person' : 'people'}';
-    case SplitType.exact:
-      return 'By amounts · $count';
-    case SplitType.percentage:
-    case SplitType.shares:
-      final how = state.splitType == SplitType.percentage
-          ? 'By percent'
-          : 'By shares';
-      // Started from the group's default split: say so on the row too.
-      return state.usingGroupDefaultSplit
-          ? '${AppStrings.groupDefaultShort} · $how'
-          : '$how · $count';
-  }
-}
-
 String formatAddExpenseDate(DateTime d) {
   final now = DateTime.now();
   final today = DateTime(now.year, now.month, now.day);

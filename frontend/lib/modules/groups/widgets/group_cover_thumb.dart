@@ -31,6 +31,11 @@ Uint8List? _decodeCoverBase64(String input) {
   }
 }
 
+/// The cover photo's bytes (shared decode cache), or null when [input] is
+/// empty or not valid base64. Used by the group detail banner.
+Uint8List? decodeGroupCover(String? input) =>
+    input == null || input.trim().isEmpty ? null : _decodeCoverBase64(input);
+
 /// Renders a group's cover. Shows the base64 photo when present,
 /// otherwise falls back to the emoji (or a generic icon if the emoji is
 /// the default people glyph). Centralises the logic so every place that

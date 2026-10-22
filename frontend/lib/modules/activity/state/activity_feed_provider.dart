@@ -7,15 +7,17 @@ import '../../auth/state/auth_provider.dart';
 
 final activityFeedProvider =
     AsyncNotifierProvider<ActivityFeedNotifier, List<ActivityModel>>(
-        ActivityFeedNotifier.new);
+      ActivityFeedNotifier.new,
+    );
 
 class ActivityFeedNotifier extends AsyncNotifier<List<ActivityModel>> {
   @override
   Future<List<ActivityModel>> build() async {
     final user = ref.watch(authProvider).user;
     if (user == null) return const [];
-    final result =
-        await ref.read(activitiesRepositoryProvider).listForUser(user.id);
+    final result = await ref
+        .read(activitiesRepositoryProvider)
+        .listForUser(user.id);
     return result.activities;
   }
 
@@ -39,8 +41,11 @@ class ActivityFeedNotifier extends AsyncNotifier<List<ActivityModel>> {
     final repo = ref.read(activitiesRepositoryProvider);
     try {
       await repo.markAsRead(activityId);
-      state = state.whenData((items) =>
-          items.map((a) => a.id == activityId ? a.copyWith(isRead: true) : a).toList());
+      state = state.whenData(
+        (items) => items
+            .map((a) => a.id == activityId ? a.copyWith(isRead: true) : a)
+            .toList(),
+      );
     } catch (_) {
       // Silent — UI already shows the activity, marking is best-effort.
     }
@@ -52,7 +57,8 @@ class ActivityFeedNotifier extends AsyncNotifier<List<ActivityModel>> {
     try {
       await ref.read(activitiesRepositoryProvider).markAllAsRead(user.id);
       state = state.whenData(
-          (items) => items.map((a) => a.copyWith(isRead: true)).toList());
+        (items) => items.map((a) => a.copyWith(isRead: true)).toList(),
+      );
     } catch (_) {
       // Best-effort.
     }
@@ -61,36 +67,38 @@ class ActivityFeedNotifier extends AsyncNotifier<List<ActivityModel>> {
 
 enum ActivityFilter { all, expenses, settlements, groups }
 
-final activityFilterProvider =
-    StateProvider<ActivityFilter>((ref) => ActivityFilter.all);
+final activityFilterProvider = StateProvider<ActivityFilter>(
+  (ref) => ActivityFilter.all,
+);
 
-final filteredActivityFeedProvider =
-    Provider<AsyncValue<List<ActivityModel>>>((ref) {
+final filteredActivityFeedProvider = Provider<AsyncValue<List<ActivityModel>>>((
+  ref,
+) {
   final feedAsync = ref.watch(activityFeedProvider);
   final filter = ref.watch(activityFilterProvider);
 
   return feedAsync.whenData((activities) {
-    switch (filter) {
-      case ActivityFilter.all:
-        return activities;
-      case ActivityFilter.expenses:
-        return activities
-            .where((a) =>
-                a.type == ActivityType.expenseAdded ||
-                a.type == ActivityType.expenseEdited ||
-                a.type == ActivityType.expenseDeleted)
-            .toList();
-      case ActivityFilter.settlements:
-        return activities
-            .where((a) => a.type == ActivityType.settled)
-            .toList();
-      case ActivityFilter.groups:
-        return activities
-            .where((a) =>
-                a.type == ActivityType.groupCreated ||
-                a.type == ActivityType.memberAdded ||
-                a.type == ActivityType.memberRemoved)
-            .toList();
-    }
+    if (filter == ActivityFilter.all) return activities;
+    return activities.where((a) => activityFilterOf(a.type) == filter).toList();
   });
 });
+
+/// Which filter chip an event belongs to (never [ActivityFilter.all]).
+/// Unknown events only show under All.
+ActivityFilter? activityFilterOf(ActivityType type) => switch (type) {
+  ActivityType.expenseAdded ||
+  ActivityType.expenseEdited ||
+  ActivityType.expenseDeleted ||
+  ActivityType.commentAdded => ActivityFilter.expenses,
+  ActivityType.settled ||
+  ActivityType.settlementConfirmed ||
+  ActivityType.settlementDeleted => ActivityFilter.settlements,
+  ActivityType.groupCreated ||
+  ActivityType.groupUpdated ||
+  ActivityType.groupArchived ||
+  ActivityType.groupDeleted ||
+  ActivityType.memberAdded ||
+  ActivityType.memberRemoved ||
+  ActivityType.memberRoleUpdated => ActivityFilter.groups,
+  ActivityType.other => null,
+};

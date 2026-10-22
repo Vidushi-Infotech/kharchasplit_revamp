@@ -12,25 +12,23 @@ import 'group_totals_breakdown.dart';
 import 'group_totals_cards.dart';
 import 'group_totals_members.dart';
 
-/// Splitwise-style "Totals" tab: spending in a period, what you paid and
-/// owe, payments, and breakdowns by category, month and member. All maths
-/// is in group_totals_calculator.dart; this only lays it out.
+/// Body of the Totals page: period chips, the headline numbers as flat
+/// rows, then spending by category, by month and paid vs share per
+/// member. All maths is in group_totals_calculator.dart; this only lays
+/// it out.
 ///
-/// One lazy ListView (same NestedScrollView body pattern as the other
-/// tabs): the fixed sections first, then one row per member.
-class GroupTotalsTab extends ConsumerWidget {
-  const GroupTotalsTab({
+/// One lazy ListView: the fixed sections first, then one row per member.
+class GroupTotalsBody extends ConsumerWidget {
+  const GroupTotalsBody({
     super.key,
     required this.groupId,
     required this.currency,
-    required this.onRefresh,
   });
 
   final String groupId;
 
   /// The group's currency (ISO code or symbol) — every amount is in it.
   final String currency;
-  final Future<void> Function() onRefresh;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -57,7 +55,7 @@ class GroupTotalsTab extends ConsumerWidget {
       if (!totals.hasActivity)
         (_) => _EmptyPeriodCard(isDark: isDark)
       else
-        (_) => GroupTotalsSummaryCards(
+        (_) => GroupTotalsSummaryRows(
           totals: totals,
           currency: currency,
           isDark: isDark,
@@ -81,28 +79,32 @@ class GroupTotalsTab extends ConsumerWidget {
         ? totals.members
         : const <MemberTotal>[];
 
-    return RefreshIndicator(
-      onRefresh: onRefresh,
-      child: ListView.builder(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: EdgeInsets.fromLTRB(pad, 16, pad, 32),
-        itemCount: sections.length + memberRows.length,
-        itemBuilder: (context, index) {
-          if (index < sections.length) {
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 14),
-              child: sections[index](context),
-            );
-          }
-          final member = memberRows[index - sections.length];
-          return GroupTotalsMemberRow(
+    // Member rows are flat list rows with their own 16px inset, so they
+    // get the page gutter minus that to line up with the sections.
+    return ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(0, 16, 0, 32),
+      itemCount: sections.length + memberRows.length,
+      itemBuilder: (context, index) {
+        if (index < sections.length) {
+          return Padding(
+            padding: EdgeInsets.fromLTRB(pad, 0, pad, 18),
+            child: sections[index](context),
+          );
+        }
+        final i = index - sections.length;
+        final member = memberRows[i];
+        return Padding(
+          padding: EdgeInsets.symmetric(horizontal: pad - 16),
+          child: GroupTotalsMemberRow(
             member: member,
             currency: currency,
             isDark: isDark,
             isMe: member.userId == myId,
-          );
-        },
-      ),
+            showDivider: i < memberRows.length - 1,
+          ),
+        );
+      },
     );
   }
 }

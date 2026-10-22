@@ -15,6 +15,7 @@ import '../../../modules/groups/state/group_detail_provider.dart';
 import '../../../modules/groups/state/groups_provider.dart';
 import '../screens/add_expense_screen.dart';
 import '../widgets/repeat_edit_scope_sheet.dart';
+import 'add_expense_form_helpers.dart';
 import 'add_expense_fx.dart';
 import 'add_expense_provider.dart';
 import 'add_expense_submit.dart';
@@ -37,6 +38,23 @@ mixin AddExpenseSaveFlow on ConsumerState<AddExpenseScreen> {
   /// Archived group: nothing can be saved until an admin unarchives it.
   void blockArchivedSave() =>
       _saveBlocked(AppStrings.groupArchivedExpenseBlocked);
+
+  /// Save tapped while it can't save: archived group → its explanation;
+  /// otherwise what's missing ([addExpenseMissingFieldHint]), after
+  /// [revealErrors] red-highlights the fields that block it.
+  void explainBlockedSave({
+    required bool archived,
+    required AddExpenseState state,
+    required VoidCallback revealErrors,
+  }) {
+    if (state.isLoading) return;
+    if (archived) return blockArchivedSave();
+    revealErrors();
+    final hint = addExpenseMissingFieldHint(state);
+    if (hint == null) return;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    _saveBlocked(hint);
+  }
 
   Future<void> handleSave() async {
     final state = ref.read(addExpenseProvider);

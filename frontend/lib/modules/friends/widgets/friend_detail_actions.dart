@@ -2,21 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../components/list/list_components.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/state/feature_flags_provider.dart';
-import '../../../core/theme/app_colors.dart';
 import '../../../data/groups/groups_repository.dart';
 import '../state/friend_detail_provider.dart';
 import '../state/friends_provider.dart';
-import 'friend_add_expense_button.dart';
 import 'friend_group_picker_sheet.dart';
 
-/// Add expense (a non-group expense with this friend), Settle up (primary,
-/// when you owe them in some group) and Remind (secondary, when they owe
-/// you in some group). Multi-group balances ask which group first. With the
-/// `settleAll` flag, owing them overall across several groups makes "Settle
-/// all balances" the primary action and the per-group Settle up secondary.
-/// When everything is settled only Add expense shows.
+/// Action chips under the friend's balance: Settle up (orange, when you owe
+/// them in some group) and Remind… (when they owe you in some group).
+/// Multi-group balances ask which group first. With the `settleAll` flag,
+/// owing them overall across several groups makes "Settle all balances"
+/// the orange chip and "Settle up one group" a plain one. Nothing to show
+/// when everything is settled — Add expense is the floating button.
 class FriendDetailActions extends ConsumerStatefulWidget {
   const FriendDetailActions({super.key, required this.friend});
 
@@ -28,142 +27,52 @@ class FriendDetailActions extends ConsumerStatefulWidget {
 }
 
 class _FriendDetailActionsState extends ConsumerState<FriendDetailActions> {
-  // Local UI flag only — disables Remind while the request is in flight.
+  // Local UI flag only — ignores Remind taps while the request is in flight.
   bool _reminding = false;
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final settleGroups = widget.friend.groupsYouOwe;
-    final remindGroups = widget.friend.groupsOwingYou;
-    final name = widget.friend.user.name;
+    final friend = widget.friend;
+    final settleGroups = friend.groupsYouOwe;
+    final remindGroups = friend.groupsOwingYou;
     // "Settle all balances" (flag `settleAll`): one per currency you owe in
     // overall across 2+ groups. Per-group Settle up then becomes secondary.
     final settleAllCurrencies = watchFeature(ref, 'settleAll')
-        ? widget.friend.settleAllCurrencies
+        ? friend.settleAllCurrencies
         : const <String>[];
-    final multiCurrency = widget.friend.netByCurrency.length > 1;
+    final multiCurrency = friend.netByCurrency.length > 1;
 
-    // Add expense is always offered; it's the main CTA unless there's a
-    // payment to make, where it sits beside Settle up (or under Settle all).
-    final hasPrimarySettle =
-        settleGroups.isNotEmpty || settleAllCurrencies.isNotEmpty;
-    final addExpense = FriendAddExpenseButton(
-      friend: widget.friend,
-      prominent: !hasPrimarySettle,
-    );
-    final plainSettleUp =
-        settleAllCurrencies.isEmpty && settleGroups.isNotEmpty;
-
-    final buttons = <Widget>[
-      if (!hasPrimarySettle) addExpense,
+    final items = <ActionChipItem>[
       for (final currency in settleAllCurrencies)
-        _primary(
+        ActionChipItem(
           label: multiCurrency
               ? AppStrings.settleAllBalancesIn(currency)
               : AppStrings.settleAllBalances,
-          semantics: '${AppStrings.settleAllBalances} with $name, $currency',
           icon: Icons.done_all_rounded,
-          onPressed: () => context.push(
-            '/settle-all/${widget.friend.user.id}?currency=$currency',
+          primary: true,
+          onTap: () => context.push(
+            '/settle-all/${friend.user.id}?currency=$currency',
           ),
         ),
-      if (plainSettleUp)
-        Row(
-          children: [
-            Expanded(
-              child: _primary(
-                label: AppStrings.settleUp,
-                semantics: '${AppStrings.settleUp} with $name',
-                icon: Icons.check_circle_outline_rounded,
-                onPressed: () => _settle(settleGroups),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(child: addExpense),
-          ],
-        ),
-      if (settleAllCurrencies.isNotEmpty) addExpense,
-      if (settleGroups.isNotEmpty && settleAllCurrencies.isNotEmpty)
-        _secondary(
-          isDark,
-          label: AppStrings.settleUpOneGroup,
-          semantics: '${AppStrings.settleUpOneGroup} with $name',
-          icon: Icons.check_circle_outline_rounded,
-          onPressed: () => _settle(settleGroups),
+      if (settleGroups.isNotEmpty)
+        ActionChipItem(
+          label: settleAllCurrencies.isEmpty
+              ? AppStrings.settleUp
+              : AppStrings.settleUpOneGroup,
+          primary: settleAllCurrencies.isEmpty,
+          onTap: () => _settle(settleGroups),
         ),
       if (remindGroups.isNotEmpty)
-        _secondary(
-          isDark,
-          label: AppStrings.remind,
-          semantics: '${AppStrings.remind} $name',
+        ActionChipItem(
+          label: AppStrings.remindEllipsis,
           icon: Icons.notifications_none_rounded,
-          onPressed: _reminding ? null : () => _remind(remindGroups),
+          onTap: () => _remind(remindGroups),
         ),
     ];
-
+    if (items.isEmpty) return const SizedBox.shrink();
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          for (var i = 0; i < buttons.length; i++) ...[
-            if (i > 0) const SizedBox(height: 8),
-            buttons[i],
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _primary({
-    required String label,
-    required String semantics,
-    required IconData icon,
-    required VoidCallback onPressed,
-  }) {
-    return Semantics(
-      button: true,
-      label: semantics,
-      child: FilledButton.icon(
-        style: FilledButton.styleFrom(
-          backgroundColor: AppColors.brand,
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-        icon: Icon(icon),
-        label: Text(label),
-        onPressed: onPressed,
-      ),
-    );
-  }
-
-  Widget _secondary(
-    bool isDark, {
-    required String label,
-    required String semantics,
-    required IconData icon,
-    required VoidCallback? onPressed,
-  }) {
-    return Semantics(
-      button: true,
-      label: semantics,
-      child: OutlinedButton.icon(
-        style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.textSecondary(isDark),
-          side: BorderSide(color: AppColors.divider(isDark)),
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-        icon: Icon(icon),
-        label: Text(label),
-        onPressed: onPressed,
-      ),
+      padding: const EdgeInsets.only(bottom: 12),
+      child: ActionChipBar(items: items),
     );
   }
 
@@ -185,6 +94,7 @@ class _FriendDetailActionsState extends ConsumerState<FriendDetailActions> {
   }
 
   Future<void> _remind(List<FriendGroupBalance> groups) async {
+    if (_reminding) return;
     final g = await _pick(groups, AppStrings.chooseGroupToRemind);
     if (g == null || !mounted) return;
     setState(() => _reminding = true);

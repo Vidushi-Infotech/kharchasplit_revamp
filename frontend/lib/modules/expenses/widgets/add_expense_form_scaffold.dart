@@ -1,30 +1,31 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
-import 'add_expense_top_bar.dart';
 
 /// Page chrome for the Add/Edit expense form: back-guard ([PopScope] routes
-/// system back through [onClose]), top bar, scrollable centred [form] and the
-/// sticky [saveBar] underneath. Width metrics come from the screen.
+/// system back through [onClose]), the [topBar] (✕ title ✓ Save), the
+/// scrollable centred [form] and the [bottomBar] (date / group / receipt /
+/// notes) that rides up with the keyboard. Width metrics come from the
+/// screen.
 class AddExpenseFormScaffold extends StatelessWidget {
   const AddExpenseFormScaffold({
     super.key,
     required this.isDark,
-    required this.title,
+    required this.topBar,
     required this.onClose,
     required this.horizontalPad,
     required this.maxFormWidth,
     required this.form,
-    required this.saveBar,
+    required this.bottomBar,
   });
 
   final bool isDark;
-  final String title;
+  final PreferredSizeWidget topBar;
   final VoidCallback onClose;
   final double horizontalPad;
   final double maxFormWidth;
   final Widget form;
-  final Widget saveBar;
+  final Widget bottomBar;
 
   @override
   Widget build(BuildContext context) {
@@ -36,11 +37,7 @@ class AddExpenseFormScaffold extends StatelessWidget {
       },
       child: Scaffold(
         backgroundColor: AppColors.background(isDark),
-        appBar: AddExpenseTopBar(
-          title: title,
-          onClose: onClose,
-          isDark: isDark,
-        ),
+        appBar: topBar,
         body: SafeArea(
           top: false,
           bottom: false,
@@ -50,9 +47,9 @@ class AddExpenseFormScaffold extends StatelessWidget {
                 child: SingleChildScrollView(
                   padding: EdgeInsets.fromLTRB(
                     horizontalPad,
-                    16,
+                    12,
                     horizontalPad,
-                    20,
+                    24,
                   ),
                   child: Center(
                     child: ConstrainedBox(
@@ -62,7 +59,7 @@ class AddExpenseFormScaffold extends StatelessWidget {
                   ),
                 ),
               ),
-              saveBar,
+              bottomBar,
             ],
           ),
         ),

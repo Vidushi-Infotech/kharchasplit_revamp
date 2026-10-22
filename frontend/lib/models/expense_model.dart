@@ -1,5 +1,6 @@
 import 'package:equatable/equatable.dart';
 import '../core/utils/currency_formatter.dart';
+import '../core/utils/server_date.dart';
 import 'category_model.dart';
 import 'split_model.dart';
 import 'user_model.dart';
@@ -178,7 +179,8 @@ class ExpenseModel extends Equatable {
       paidBy: paidBy,
       splits: splits,
       groupId: (json['groupId'] ?? json['group_id']) as String?,
-      date: dateRaw is String ? DateTime.parse(dateRaw) : DateTime.now(),
+      date: (dateRaw is String ? parseServerCalendarDate(dateRaw) : null) ??
+          DateTime.now(),
       notes: json['notes'] as String?,
       receiptBase64: receipt,
       hasReceipt: json['has_receipt'] == true ||

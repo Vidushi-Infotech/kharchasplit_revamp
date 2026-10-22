@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/constants/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../components/list/list_components.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../state/group_totals_calculator.dart';
@@ -59,7 +60,8 @@ class GroupTotalsPeriodChips extends StatelessWidget {
   }
 }
 
-/// Rounded card shell shared by every Totals section.
+/// Flat section shared by every Totals block: a grey title, then the
+/// content with the page's side gutter.
 class GroupTotalsSection extends StatelessWidget {
   const GroupTotalsSection({
     super.key,
@@ -74,39 +76,34 @@ class GroupTotalsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.cardBg(isDark),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.divider(isDark)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (title != null) ...[
-            Semantics(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (title != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Semantics(
               header: true,
               child: Text(
                 title!,
-                style: AppTextStyles.body1(
-                  isDark,
-                ).copyWith(fontWeight: FontWeight.w700),
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: AppColors.textSecondary(isDark),
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
-            const SizedBox(height: 12),
-          ],
-          child,
-        ],
-      ),
+          ),
+        child,
+      ],
     );
   }
 }
 
-/// The four headline numbers: group spending, you paid, your share,
-/// payments made / received. Two per row on phones, four on wide panes.
-class GroupTotalsSummaryCards extends StatelessWidget {
-  const GroupTotalsSummaryCards({
+/// The headline numbers as flat label / amount rows: group spending, what
+/// you paid, your share, payments made and received, and the change in
+/// your balance (tone colored).
+class GroupTotalsSummaryRows extends StatelessWidget {
+  const GroupTotalsSummaryRows({
     super.key,
     required this.totals,
     required this.currency,
@@ -117,117 +114,128 @@ class GroupTotalsSummaryCards extends StatelessWidget {
   final String currency;
   final bool isDark;
 
-  String _fmt(double v) => CurrencyFormatter.format(v, currency: currency);
+  String _fmt(double v) =>
+      CurrencyFormatter.format(v.abs(), currency: currency);
 
   @override
   Widget build(BuildContext context) {
-    final tiles = [
-      _SummaryTile(
-        label: AppStrings.totalGroupSpending,
-        value: _fmt(totals.totalSpending),
-        caption: AppStrings.totalsExpenseCount(totals.expenseCount),
-        isDark: isDark,
-        highlight: true,
-      ),
-      _SummaryTile(
-        label: AppStrings.totalYouPaidFor,
-        value: _fmt(totals.youPaid),
-        isDark: isDark,
-      ),
-      _SummaryTile(
-        label: AppStrings.yourTotalShare,
-        value: _fmt(totals.yourShare),
-        isDark: isDark,
-      ),
-      _SummaryTile(
-        label: AppStrings.paymentsMadeReceived,
-        value:
-            '${_fmt(totals.paymentsMade)} / '
-            '${_fmt(totals.paymentsReceived)}',
-        isDark: isDark,
-      ),
-    ];
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final perRow = constraints.maxWidth >= 720 ? 4 : 2;
-        const gap = 10.0;
-        final tileWidth = (constraints.maxWidth - gap * (perRow - 1)) / perRow;
-        return Wrap(
-          spacing: gap,
-          runSpacing: gap,
-          children: [
-            for (final t in tiles) SizedBox(width: tileWidth, child: t),
-          ],
-        );
-      },
+    final change = BalanceTone.fromAmount(totals.balanceChange);
+    final sign = switch (change) {
+      BalanceTone.owed => '+',
+      BalanceTone.owe => '−',
+      _ => '',
+    };
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _SummaryRow(
+          label: AppStrings.totalGroupSpending,
+          caption: AppStrings.totalsExpenseCount(totals.expenseCount),
+          value: _fmt(totals.totalSpending),
+          isDark: isDark,
+          emphasis: true,
+        ),
+        _SummaryRow(
+          label: AppStrings.totalYouPaidFor,
+          value: _fmt(totals.youPaid),
+          isDark: isDark,
+        ),
+        _SummaryRow(
+          label: AppStrings.yourTotalShare,
+          value: _fmt(totals.yourShare),
+          isDark: isDark,
+        ),
+        _SummaryRow(
+          label: AppStrings.paymentsMade,
+          value: _fmt(totals.paymentsMade),
+          isDark: isDark,
+        ),
+        _SummaryRow(
+          label: AppStrings.paymentsReceived,
+          value: _fmt(totals.paymentsReceived),
+          isDark: isDark,
+        ),
+        _SummaryRow(
+          label: AppStrings.totalChangeInBalance,
+          value: '$sign${_fmt(totals.balanceChange)}',
+          valueColor: change.color(isDark),
+          isDark: isDark,
+          showDivider: false,
+        ),
+      ],
     );
   }
 }
 
-class _SummaryTile extends StatelessWidget {
-  const _SummaryTile({
+class _SummaryRow extends StatelessWidget {
+  const _SummaryRow({
     required this.label,
     required this.value,
     required this.isDark,
     this.caption,
-    this.highlight = false,
+    this.valueColor,
+    this.emphasis = false,
+    this.showDivider = true,
   });
 
   final String label;
   final String value;
   final String? caption;
+  final Color? valueColor;
   final bool isDark;
-  final bool highlight;
+  final bool emphasis;
+  final bool showDivider;
 
   @override
   Widget build(BuildContext context) {
-    final fg = highlight ? Colors.white : AppColors.textPrimary(isDark);
-    final sub = highlight
-        ? Colors.white.withValues(alpha: 0.8)
-        : AppColors.textSecondary(isDark);
+    final textTheme = Theme.of(context).textTheme;
     return Semantics(
       container: true,
       label: '$label: $value${caption == null ? '' : ', $caption'}',
       excludeSemantics: true,
       child: Container(
-        constraints: const BoxConstraints(minHeight: 92),
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          color: highlight ? AppColors.brand : AppColors.cardBg(isDark),
-          borderRadius: BorderRadius.circular(14),
-          border: highlight
-              ? null
-              : Border.all(color: AppColors.divider(isDark)),
+          border: showDivider
+              ? Border(
+                  bottom: BorderSide(
+                    color: AppColors.divider(isDark),
+                    width: 0.6,
+                  ),
+                )
+              : null,
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
           children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: textTheme.bodyLarge?.copyWith(
+                      color: AppColors.textPrimary(isDark),
+                    ),
+                  ),
+                  if (caption != null)
+                    Text(
+                      caption!,
+                      style: textTheme.bodySmall?.copyWith(
+                        color: AppColors.textSecondary(isDark),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
             Text(
-              label,
-              style: AppTextStyles.caption(isDark).copyWith(color: sub),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
+              value,
+              style: (emphasis ? textTheme.titleLarge : textTheme.titleMedium)
+                  ?.copyWith(
+                    color: valueColor ?? AppColors.textPrimary(isDark),
+                    fontWeight: FontWeight.w700,
+                  ),
             ),
-            const SizedBox(height: 6),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Text(
-                value,
-                style: AppTextStyles.body1(isDark).copyWith(
-                  color: fg,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 17,
-                ),
-              ),
-            ),
-            if (caption != null) ...[
-              const SizedBox(height: 2),
-              Text(
-                caption!,
-                style: AppTextStyles.caption(isDark).copyWith(color: sub),
-              ),
-            ],
           ],
         ),
       ),

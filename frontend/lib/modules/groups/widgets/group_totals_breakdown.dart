@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../../components/list/category_tile.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -44,39 +45,58 @@ class GroupTotalsCategorySection extends StatelessWidget {
       label: '${c.category.name}: $amount, $pct percent',
       excludeSemantics: true,
       child: Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(
           children: [
-            Row(
-              children: [
-                Icon(c.category.icon, size: 16, color: color),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    c.category.name,
-                    style: AppTextStyles.body2(isDark),
-                    overflow: TextOverflow.ellipsis,
+            CategoryTile(icon: c.category.icon, color: color, size: 36),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          c.category.name,
+                          style: AppTextStyles.body2(isDark),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Text(
+                        amount,
+                        style: AppTextStyles.body2(
+                          isDark,
+                        ).copyWith(fontWeight: FontWeight.w600),
+                      ),
+                    ],
                   ),
-                ),
-                Text(
-                  '$amount · $pct%',
-                  style: AppTextStyles.body2(
-                    isDark,
-                  ).copyWith(fontWeight: FontWeight.w600),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(
-                value: c.fraction.clamp(0.0, 1.0),
-                minHeight: 6,
-                color: color,
-                backgroundColor: AppColors.divider(
-                  isDark,
-                ).withValues(alpha: 0.5),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: LinearProgressIndicator(
+                            value: c.fraction.clamp(0.0, 1.0),
+                            minHeight: 4,
+                            color: color,
+                            backgroundColor: AppColors.divider(
+                              isDark,
+                            ).withValues(alpha: 0.5),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '$pct%',
+                        style: AppTextStyles.caption(
+                          isDark,
+                        ).copyWith(color: AppColors.textSecondary(isDark)),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
           ],

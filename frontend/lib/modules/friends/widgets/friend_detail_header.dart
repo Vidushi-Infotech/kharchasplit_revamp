@@ -1,100 +1,76 @@
 import 'package:flutter/material.dart';
 
-import '../../../components/components.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_text_styles.dart';
+import '../state/friend_detail_view.dart';
 import '../state/friends_provider.dart';
-import 'friend_balance_label.dart';
+import 'friend_group_balances.dart';
 
-/// Avatar, name and the overall balance with this friend ("Asha owes you
-/// ₹500" / "You owe Asha ₹200" / "You are all settled up with Asha"), one
-/// line per currency.
+/// Under the banner: the friend's name, their email / phone (or
+/// "Invited"), the overall balance in its tone color — one line per
+/// currency, never converted — and the gray per-group lines.
 class FriendDetailHeader extends StatelessWidget {
-  const FriendDetailHeader({super.key, required this.friend});
+  const FriendDetailHeader({
+    super.key,
+    required this.friend,
+    this.horizontalPadding = 16,
+  });
 
   final FriendBalance friend;
+  final double horizontalPadding;
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textTheme = Theme.of(context).textTheme;
     final user = friend.user;
-    final byCurrency = friend.netByCurrency;
-    final subtitle = user.email.isNotEmpty ? user.email : user.phone;
-
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: AppColors.surface(isDark),
-        border: Border(bottom: BorderSide(color: AppColors.divider(isDark))),
-      ),
-      child: Column(
-        children: [
-          AvatarWidget(imageUrl: user.avatarUrl, name: user.name, radius: 40),
-          const SizedBox(height: 12),
-          Text(
-            user.name,
-            textAlign: TextAlign.center,
-            style: AppTextStyles.headline3(isDark),
-          ),
-          if (subtitle.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text(subtitle, style: AppTextStyles.caption(isDark)),
-          ],
-          if (user.isPlaceholder) ...[
-            const SizedBox(height: 4),
-            Text(
-              AppStrings.invited,
-              style: AppTextStyles.caption(isDark)
-                  .copyWith(color: AppColors.textSecondary(isDark)),
-            ),
-          ],
-          const SizedBox(height: 16),
-          if (byCurrency.isEmpty)
-            _BalanceLine(
-              text: AppStrings.settledUpWith(user.name),
-              net: 0,
-              isDark: isDark,
-            )
-          else
-            for (final e in byCurrency.entries)
-              _BalanceLine(
-                text: e.value > 0
-                    ? AppStrings.nameOwesYou(
-                        user.name, formatFriendAmount(e.value, e.key))
-                    : AppStrings.youOweName(
-                        user.name, formatFriendAmount(e.value, e.key)),
-                net: e.value,
-                isDark: isDark,
-              ),
-        ],
-      ),
+    final contact = user.isPlaceholder
+        ? AppStrings.invited
+        : user.email.isNotEmpty
+            ? user.email
+            : user.phone;
+    final secondary = textTheme.bodyMedium?.copyWith(
+      color: AppColors.textSecondary(isDark),
     );
-  }
-}
 
-class _BalanceLine extends StatelessWidget {
-  const _BalanceLine({
-    required this.text,
-    required this.net,
-    required this.isDark,
-  });
-
-  final String text;
-  final double net;
-  final bool isDark;
-
-  @override
-  Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(top: 4),
-      child: Text(
-        text,
-        textAlign: TextAlign.center,
-        style: AppTextStyles.body1(isDark).copyWith(
-          fontWeight: FontWeight.w700,
-          color: friendBalanceColor(net, isDark),
-        ),
+      padding: EdgeInsets.fromLTRB(horizontalPadding, 8, horizontalPadding, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Semantics(
+            header: true,
+            child: Text(
+              friendDisplayName(user.name),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: textTheme.headlineSmall?.copyWith(
+                color: AppColors.textPrimary(isDark),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          if (contact.isNotEmpty)
+            Text(
+              contact,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: secondary,
+            ),
+          const SizedBox(height: 6),
+          for (final line in friendOverallLines(friend))
+            Padding(
+              padding: const EdgeInsets.only(bottom: 2),
+              child: Text(
+                line.text,
+                style: textTheme.titleMedium?.copyWith(
+                  color: line.tone.color(isDark),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          FriendGroupBalanceLines(friend: friend),
+        ],
       ),
     );
   }

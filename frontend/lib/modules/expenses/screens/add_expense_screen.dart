@@ -4,8 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/app_strings.dart';
-import '../../../core/services/haptic_service.dart';
-import '../../../components/web/web_form_row.dart';
 import '../../../data/expenses/expenses_repository.dart';
 import '../../../models/models.dart';
 import '../../../modules/auth/state/auth_provider.dart';
@@ -14,14 +12,17 @@ import '../state/add_expense_form_effects.dart';
 import '../state/add_expense_form_helpers.dart';
 import '../state/add_expense_provider.dart';
 import '../state/add_expense_save_flow.dart';
+import '../state/add_expense_sentence.dart';
 import '../state/add_expense_submit.dart';
 import '../state/add_expense_validation.dart';
-import '../widgets/add_expense_form_cards.dart';
-import '../widgets/add_expense_group_context.dart';
-import '../widgets/add_expense_hero_card.dart';
-import '../widgets/add_expense_hydrate_view.dart';
-import '../widgets/add_expense_save_bar.dart';
+import '../widgets/add_expense_bottom_bar.dart';
+import '../widgets/add_expense_extras_summary.dart';
 import '../widgets/add_expense_form_scaffold.dart';
+import '../widgets/add_expense_group_context.dart';
+import '../widgets/add_expense_hydrate_view.dart';
+import '../widgets/add_expense_main_fields.dart';
+import '../widgets/add_expense_paid_split_line.dart';
+import '../widgets/add_expense_top_bar.dart';
 import '../widgets/category_sheet.dart';
 import '../widgets/paid_by_sheet.dart';
 import '../widgets/receipt_notes_sheets.dart';
@@ -58,8 +59,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen>
   bool _hydrating = false;
   String? _hydrateError;
 
-  /// Set once the user taps the disabled Save bar: red-highlights the
-  /// amount / title / split that block the save.
+  /// Set once the user taps Save while it can't save: red-highlights the
+  /// amount / description / split that block it.
   bool _showValidation = false;
 
   @override
@@ -168,120 +169,122 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen>
       isMounted: () => mounted,
     );
 
-    final screenWidth = MediaQuery.sizeOf(context).width;
-    // Wider on the web tier: the two option cards sit side by side there.
-    final double maxFormWidth = screenWidth < 600
+    final w = MediaQuery.sizeOf(context).width;
+    // One centred column on every tier, a little wider on the web tier.
+    final double maxFormWidth = w < 600
         ? double.infinity
-        : screenWidth < 1100
-        ? 600
-        : 920;
-    final double horizontalPad = screenWidth < 600
-        ? 16
-        : screenWidth < 1100
-        ? 24
-        : 32;
+        : (w < 1100 ? 560 : 640);
+    final double horizontalPad = w < 600 ? 16 : (w < 1100 ? 24 : 32);
+    final myId = ref.watch(authProvider).user?.id;
+    final groupLabel = addExpenseGroupLabel(groupAsync?.value?.group, myId);
+    final onPickGroup = widget.isEditing
+        ? null
+        : () => pickGroupForNewExpense(isDark);
+    final onRepeatTap = repeatTapHandler(isDark);
+    void onReceiptTap() => openReceiptSheet(isDark, _titleController);
+    void onNotesTap() => showNotesSheet(
+      context,
+      ref,
+      isDark: isDark,
+      notesController: _notesController,
+    );
 
     return AddExpenseFormScaffold(
       isDark: isDark,
-      title: widget.isEditing ? 'Edit expense' : 'Add expense',
       onClose: closeScreen,
       horizontalPad: horizontalPad,
       maxFormWidth: maxFormWidth,
-      form: _buildFormBody(isDark, expenseState, groupMembers, archived),
-      saveBar: AddExpenseSaveBar(
+      topBar: AddExpenseTopBar(
+        title: widget.isEditing
+            ? AppStrings.editExpense
+            : AppStrings.addAnExpense,
+        onClose: closeScreen,
         isDark: isDark,
-        enabled: !archived && expenseState.isValid && !expenseState.isLoading,
-        loading: expenseState.isLoading,
-        horizontalPad: horizontalPad,
-        maxFormWidth: maxFormWidth,
-        label: widget.isEditing ? 'Save changes' : 'Save expense',
-        disabledHint: archived
-            ? AppStrings.groupArchived
-            : addExpenseMissingFieldHint(expenseState),
-        onTap: handleSave,
-        // Tapping it while disabled reveals which fields are wrong.
-        onDisabledTap: () {
-          if (archived) return blockArchivedSave();
-          HapticService.instance.error();
-          if (!_showValidation) {
-            setState(() => _showValidation = true);
-          }
-        },
-      ),
-    );
-  }
-
-  Widget _buildFormBody(
-    bool isDark,
-    AddExpenseState state,
-    List<UserModel> groupMembers,
-    bool archived,
-  ) {
-    final me = ref.watch(authProvider).user;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        AddExpenseGroupContext(isDark: isDark, archived: archived),
-        AddExpenseHeroCard(
-          isDark: isDark,
-          state: state,
-          autoFocus: !widget.isEditing,
-          showValidation: _showValidation,
-          titleController: _titleController,
-          onAmountChanged: (amount) {
-            ref.read(addExpenseProvider.notifier).state = state.copyWith(
-              amount: amount,
-            );
+        saveEnabled: !archived && expenseState.isValid,
+        saving: expenseState.isLoading,
+        onSave: handleSave,
+        // Tapping Save while it can't save says why, and red-highlights the
+        // fields that block it.
+        onSaveBlocked: () => explainBlockedSave(
+          archived: archived,
+          state: expenseState,
+          revealErrors: () {
+            if (!_showValidation) setState(() => _showValidation = true);
           },
-          onTitleChanged: _onTitleChanged,
         ),
-        const SizedBox(height: 28),
-        // Stacked on touch, side by side on the web tier (six full-width
-        // rows would push Save below the fold on a laptop).
-        WebFormRow(
-          spacing: 20,
-          flex: const [3, 2],
-          children: [
-            AddExpenseQuickRowsCard(
+      ),
+      form: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AddExpenseGroupContext(
+            isDark: isDark,
+            archived: archived,
+            onPick: onPickGroup,
+          ),
+          AddExpenseMainFields(
+            isDark: isDark,
+            state: expenseState,
+            autoFocus: !widget.isEditing,
+            showValidation: _showValidation,
+            titleController: _titleController,
+            onAmountChanged: (amount) {
+              ref.read(addExpenseProvider.notifier).state = ref
+                  .read(addExpenseProvider)
+                  .copyWith(amount: amount);
+            },
+            onTitleChanged: _onTitleChanged,
+            onCategoryTap: () => showCategorySheet(
+              context,
+              ref,
               isDark: isDark,
-              state: state,
+              state: expenseState,
+            ),
+          ),
+          const SizedBox(height: 28),
+          AddExpensePaidSplitLine(
+            isDark: isDark,
+            state: expenseState,
+            groupMembers: groupMembers,
+            myId: myId,
+            showValidation: _showValidation,
+            onPaidByTap: () => showPaidBySheet(
+              context,
+              ref,
+              isDark: isDark,
+              state: expenseState,
               groupMembers: groupMembers,
-              me: me,
-              showValidation: _showValidation,
-              onPaidByTap: () => showPaidBySheet(
-                context,
-                ref,
-                isDark: isDark,
-                state: state,
-                groupMembers: groupMembers,
-                allowMultiple: multiPayerEnabled,
-              ),
-              onSplitTap: () => showSplitSheet(
-                context,
-                ref,
-                isDark: isDark,
-                groupMembers: groupMembers,
-              ),
-              onDateTap: () => pickExpenseDate(context, ref, state),
-              onRepeatTap: repeatTapHandler(isDark),
-              onCategoryTap: () =>
-                  showCategorySheet(context, ref, isDark: isDark, state: state),
+              allowMultiple: multiPayerEnabled,
             ),
-            AddExpenseMoreOptionsCard(
+            onSplitTap: () => showSplitSheet(
+              context,
+              ref,
               isDark: isDark,
-              state: state,
-              onReceiptTap: () => openReceiptSheet(isDark, _titleController),
-              onNotesTap: () => showNotesSheet(
-                context,
-                ref,
-                isDark: isDark,
-                notesController: _notesController,
-              ),
+              groupMembers: groupMembers,
             ),
-          ],
-        ),
-        const SizedBox(height: 24),
-      ],
+          ),
+          AddExpenseExtrasSummary(
+            isDark: isDark,
+            state: expenseState,
+            onReceiptTap: onReceiptTap,
+            onNotesTap: onNotesTap,
+            onRepeatTap: onRepeatTap,
+          ),
+        ],
+      ),
+      bottomBar: AddExpenseBottomBar(
+        isDark: isDark,
+        maxWidth: maxFormWidth,
+        dateLabel: formatAddExpenseDate(expenseState.date),
+        groupLabel: groupLabel,
+        onDateTap: () => pickExpenseDate(context, ref, expenseState),
+        onGroupTap: onPickGroup,
+        onRepeatTap: onRepeatTap,
+        onReceiptTap: onReceiptTap,
+        onNotesTap: onNotesTap,
+        hasReceipt: AddExpenseExtrasSummary.hasReceiptIn(expenseState),
+        hasNotes: (expenseState.notes ?? '').trim().isNotEmpty,
+        repeatOn: expenseState.repeat.isOn,
+      ),
     );
   }
 

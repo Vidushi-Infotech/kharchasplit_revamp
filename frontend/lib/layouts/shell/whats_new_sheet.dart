@@ -101,6 +101,11 @@ class WhatsNewSheet extends StatelessWidget {
                 text: AppStrings.whatsNewAccount,
                 isDark: isDark,
               ),
+              _Bullet(
+                icon: Icons.receipt_long_rounded,
+                text: AppStrings.whatsNewAddExpense,
+                isDark: isDark,
+              ),
               const SizedBox(height: 8),
               SizedBox(
                 width: double.infinity,

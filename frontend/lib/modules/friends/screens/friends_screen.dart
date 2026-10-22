@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../components/components.dart';
+import '../../../components/list/list_components.dart';
 import '../../../components/web/web_page.dart';
 import '../../../components/web/web_page_header.dart';
 import '../../../core/constants/app_strings.dart';
@@ -37,8 +38,10 @@ class FriendsScreen extends ConsumerWidget {
           ? null
           : AppBar(
               title: const Text(AppStrings.friends),
+              centerTitle: false,
               elevation: 0,
-              backgroundColor: AppColors.surface(isDark),
+              surfaceTintColor: Colors.transparent,
+              backgroundColor: AppColors.background(isDark),
               actions: [
                 // Global search (expenses, groups, friends).
                 IconButton(
@@ -80,14 +83,26 @@ class FriendsScreen extends ConsumerWidget {
               ),
             );
           }
+          // Rows are flat and full-bleed; the bottom reserve keeps the
+          // floating "Add expense" button off the footer.
           final list = _FriendsList(
-            padding: EdgeInsets.fromLTRB(gutter, isWeb ? 0 : 16, gutter, 24),
-            hoverable: isWeb,
+            padding: EdgeInsets.only(
+              bottom: bottomNavReserve(context.widthTier, compact: 88),
+            ),
             isDark: isDark,
           );
 
           if (!isWeb) {
-            return RefreshIndicator(onRefresh: () => _refresh(ref), child: list);
+            // Standard (600–1100): same list, centered.
+            return RefreshIndicator(
+              onRefresh: () => _refresh(ref),
+              child: WebContentColumn(
+                width: ContentWidth.reading,
+                gutter: false,
+                applyBelowWebTier: true,
+                child: list,
+              ),
+            );
           }
 
           return WebContentColumn(
@@ -144,46 +159,53 @@ class FriendsScreen extends ConsumerWidget {
   }
 }
 
-/// Summary header + lazily built friend rows (after the hide-settled filter).
+/// Summary header, lazily built flat friend rows (after the hide-settled
+/// filter) and the "Add more friends" footer.
 class _FriendsList extends ConsumerWidget {
-  const _FriendsList({
-    required this.padding,
-    required this.hoverable,
-    required this.isDark,
-  });
+  const _FriendsList({required this.padding, required this.isDark});
 
   final EdgeInsets padding;
-  final bool hoverable;
   final bool isDark;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final visible = ref.watch(visibleFriendsProvider).value ?? const [];
+    // Header + rows (or the "everyone hidden" note) + footer.
+    final rowCount = visible.isEmpty ? 1 : visible.length;
 
-    return ListView.separated(
+    return ListView.builder(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: padding,
-      // +1 for the header; +1 for the "everyone hidden" note when filtered
-      // down to nothing.
-      itemCount: 1 + (visible.isEmpty ? 1 : visible.length),
-      separatorBuilder: (_, _) => const SizedBox(height: 8),
+      itemCount: rowCount + 2,
       itemBuilder: (context, index) {
         if (index == 0) return const FriendsSummaryHeader();
+        if (index == rowCount + 1) {
+          return ListFooterActions(
+            actions: [
+              ListFooterAction(
+                label: AppStrings.addMoreFriends,
+                icon: Icons.person_add_alt_1_rounded,
+                onTap: () => showAddFriendSheet(context),
+              ),
+            ],
+          );
+        }
         if (visible.isEmpty) {
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 32),
             child: Text(
               AppStrings.youAreAllSettledUp,
               textAlign: TextAlign.center,
-              style: AppTextStyles.body2(isDark)
-                  .copyWith(color: AppColors.textSecondary(isDark)),
+              style: AppTextStyles.body2(
+                isDark,
+              ).copyWith(color: AppColors.textSecondary(isDark)),
             ),
           );
         }
         final f = visible[index - 1];
         return FriendListTile(
           friend: f,
-          hoverable: hoverable,
+          showDivider: index < visible.length,
           onTap: () => context.push('/home/friends/${f.user.id}'),
         );
       },
