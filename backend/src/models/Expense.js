@@ -1,4 +1,5 @@
 import { query, transaction  } from '../config/database.js';
+import { displayNameSql } from '../utils/memberNameSql.js';
 import { cache, TTL } from '../services/cacheService.js';
 import { readReceiptBase64 } from '../services/receiptStore.js';
 
@@ -12,7 +13,7 @@ class Expense {
               e.paid_by, e.split_type, e.split_meta, e.recurring_rule_id, e.receipt_base64, e.receipt_path,
               e.original_amount, e.original_currency, e.fx_rate, to_char(e.fx_date, 'YYYY-MM-DD') AS fx_date,
               e.notes, e.expense_date,
-              e.created_at, e.updated_at, u.name as paid_by_name
+              e.created_at, e.updated_at, ${displayNameSql('u', 'e.paid_by', 'e.group_id')} as paid_by_name
        FROM expenses e
        LEFT JOIN users u ON e.paid_by = u.id
        WHERE e.id = $1 AND e.deleted_at IS NULL`,
@@ -27,9 +28,11 @@ class Expense {
 
     // Get participants
     const participantsResult = await query(
-      `SELECT es.expense_id, es.user_id, es.amount, es.percentage, es.shares, u.name
+      `SELECT es.expense_id, es.user_id, es.amount, es.percentage, es.shares,
+              ${displayNameSql('u', 'es.user_id', 'ex.group_id')} AS name
        FROM expense_splits es
        LEFT JOIN users u ON es.user_id = u.id
+       LEFT JOIN expenses ex ON ex.id = es.expense_id
        WHERE es.expense_id = $1
        ORDER BY es.amount DESC`,
       [id]
@@ -60,7 +63,7 @@ class Expense {
               e.paid_by, e.split_type, e.split_meta, e.recurring_rule_id, e.notes, e.expense_date,
               e.original_amount, e.original_currency, e.fx_rate,
               (e.receipt_path IS NOT NULL OR e.receipt_base64 IS NOT NULL) AS has_receipt,
-              e.created_at, e.updated_at, u.name as paid_by_name
+              e.created_at, e.updated_at, ${displayNameSql('u', 'e.paid_by', 'e.group_id')} as paid_by_name
        FROM expenses e
        LEFT JOIN users u ON e.paid_by = u.id
        WHERE e.group_id = $1 AND e.deleted_at IS NULL
@@ -76,9 +79,11 @@ class Expense {
     const expenseIds = expenses.map(e => e.id);
     const placeholders = expenseIds.map((_, i) => `$${i + 1}`).join(', ');
     const participantsResult = await query(
-      `SELECT es.expense_id, es.user_id, es.amount, es.percentage, es.shares, u.name
+      `SELECT es.expense_id, es.user_id, es.amount, es.percentage, es.shares,
+              ${displayNameSql('u', 'es.user_id', 'ex.group_id')} AS name
        FROM expense_splits es
        LEFT JOIN users u ON es.user_id = u.id
+       LEFT JOIN expenses ex ON ex.id = es.expense_id
        WHERE es.expense_id IN (${placeholders})
        ORDER BY es.amount DESC`,
       expenseIds
@@ -119,12 +124,14 @@ class Expense {
   static async payersByExpense(expenseIds) {
     if (expenseIds.length === 0) return {};
     const result = await query(
-      `SELECT ep.expense_id, ep.user_id, ep.amount, u.name
+      `SELECT ep.expense_id, ep.user_id, ep.amount,
+              ${displayNameSql('u', 'ep.user_id', 'ex.group_id')} AS name
          FROM expense_payers ep
          LEFT JOIN users u ON u.id = ep.user_id
+         LEFT JOIN expenses ex ON ex.id = ep.expense_id
         WHERE ep.expense_id = ANY($1::uuid[])
        UNION ALL
-       SELECT e.id, e.paid_by, e.amount, u.name
+       SELECT e.id, e.paid_by, e.amount, ${displayNameSql('u', 'e.paid_by', 'e.group_id')}
          FROM expenses e
          LEFT JOIN users u ON u.id = e.paid_by
         WHERE e.id = ANY($1::uuid[]) AND e.paid_by IS NOT NULL AND e.amount > 0

@@ -24,17 +24,60 @@ class Activity {
   }
 
   /**
-   * Get activities for a user
+   * Feed visibility for user $1 (Splitwise-style): your own actions plus
+   * everything that happened in your groups while you were a member (a
+   * minute of slack either side, so "added you" / "you left" show up).
+   */
+  static get VISIBLE_TO_USER() {
+    return `a.deleted_at IS NULL AND (
+      a.user_id = $1 OR EXISTS (
+        SELECT 1 FROM group_members gm
+         WHERE gm.group_id = a.group_id AND gm.user_id = $1
+           AND a.created_at >= gm.joined_at - INTERVAL '1 minute'
+           AND a.created_at <= COALESCE(gm.left_at, gm.deleted_at, 'infinity'::timestamp)
+                               + INTERVAL '1 minute'))`;
+  }
+
+  /**
+   * Read state for user $1: your own actions are always read; others' are
+   * read once you open them or mark all read (activity_reads, migration 024).
+   */
+  static get IS_READ_FOR_USER() {
+    return `(a.user_id = $1 OR EXISTS (
+      SELECT 1 FROM activity_reads r WHERE r.activity_id = a.id AND r.user_id = $1))`;
+  }
+
+  /**
+   * Get the activity feed for a user. Expense rows also carry the
+   * expense's category and the viewer's net on it (paid − share; null when
+   * not involved or the expense is deleted), matching ledger.js payer rules.
    */
   static async findByUserId(userId, limit = 50, offset = 0) {
     const result = await query(
-      `SELECT ${this.COLUMNS},
+      `SELECT a.id, a.group_id, a.user_id, a.activity_type, a.entity_type,
+              a.entity_id, a.title, a.description, a.metadata, a.created_at,
+              ${this.IS_READ_FOR_USER} AS is_read,
               u.name as actor_name,
-              g.name as group_name
+              g.name as group_name,
+              e.category AS expense_category,
+              CASE WHEN e.id IS NULL OR e.deleted_at IS NOT NULL
+                     OR (mine.paid = 0 AND mine.share IS NULL) THEN NULL
+                   ELSE mine.paid - COALESCE(mine.share, 0) END AS your_net
        FROM activities a
        LEFT JOIN users u ON a.user_id = u.id
        LEFT JOIN groups g ON a.group_id = g.id
-       WHERE a.user_id = $1 AND a.deleted_at IS NULL
+       LEFT JOIN expenses e ON a.entity_type = 'expense' AND e.id = a.entity_id
+       LEFT JOIN LATERAL (
+         SELECT
+           CASE WHEN EXISTS (SELECT 1 FROM expense_payers p WHERE p.expense_id = e.id)
+                THEN (SELECT COALESCE(SUM(p.amount), 0) FROM expense_payers p
+                       WHERE p.expense_id = e.id AND p.user_id = $1)
+                WHEN e.paid_by = $1 THEN e.amount
+                ELSE 0 END AS paid,
+           (SELECT SUM(s.amount) FROM expense_splits s
+             WHERE s.expense_id = e.id AND s.user_id = $1 AND s.deleted_at IS NULL) AS share
+       ) mine ON e.id IS NOT NULL
+       WHERE ${this.VISIBLE_TO_USER}
        ORDER BY a.created_at DESC
        LIMIT $2 OFFSET $3`,
       [userId, limit, offset]
@@ -66,9 +109,8 @@ class Activity {
    */
   static async getUnreadCount(userId) {
     const result = await query(
-      `SELECT COUNT(*) as count
-       FROM activities
-       WHERE user_id = $1 AND is_read = FALSE AND deleted_at IS NULL`,
+      `SELECT COUNT(*) as count FROM activities a
+       WHERE ${this.VISIBLE_TO_USER} AND NOT ${this.IS_READ_FOR_USER}`,
       [userId]
     );
     return parseInt(result.rows[0].count);
@@ -113,17 +155,24 @@ class Activity {
   }
 
   /**
-   * Mark activity as read
+   * Mark one activity read for a user (any activity in their feed)
    */
   static async markAsRead(id, userId) {
     const result = await query(
-      `UPDATE activities
-       SET is_read = TRUE
-       WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
-       RETURNING id, is_read`,
-      [id, userId]
+      `INSERT INTO activity_reads (activity_id, user_id)
+       SELECT a.id, $1 FROM activities a
+        WHERE a.id = $2 AND ${this.VISIBLE_TO_USER}
+       ON CONFLICT DO NOTHING
+       RETURNING activity_id AS id`,
+      [userId, id]
     );
-    return result.rows[0] || null;
+    if (result.rows[0]) return { id, is_read: true };
+    // Already read (or your own action) still counts as found.
+    const seen = await query(
+      `SELECT a.id FROM activities a WHERE a.id = $2 AND ${this.VISIBLE_TO_USER}`,
+      [userId, id]
+    );
+    return seen.rows[0] ? { id, is_read: true } : null;
   }
 
   /**
@@ -131,9 +180,10 @@ class Activity {
    */
   static async markAllAsRead(userId) {
     await query(
-      `UPDATE activities
-       SET is_read = TRUE
-       WHERE user_id = $1 AND is_read = FALSE AND deleted_at IS NULL`,
+      `INSERT INTO activity_reads (activity_id, user_id)
+       SELECT a.id, $1 FROM activities a
+        WHERE ${this.VISIBLE_TO_USER} AND NOT ${this.IS_READ_FOR_USER}
+       ON CONFLICT DO NOTHING`,
       [userId]
     );
     return true;
@@ -144,10 +194,11 @@ class Activity {
    */
   static async markGroupActivitiesAsRead(groupId, userId) {
     await query(
-      `UPDATE activities
-       SET is_read = TRUE
-       WHERE group_id = $1 AND user_id = $2 AND is_read = FALSE AND deleted_at IS NULL`,
-      [groupId, userId]
+      `INSERT INTO activity_reads (activity_id, user_id)
+       SELECT a.id, $1 FROM activities a
+        WHERE a.group_id = $2 AND ${this.VISIBLE_TO_USER} AND NOT ${this.IS_READ_FOR_USER}
+       ON CONFLICT DO NOTHING`,
+      [userId, groupId]
     );
     return true;
   }
@@ -167,13 +218,11 @@ class Activity {
   }
 
   /**
-   * Count total activities for a user
+   * Count total activities in a user's feed
    */
   static async countByUserId(userId) {
     const result = await query(
-      `SELECT COUNT(*) as count
-       FROM activities
-       WHERE user_id = $1 AND deleted_at IS NULL`,
+      `SELECT COUNT(*) as count FROM activities a WHERE ${this.VISIBLE_TO_USER}`,
       [userId]
     );
     return parseInt(result.rows[0].count);

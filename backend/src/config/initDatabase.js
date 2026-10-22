@@ -378,6 +378,16 @@ CREATE TABLE IF NOT EXISTS fx_rates (
   PRIMARY KEY (rate_date, base, quote)
 );
 
+-- Per-user read state for the shared activity feed (migration 024).
+CREATE TABLE IF NOT EXISTS activity_reads (
+  activity_id UUID NOT NULL REFERENCES activities(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  read_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (activity_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_activity_reads_user ON activity_reads(user_id);
+CREATE INDEX IF NOT EXISTS idx_group_members_user_group ON group_members(user_id, group_id);
+
 -- State of an expense before each edit (services/expenseHistory.js).
 CREATE TABLE IF NOT EXISTS expense_revisions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

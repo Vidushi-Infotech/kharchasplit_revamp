@@ -1,4 +1,5 @@
 import { query  } from '../config/database.js';
+import { displayNameSql } from '../utils/memberNameSql.js';
 import { cache, TTL } from '../services/cacheService.js';
 
 class Settlement {
@@ -13,7 +14,8 @@ class Settlement {
    */
   static async findById(id) {
     const result = await query(
-      `SELECT ${this.COLUMNS}, u1.name as from_user_name, u2.name as to_user_name
+      `SELECT ${this.COLUMNS}, ${displayNameSql('u1', 's.from_user_id', 's.group_id')} as from_user_name,
+              ${displayNameSql('u2', 's.to_user_id', 's.group_id')} as to_user_name
        FROM settlements s
        LEFT JOIN users u1 ON s.from_user_id = u1.id
        LEFT JOIN users u2 ON s.to_user_id = u2.id
@@ -29,7 +31,8 @@ class Settlement {
   static async findByGroupId(groupId, limit = 50, offset = 0) {
     return cache.getOrSet(`group:${groupId}:settlements:${limit}:${offset}`, TTL.GROUP_SETTLEMENTS, async () => {
       const result = await query(
-        `SELECT ${this.COLUMNS}, u1.name as from_user_name, u2.name as to_user_name
+        `SELECT ${this.COLUMNS}, ${displayNameSql('u1', 's.from_user_id', 's.group_id')} as from_user_name,
+              ${displayNameSql('u2', 's.to_user_id', 's.group_id')} as to_user_name
          FROM settlements s
          LEFT JOIN users u1 ON s.from_user_id = u1.id
          LEFT JOIN users u2 ON s.to_user_id = u2.id
@@ -59,7 +62,8 @@ class Settlement {
    */
   static async findPendingBetweenUsers(groupId, fromUserId, toUserId) {
     const result = await query(
-      `SELECT ${this.COLUMNS}, u1.name as from_user_name, u2.name as to_user_name
+      `SELECT ${this.COLUMNS}, ${displayNameSql('u1', 's.from_user_id', 's.group_id')} as from_user_name,
+              ${displayNameSql('u2', 's.to_user_id', 's.group_id')} as to_user_name
        FROM settlements s
        LEFT JOIN users u1 ON s.from_user_id = u1.id
        LEFT JOIN users u2 ON s.to_user_id = u2.id

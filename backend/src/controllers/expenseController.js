@@ -474,6 +474,16 @@ const updateExpense = async (req, res, next) => {
         Group.findById(existingExpense.group_id),
         User.findById(req.user.id),
       ]);
+      // The shared Activity feed shows edits too (was never logged).
+      await ActivityService.logExpenseUpdated(
+        id,
+        existingExpense.group_id,
+        req.user.id,
+        group?.name || '',
+        expense?.description ?? existingExpense.description,
+        Number(expense?.amount ?? existingExpense.amount),
+        expense?.currency || existingExpense.currency || group?.currency,
+      );
       await NotificationService.notifyExpenseChanged('EXPENSE_UPDATED', {
         groupId: existingExpense.group_id,
         groupName: group?.name || 'your group',
@@ -564,6 +574,14 @@ const deleteExpense = async (req, res, next) => {
         Group.findById(expense.group_id),
         User.findById(req.user.id),
       ]);
+      // The shared Activity feed shows deletions too (was never logged).
+      await ActivityService.logExpenseDeleted(
+        id,
+        expense.group_id,
+        req.user.id,
+        group?.name || '',
+        expense.description,
+      );
       await NotificationService.notifyExpenseChanged('EXPENSE_DELETED', {
         groupId: expense.group_id,
         groupName: group?.name || 'your group',

@@ -43,6 +43,10 @@ const getUserActivities = async (req, res, next) => {
       createdAt: act.created_at,
       actorName: act.actor_name,
       groupName: act.group_name,
+      // Expense rows: category and the viewer's net on the expense
+      // (paid − share; positive = you get back, null = not involved).
+      category: act.expense_category ?? null,
+      yourNet: act.your_net == null ? null : Number(act.your_net),
     }));
 
     res.json({
