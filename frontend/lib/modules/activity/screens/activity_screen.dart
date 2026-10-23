@@ -9,6 +9,7 @@ import '../../../models/activity_model.dart';
 import '../../auth/state/auth_provider.dart';
 import '../state/activity_feed_provider.dart';
 import '../state/activity_sentence.dart';
+import '../state/activity_tap.dart';
 import '../widgets/activity_row.dart';
 import '../widgets/activity_states.dart';
 
@@ -108,7 +109,7 @@ class _ActivityList extends ConsumerWidget {
           myUserId: me?.id,
           myName: me?.name,
         );
-        final route = activityRoute(a);
+        final tap = activityTap(a, myUserId: me?.id);
         final isMine = me != null && a.actorId == me.id;
         return ActivityRow(
           activity: a,
@@ -117,6 +118,13 @@ class _ActivityList extends ConsumerWidget {
           showDivider: i < items.length - 1,
           onTap: () {
             if (!a.isRead) notifier.markAsRead(a.id);
+            final notice = tap.notice;
+            if (notice != null) {
+              ScaffoldMessenger.of(context)
+                ..hideCurrentSnackBar()
+                ..showSnackBar(SnackBar(content: Text(notice)));
+            }
+            final route = tap.route;
             if (route != null) context.push(route);
           },
         );

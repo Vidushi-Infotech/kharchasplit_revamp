@@ -855,4 +855,9 @@ abstract final class AppStrings {
       'Take a photo — we fill in the amount, date and description';
   static const addReceiptTitle = 'Add a receipt';
   static const addReceiptHint = 'Attach a photo of the bill';
+
+  // ── Activity taps ──
+  static const activityExpenseDeleted = 'This expense was deleted';
+  static const activityGroupDeleted = 'This group was deleted';
+  static const activityNotInGroup = "You're no longer in this group";
 }

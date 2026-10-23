@@ -53,6 +53,15 @@ class ActivityModel extends Equatable {
   final String? category;
   final double? yourNet;
 
+  /// Where a tap can go (sent by the server since the shared feed; older
+  /// servers leave the defaults): the expense or group was deleted, you're
+  /// no longer in the group, and who a payment was from / to.
+  final bool expenseDeleted;
+  final bool groupDeleted;
+  final bool inGroup;
+  final String? paymentFromId;
+  final String? paymentToId;
+
   const ActivityModel({
     required this.id,
     required this.type,
@@ -69,6 +78,11 @@ class ActivityModel extends Equatable {
     this.metadata = const {},
     this.category,
     this.yourNet,
+    this.expenseDeleted = false,
+    this.groupDeleted = false,
+    this.inGroup = true,
+    this.paymentFromId,
+    this.paymentToId,
   });
 
   factory ActivityModel.fromJson(Map<String, dynamic> json) {
@@ -114,6 +128,11 @@ class ActivityModel extends Equatable {
           : const {},
       category: json['category'] as String?,
       yourNet: (json['yourNet'] as num?)?.toDouble(),
+      expenseDeleted: json['expenseDeleted'] == true,
+      groupDeleted: json['groupDeleted'] == true,
+      inGroup: json['inGroup'] != false,
+      paymentFromId: json['paymentFromId'] as String?,
+      paymentToId: json['paymentToId'] as String?,
     );
   }
 
@@ -190,6 +209,11 @@ class ActivityModel extends Equatable {
       metadata: metadata ?? this.metadata,
       category: category ?? this.category,
       yourNet: yourNet ?? this.yourNet,
+      expenseDeleted: expenseDeleted,
+      groupDeleted: groupDeleted,
+      inGroup: inGroup,
+      paymentFromId: paymentFromId,
+      paymentToId: paymentToId,
     );
   }
 
@@ -274,5 +298,10 @@ class ActivityModel extends Equatable {
     metadata,
     category,
     yourNet,
+    expenseDeleted,
+    groupDeleted,
+    inGroup,
+    paymentFromId,
+    paymentToId,
   ];
 }

@@ -230,27 +230,6 @@ String activityTimeLabel(DateTime time, {DateTime? now}) {
   return '$date, $clock';
 }
 
-/// Where tapping a row goes: the expense (unless it was deleted), else the
-/// group (unless it was deleted), else nowhere.
-String? activityRoute(ActivityModel a) {
-  final isExpense =
-      a.entityType == 'expense' ||
-      a.type == ActivityType.expenseAdded ||
-      a.type == ActivityType.expenseEdited ||
-      a.type == ActivityType.commentAdded;
-  final entityId = a.entityId ?? '';
-  if (isExpense &&
-      a.type != ActivityType.expenseDeleted &&
-      entityId.isNotEmpty) {
-    return '/expense/$entityId';
-  }
-  final groupId = a.group?.id ?? '';
-  if (groupId.isNotEmpty && a.type != ActivityType.groupDeleted) {
-    return '/home/groups/$groupId';
-  }
-  return null;
-}
-
 /// Server amounts arrive as numbers or NUMERIC strings ("1000.00").
 double? _amount(Object? raw) {
   if (raw is num) return raw.toDouble();
