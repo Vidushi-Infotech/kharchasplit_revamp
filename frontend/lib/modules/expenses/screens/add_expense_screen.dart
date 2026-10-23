@@ -26,6 +26,7 @@ import '../widgets/add_expense_top_bar.dart';
 import '../widgets/category_sheet.dart';
 import '../widgets/paid_by_sheet.dart';
 import '../widgets/receipt_notes_sheets.dart';
+import '../widgets/scan_receipt_prompt.dart';
 import '../widgets/split_sheet.dart';
 
 class AddExpenseScreen extends ConsumerStatefulWidget {
@@ -220,6 +221,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen>
             isDark: isDark,
             archived: archived,
             onPick: onPickGroup,
+          ),
+          ScanReceiptPrompt(
+            isEditing: widget.isEditing,
+            onTap: onReceiptTap,
           ),
           AddExpenseMainFields(
             isDark: isDark,

@@ -848,4 +848,11 @@ abstract final class AppStrings {
       'When you settle up with $name, payments will appear here.';
   static String historyBetween(String from, String to) =>
       'Money flows from $from to $to';
+
+  // ── Scan receipt prompt ──
+  static const scanReceiptTitle = 'Scan a receipt';
+  static const scanReceiptHint =
+      'Take a photo — we fill in the amount, date and description';
+  static const addReceiptTitle = 'Add a receipt';
+  static const addReceiptHint = 'Attach a photo of the bill';
 }

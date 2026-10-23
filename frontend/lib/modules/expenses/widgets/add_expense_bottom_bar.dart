@@ -102,6 +102,7 @@ class AddExpenseBottomBar extends StatelessWidget {
                     tooltip: AppStrings.addOrScanReceipt,
                     isDark: isDark,
                     marked: hasReceipt,
+                    highlight: true,
                     onTap: onReceiptTap,
                   ),
                   _IconAction(
@@ -178,6 +179,7 @@ class _IconAction extends StatelessWidget {
     required this.isDark,
     required this.marked,
     required this.onTap,
+    this.highlight = false,
   });
 
   final IconData icon;
@@ -186,18 +188,30 @@ class _IconAction extends StatelessWidget {
   final bool marked;
   final VoidCallback onTap;
 
+  /// The receipt camera: a tinted teal circle, so scanning stands out.
+  final bool highlight;
+
   @override
   Widget build(BuildContext context) {
     return IconButton(
       tooltip: tooltip,
       onPressed: onTap,
+      style: highlight
+          ? IconButton.styleFrom(
+              backgroundColor: AppColors.brand.withValues(
+                alpha: isDark ? 0.25 : 0.12,
+              ),
+            )
+          : null,
       icon: Badge(
         isLabelVisible: marked,
         smallSize: 8,
         backgroundColor: AppColors.tealDark,
         child: Icon(
           icon,
-          color: marked ? AppColors.tealDark : AppColors.textSecondary(isDark),
+          color: marked || highlight
+              ? AppColors.tealDark
+              : AppColors.textSecondary(isDark),
         ),
       ),
     );
