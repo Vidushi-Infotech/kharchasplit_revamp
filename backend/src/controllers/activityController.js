@@ -47,6 +47,12 @@ const getUserActivities = async (req, res, next) => {
       // (paid − share; positive = you get back, null = not involved).
       category: act.expense_category ?? null,
       yourNet: act.your_net == null ? null : Number(act.your_net),
+      // For opening the right screen on tap.
+      expenseDeleted: act.expense_deleted === true,
+      groupDeleted: act.group_deleted === true,
+      inGroup: act.in_group === true,
+      paymentFromId: act.payment_from_id ?? null,
+      paymentToId: act.payment_to_id ?? null,
     }));
 
     res.json({

@@ -60,6 +60,15 @@ class Activity {
               u.name as actor_name,
               g.name as group_name,
               e.category AS expense_category,
+              -- Where a tap can go: is the expense / group still there, are
+              -- you still in the group, and who the payment was between.
+              (e.id IS NOT NULL AND e.deleted_at IS NOT NULL) AS expense_deleted,
+              (a.group_id IS NOT NULL AND (g.id IS NULL OR g.deleted_at IS NOT NULL)) AS group_deleted,
+              EXISTS (SELECT 1 FROM group_members gmx
+                       WHERE gmx.group_id = a.group_id AND gmx.user_id = $1
+                         AND gmx.deleted_at IS NULL AND gmx.left_at IS NULL) AS in_group,
+              st.from_user_id AS payment_from_id,
+              st.to_user_id AS payment_to_id,
               CASE WHEN e.id IS NULL OR e.deleted_at IS NOT NULL
                      OR (mine.paid = 0 AND mine.share IS NULL) THEN NULL
                    ELSE mine.paid - COALESCE(mine.share, 0) END AS your_net
@@ -67,6 +76,7 @@ class Activity {
        LEFT JOIN users u ON a.user_id = u.id
        LEFT JOIN groups g ON a.group_id = g.id
        LEFT JOIN expenses e ON a.entity_type = 'expense' AND e.id = a.entity_id
+       LEFT JOIN settlements st ON a.entity_type = 'settlement' AND st.id = a.entity_id
        LEFT JOIN LATERAL (
          SELECT
            CASE WHEN EXISTS (SELECT 1 FROM expense_payers p WHERE p.expense_id = e.id)
