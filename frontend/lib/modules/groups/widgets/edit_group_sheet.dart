@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../../core/services/image_processor_service.dart';
 import '../../../core/utils/base64_async.dart';
+import '../../../data/groups/groups_repository.dart';
 import '../../../components/web/adaptive_sheet.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -63,6 +64,10 @@ class _EditGroupSheetState extends ConsumerState<EditGroupSheet> {
   bool _saving = false;
   String? _nameError;
 
+  /// Why the last save failed, shown inside the sheet (a SnackBar would
+  /// sit behind it).
+  String? _saveError;
+
   @override
   void initState() {
     super.initState();
@@ -98,14 +103,19 @@ class _EditGroupSheetState extends ConsumerState<EditGroupSheet> {
     if (_picking) return;
     setState(() => _picking = true);
     try {
+      // A cover is shown small: cap it at 1600px so the upload stays light
+      // even when WebP compression isn't available and the original is used.
       final picked = await _picker.pickImage(
         source: ImageSource.gallery,
-        imageQuality: 90,
+        maxWidth: 1600,
+        maxHeight: 1600,
+        imageQuality: 85,
       );
       if (picked == null) return;
       // Same compression pipeline as create flow.
-      Uint8List? bytes =
-          await ImageProcessorService.compressImageToWebP(picked.path);
+      Uint8List? bytes = await ImageProcessorService.compressImageToWebP(
+        picked.path,
+      );
       if (bytes == null || bytes.isEmpty) {
         bytes = await picked.readAsBytes();
       }
@@ -116,9 +126,9 @@ class _EditGroupSheetState extends ConsumerState<EditGroupSheet> {
       });
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not pick image')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Could not pick image')));
     } finally {
       if (mounted) setState(() => _picking = false);
     }
@@ -133,10 +143,11 @@ class _EditGroupSheetState extends ConsumerState<EditGroupSheet> {
 
   Future<void> _save() async {
     if (!_isValid) {
-      setState(() => _nameError =
-          _nameController.text.trim().isEmpty
-              ? 'Group name is required'
-              : 'Name is too short');
+      setState(
+        () => _nameError = _nameController.text.trim().isEmpty
+            ? 'Group name is required'
+            : 'Name is too short',
+      );
       return;
     }
     if (!_hasChanges) {
@@ -144,7 +155,10 @@ class _EditGroupSheetState extends ConsumerState<EditGroupSheet> {
       return;
     }
 
-    setState(() => _saving = true);
+    setState(() {
+      _saving = true;
+      _saveError = null;
+    });
 
     final newName = _nameController.text.trim();
     String? coverPayload;
@@ -158,7 +172,9 @@ class _EditGroupSheetState extends ConsumerState<EditGroupSheet> {
     }
 
     try {
-      final updated = await ref.read(groupsProvider.notifier).updateGroup(
+      final updated = await ref
+          .read(groupsProvider.notifier)
+          .updateGroup(
             widget.group.id,
             name: newName != widget.group.name ? newName : null,
             coverImageBase64: coverPayload,
@@ -167,10 +183,14 @@ class _EditGroupSheetState extends ConsumerState<EditGroupSheet> {
       Navigator.of(context).pop(updated);
     } catch (e) {
       if (!mounted) return;
-      setState(() => _saving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not update group: $e')),
-      );
+      setState(() {
+        _saving = false;
+        _saveError = e is GroupsApiException && e.statusCode == 413
+            ? 'This photo is too large. Please choose a smaller one.'
+            : e is GroupsApiException
+            ? 'Could not update the group: ${e.message}'
+            : 'Could not update the group. Check your connection and try again.';
+      });
     }
   }
 
@@ -192,7 +212,10 @@ class _EditGroupSheetState extends ConsumerState<EditGroupSheet> {
             mainAxisSize: MainAxisSize.min,
             children: [
               _Handle(isDark: isDark),
-              _Header(isDark: isDark, onClose: () => Navigator.of(context).pop()),
+              _Header(
+                isDark: isDark,
+                onClose: () => Navigator.of(context).pop(),
+              ),
               Flexible(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
@@ -210,9 +233,9 @@ class _EditGroupSheetState extends ConsumerState<EditGroupSheet> {
                           onPick: _pickPhoto,
                           onRemove:
                               (widget.group.coverImageBase64 != null ||
-                                      _newCoverBytes != null)
-                                  ? _removePhoto
-                                  : null,
+                                  _newCoverBytes != null)
+                              ? _removePhoto
+                              : null,
                         ),
                       ),
                       const SizedBox(height: 24),
@@ -235,6 +258,10 @@ class _EditGroupSheetState extends ConsumerState<EditGroupSheet> {
                       if (!widget.group.isDirect) ...[
                         const SizedBox(height: 16),
                         GroupDefaultSplitRow(group: widget.group),
+                      ],
+                      if (_saveError != null) ...[
+                        const SizedBox(height: 16),
+                        _FieldError(text: _saveError!, isDark: isDark),
                       ],
                       const SizedBox(height: 24),
                       Row(
@@ -453,8 +480,9 @@ class _CoverPicker extends StatelessWidget {
                 height: 132,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: AppColors.tealDark
-                      .withValues(alpha: isDark ? 0.10 : 0.06),
+                  color: AppColors.tealDark.withValues(
+                    alpha: isDark ? 0.10 : 0.06,
+                  ),
                 ),
               ),
               cover,
@@ -479,8 +507,9 @@ class _CoverPicker extends StatelessWidget {
                           height: 14,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            valueColor:
-                                AlwaysStoppedAnimation<Color>(Colors.white),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
+                            ),
                           ),
                         )
                       : const Icon(
@@ -601,18 +630,16 @@ class _StyledFieldState extends State<_StyledField> {
               focusNode: widget.focusNode,
               textInputAction: widget.textInputAction,
               onSubmitted: widget.onSubmitted,
-              style: AppTextStyles.body1(isDark).copyWith(
-                fontWeight: FontWeight.w600,
-                fontSize: 15,
-              ),
+              style: AppTextStyles.body1(
+                isDark,
+              ).copyWith(fontWeight: FontWeight.w600, fontSize: 15),
               decoration: InputDecoration(
                 isCollapsed: true,
                 border: InputBorder.none,
                 contentPadding: const EdgeInsets.fromLTRB(0, 16, 14, 16),
                 hintText: widget.hint,
                 hintStyle: AppTextStyles.body1(isDark).copyWith(
-                  color: AppColors.textSecondary(isDark)
-                      .withValues(alpha: 0.7),
+                  color: AppColors.textSecondary(isDark).withValues(alpha: 0.7),
                   fontWeight: FontWeight.w500,
                   fontSize: 15,
                 ),
@@ -641,10 +668,9 @@ class _FieldError extends StatelessWidget {
           Expanded(
             child: Text(
               text,
-              style: AppTextStyles.caption(isDark).copyWith(
-                color: AppColors.warning,
-                fontWeight: FontWeight.w600,
-              ),
+              style: AppTextStyles.caption(
+                isDark,
+              ).copyWith(color: AppColors.warning, fontWeight: FontWeight.w600),
             ),
           ),
         ],
@@ -738,8 +764,9 @@ class _PrimaryButton extends StatelessWidget {
               boxShadow: enabled
                   ? [
                       BoxShadow(
-                        color: AppColors.tealDark
-                            .withValues(alpha: isDark ? 0.30 : 0.20),
+                        color: AppColors.tealDark.withValues(
+                          alpha: isDark ? 0.30 : 0.20,
+                        ),
                         blurRadius: 14,
                         offset: const Offset(0, 6),
                         spreadRadius: -4,
