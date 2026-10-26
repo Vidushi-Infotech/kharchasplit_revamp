@@ -17,13 +17,38 @@ class UpiIdRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final value = upiId?.trim() ?? '';
     final hasValue = value.isNotEmpty;
+    void edit() => context.pushNamed('edit-profile');
     return AccountRow(
-      icon: Icons.account_balance_wallet_outlined,
+      icon: Icons.qr_code_2_rounded,
       label: AppStrings.upiId,
-      value: hasValue ? value : AppStrings.addUpiId,
-      valueColor: hasValue ? null : AppColors.brand,
+      value: hasValue ? value : null,
+      // No UPI ID yet: a clear "+ Add" button instead of a faint value.
+      trailing: hasValue ? null : _AddPill(onTap: edit),
+      showChevron: hasValue,
       showDivider: showDivider,
-      onTap: () => context.pushNamed('edit-profile'),
+      onTap: edit,
+    );
+  }
+}
+
+class _AddPill extends StatelessWidget {
+  const _AddPill({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: onTap,
+      icon: const Icon(Icons.add_rounded, size: 18),
+      label: const Text(AppStrings.addUpiId),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: AppColors.brand,
+        side: const BorderSide(color: AppColors.brand),
+        shape: const StadiumBorder(),
+        visualDensity: VisualDensity.compact,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+      ),
     );
   }
 }

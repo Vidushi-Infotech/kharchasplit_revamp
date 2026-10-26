@@ -17,6 +17,7 @@ class AccountRow extends StatelessWidget {
     required this.onTap,
     this.value,
     this.valueColor,
+    this.trailing,
     this.color,
     this.showChevron = true,
     this.showDivider = true,
@@ -29,6 +30,9 @@ class AccountRow extends StatelessWidget {
   /// Right-aligned current value, e.g. "Dark" or a UPI ID.
   final String? value;
   final Color? valueColor;
+
+  /// Replaces [value] with a widget, e.g. the UPI row's "+ Add" pill.
+  final Widget? trailing;
 
   /// Icon and label color (Log out uses the warning tone).
   final Color? color;
@@ -77,9 +81,17 @@ class AccountRow extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (value != null) ...[
+                // Value hugs the chevron at the right edge; long values
+                // (a UPI ID) get at most ~45% of the row and ellipsize.
+                if (trailing != null) ...[
                   const SizedBox(width: 12),
-                  Flexible(
+                  trailing!,
+                ] else if (value != null) ...[
+                  const SizedBox(width: 12),
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: MediaQuery.sizeOf(context).width * 0.45,
+                    ),
                     child: Text(
                       value!,
                       maxLines: 1,
