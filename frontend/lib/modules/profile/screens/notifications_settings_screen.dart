@@ -293,7 +293,7 @@ class _Intro extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'Choose what you want to hear about — and how.',
+              'Choose what you want to hear about, and how.',
               style: AppTextStyles.body2(isDark).copyWith(
                 color: AppColors.textPrimary(isDark),
                 fontWeight: FontWeight.w500,

@@ -30,7 +30,7 @@ class LocalStore {
       ]);
       _ready = true;
     } catch (e, st) {
-      AppLogger.error('Local store unavailable — offline mode off',
+      AppLogger.error('Local store unavailable, offline mode off',
           tag: 'LocalStore', error: e, stackTrace: st);
     }
   }

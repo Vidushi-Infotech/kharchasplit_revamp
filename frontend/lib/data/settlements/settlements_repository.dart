@@ -96,7 +96,7 @@ class SettlementsRepository {
     final data = body['data'];
     if (data is! List) {
       throw SettlementsApiException(
-          'Malformed response — expected list in data');
+          'Malformed response: expected list in data');
     }
     final items = data
         .whereType<Map<String, dynamic>>()
@@ -203,7 +203,7 @@ class SettlementsRepository {
     final body = _ensureSuccess(res);
     final data = body['data'];
     if (data is! Map<String, dynamic>) {
-      throw SettlementsApiException('Malformed response — expected object');
+      throw SettlementsApiException('Malformed response: expected object');
     }
     return data;
   }

@@ -142,7 +142,7 @@ class ExpensesRepository {
     final body = _ensureSuccess(res);
     final data = body['data'];
     if (data is! List) {
-      throw ExpensesApiException('Malformed response — expected list in data');
+      throw ExpensesApiException('Malformed response: expected list in data');
     }
     final items = data
         .whereType<Map<String, dynamic>>()
@@ -347,7 +347,7 @@ class ExpensesRepository {
     final data = body['data'];
     if (data is! Map<String, dynamic>) {
       throw ExpensesApiException(
-        'Malformed response — expected object in data',
+        'Malformed response: expected object in data',
       );
     }
     return data;

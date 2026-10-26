@@ -100,7 +100,7 @@ abstract final class AppStrings {
   static const splitAdjustmentShort = 'Equal ± extra';
   static const adjustmentHint =
       'Everyone pays an equal part, then add or take off an amount for '
-      'anyone — e.g. +150 for an extra drink.';
+      'anyone, e.g. +150 for an extra drink.';
   static const adjustmentsTooLarge = 'Adjustments are more than the total';
   static String adjustmentFor(String name) => 'Adjustment for $name';
   static const flipAdjustmentSign = 'Switch between adding and taking off';
@@ -131,13 +131,13 @@ abstract final class AppStrings {
       'Settle all balances ($currency)';
   static const settleUpOneGroup = 'Settle up one group';
   static String settleAllGroupYouOwe(String group, String amount) =>
-      '$group — you owe $amount';
+      '$group: you owe $amount';
   static String settleAllGroupOwesYou(
     String group,
     String name,
     String amount,
   ) =>
-      '$group — $name owes you $amount';
+      '$group: $name owes you $amount';
   static String totalYouPay(String name, String amount) =>
       'Total you pay $name: $amount';
   static String settleAllExplain(int groups) =>
@@ -145,7 +145,7 @@ abstract final class AppStrings {
   static String recordAmountPayment(String amount) =>
       'Record $amount payment';
   static const balancesChangedCheckTotal =
-      'Balances changed — check the new total';
+      'Balances changed. Check the new total';
   static String settledUpWithName(String name) => 'Settled up with $name';
   static String nothingToPayName(String name) =>
       "You don't owe $name anything overall right now.";
@@ -171,7 +171,7 @@ abstract final class AppStrings {
   static const unarchive = 'Unarchive';
   static const markComplete = 'Mark as complete';
   static const groupArchived = 'This group is archived';
-  static const groupCompleted = 'Completed — all settled up';
+  static const groupCompleted = 'Completed, all settled up';
   static const unarchiveToAddExpenses = 'Unarchive to add expenses';
   static const settleUpFirst = 'Settle up first';
   static const groupArchivedExpenseBlocked =
@@ -210,7 +210,7 @@ abstract final class AppStrings {
       'Your archived groups are below. Start a new group any time.';
   static const whatsNewTitle = 'A new look';
   static const whatsNewGroups =
-      'Groups is your new home — your overall balance is at the top';
+      'Groups is your new home. Your overall balance is at the top';
   static const whatsNewFriends =
       'Friends shows what each person owes you across groups';
   static const whatsNewAccount =
@@ -238,7 +238,7 @@ abstract final class AppStrings {
       'Check your UPI app. Only record it once the money has left your account.';
   static String yesRecordAmount(String amount) => 'Yes, record $amount';
   static const upiNotPaid = 'No';
-  static const iHavePaidRecordIt = 'I’ve paid — record it';
+  static const iHavePaidRecordIt = 'I’ve paid, record it';
   static String payNameByUpi(String name) => 'Pay $name by UPI';
   static const noUpiAppFound =
       'No UPI app opened. Copy the UPI ID or scan the QR with your phone.';
@@ -365,7 +365,7 @@ abstract final class AppStrings {
   static const save = 'Save';
   static const defaultSplitSaved = 'Default split saved';
   static const defaultSplitCleared =
-      'Default split cleared — expenses split equally';
+      'Default split cleared. Expenses split equally';
   static const equallyByDefault = 'Equally (no default)';
 
   // ── Recurring expenses: add / edit expense form ─────────────────────
@@ -404,7 +404,7 @@ abstract final class AppStrings {
   static String recurringNextOn(String date) => 'Next on $date';
   static String recurringEndsOn(String date) => 'Ends $date';
   static const recurringPaused = 'Paused';
-  static String recurringPausedBecause(String reason) => 'Paused — $reason';
+  static String recurringPausedBecause(String reason) => 'Paused: $reason';
   static const recurringEnded = 'Ended';
   static const recurringStopped = 'Stopped';
   static const recurringStoppedHint =
@@ -441,7 +441,7 @@ abstract final class AppStrings {
   static String offlineShowingDataFrom(String ago) =>
       'Offline · showing data from $ago';
   static const savedOffline =
-      'Saved offline — will sync when you\'re back online';
+      'Saved offline. It will sync when you\'re back online';
   static const unsyncedChanges = 'Unsynced changes';
   static String unsyncedChangesCount(int n) => 'Unsynced changes ($n)';
   static const pendingSync = 'Pending sync';
@@ -517,7 +517,7 @@ abstract final class AppStrings {
   static const exportCreate = 'Create PDF';
   static const exportPreparing = 'Preparing your file…';
   static const exportFailed = 'Could not export';
-  static String exportShareSubject(String name) => 'KharchaSplit — $name';
+  static String exportShareSubject(String name) => 'KharchaSplit: $name';
   static const statementTitle = 'Group statement';
   static String statementGenerated(String date) => 'Generated on $date';
   static String statementPeriod(String period) => 'Period: $period';
@@ -852,7 +852,7 @@ abstract final class AppStrings {
   // ── Scan receipt prompt ──
   static const scanReceiptTitle = 'Scan a receipt';
   static const scanReceiptHint =
-      'Take a photo — we fill in the amount, date and description';
+      'Take a photo and we fill in the amount, date and description';
   static const addReceiptTitle = 'Add a receipt';
   static const addReceiptHint = 'Attach a photo of the bill';
 

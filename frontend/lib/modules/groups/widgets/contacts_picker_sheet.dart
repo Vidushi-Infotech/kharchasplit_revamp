@@ -204,7 +204,7 @@ class _ContactsPickerSheetState extends ConsumerState<ContactsPickerSheet> {
         _phoneLooking = false;
         _phoneResult = null;
         _phoneError = e.statusCode == 429
-            ? 'Too many searches — try again in a few minutes.'
+            ? 'Too many searches. Try again in a few minutes.'
             : 'Lookup failed. Check your connection and try again.';
       });
     } catch (_) {

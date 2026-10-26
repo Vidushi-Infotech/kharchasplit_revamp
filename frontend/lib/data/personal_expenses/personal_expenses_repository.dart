@@ -130,7 +130,7 @@ class PersonalExpensesRepository {
     final data = body['data'];
     if (data is! Map<String, dynamic>) {
       throw PersonalExpensesApiException(
-          'Malformed response — expected object in data');
+          'Malformed response: expected object in data');
     }
     return data;
   }
@@ -140,7 +140,7 @@ class PersonalExpensesRepository {
     final data = body['data'];
     if (data is! List) {
       throw PersonalExpensesApiException(
-          'Malformed response — expected list in data');
+          'Malformed response: expected list in data');
     }
     return data;
   }

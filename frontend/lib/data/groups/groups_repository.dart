@@ -214,7 +214,7 @@ class GroupsRepository {
     );
     final id = _ensureSuccessMap(res)['groupId'];
     if (id is! String) {
-      throw GroupsApiException('Malformed response — expected groupId');
+      throw GroupsApiException('Malformed response: expected groupId');
     }
     return id;
   }
@@ -405,7 +405,7 @@ class GroupsRepository {
     final body = _ensureSuccess(res);
     final data = body['data'];
     if (data is! Map<String, dynamic>) {
-      throw GroupsApiException('Malformed response — expected object in data');
+      throw GroupsApiException('Malformed response: expected object in data');
     }
     return data;
   }
@@ -414,7 +414,7 @@ class GroupsRepository {
     final body = _ensureSuccess(res);
     final data = body['data'];
     if (data is! List) {
-      throw GroupsApiException('Malformed response — expected list in data');
+      throw GroupsApiException('Malformed response: expected list in data');
     }
     return data;
   }

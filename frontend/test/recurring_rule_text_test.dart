@@ -59,7 +59,7 @@ void main() {
           ),
           now: now,
         ),
-        'Repeats every week · Paused — someone in it has left the group',
+        'Repeats every week · Paused: someone in it has left the group',
       );
     });
   });
@@ -74,7 +74,7 @@ void main() {
     test('server reason', () {
       expect(
         recurringPauseLabel('the group was archived'),
-        'Paused — the group was archived',
+        'Paused: the group was archived',
       );
     });
   });

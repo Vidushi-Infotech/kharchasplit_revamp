@@ -207,7 +207,7 @@ class _ExpenseDetailPeopleState extends State<ExpenseDetailPeople> {
             const SizedBox(width: 8),
             Semantics(
               button: true,
-              label: '${action.label} — $name',
+              label: '${action.label}, $name',
               excludeSemantics: true,
               child: OutlinedButton(
                 onPressed: action.onTap,

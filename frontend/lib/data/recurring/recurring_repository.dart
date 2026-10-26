@@ -141,7 +141,7 @@ class RecurringRepository {
   RecurringRule _rule(Response res) {
     final data = _ok(res)['data'];
     if (data is! Map<String, dynamic>) {
-      throw RecurringApiException('Malformed response — expected a rule');
+      throw RecurringApiException('Malformed response: expected a rule');
     }
     return RecurringRule.fromJson(data);
   }

@@ -198,7 +198,7 @@ extension UpiApi on UsersRepository {
     final res = await _client.dio.get('/users/$userId/payment-info');
     final data = _ensureEnvelope(res)['data'];
     if (data is! Map) {
-      throw UsersApiException('Malformed response — expected object');
+      throw UsersApiException('Malformed response: expected object');
     }
     return PaymentInfo.fromJson(data.cast<String, dynamic>());
   }

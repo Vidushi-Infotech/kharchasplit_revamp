@@ -188,7 +188,7 @@ void main() {
           to: _me,
           amount: 200,
           method: SettlementMethod.cash,
-          note: 'Written off — Test Four removed by admin',
+          note: 'Written off: Test Four removed by admin',
         ),
         myId: 'me',
         otherName: 'Test Four',
@@ -196,7 +196,7 @@ void main() {
       expect(r.title, startsWith('Test F. paid you '));
       expect(r.when, '19 Oct 2026, 9:34 AM · Cash');
       expect(r.status, AppStrings.historyPaymentConfirmed);
-      expect(r.note, 'Written off — Test Four removed by admin');
+      expect(r.note, 'Written off: Test Four removed by admin');
       expect(r.tone, BalanceTone.owed);
       expect(r.canMarkNotReceived, isTrue);
     });
@@ -241,7 +241,7 @@ void main() {
           from: _four,
           to: _me,
           amount: 200,
-          note: 'Written off — Test Four removed by admin',
+          note: 'Written off: Test Four removed by admin',
         ),
       ],
       fourIsMember: false,
@@ -270,7 +270,7 @@ void main() {
     expect(find.text('October 2026'), findsOneWidget);
     expect(find.textContaining('Test F. paid you'), findsOneWidget);
     expect(
-      find.text('Written off — Test Four removed by admin'),
+      find.text('Written off: Test Four removed by admin'),
       findsOneWidget,
     );
     expect(find.byType(NotReceivedButton), findsOneWidget);

@@ -390,7 +390,7 @@ class _SectionHeader extends StatelessWidget {
               ? titleWidget
               : Semantics(
                   button: true,
-                  label: '$title — see all',
+                  label: '$title, see all',
                   child: InkWell(
                     onTap: onSeeAll,
                     borderRadius: BorderRadius.circular(6),

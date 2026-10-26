@@ -134,8 +134,8 @@ Future<void> exportGroup(
                 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
           ),
         ],
-        subject: 'KharchaSplit — ${group.name} ledger',
-        text: 'Group ledger for "${group.name}" — exported from KharchaSplit.',
+        subject: 'KharchaSplit: ${group.name} ledger',
+        text: 'Group ledger for "${group.name}", exported from KharchaSplit.',
       ),
     );
   } on GroupsApiException catch (e) {

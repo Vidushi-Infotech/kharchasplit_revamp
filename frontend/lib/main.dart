@@ -162,8 +162,39 @@ class _KharchaSplitAppState extends ConsumerState<KharchaSplitApp> {
       debugShowCheckedModeBanner: false,
       scrollBehavior: const _AppScrollBehavior(),
       // The banner overlays every route by wrapping the router's content.
-      builder: (context, child) =>
-          OfflineBanner(child: child ?? const SizedBox.shrink()),
+      builder: (context, child) => _NonNegativeInsets(
+        child: OfflineBanner(child: child ?? const SizedBox.shrink()),
+      ),
+    );
+  }
+}
+
+/// iOS 26 briefly reports a negative keyboard inset while the keyboard
+/// animates; any padding built from it then fails Flutter's
+/// non-negative assertion. Clamp the insets once for every route and sheet.
+class _NonNegativeInsets extends StatelessWidget {
+  const _NonNegativeInsets({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final mq = MediaQuery.of(context);
+    final v = mq.viewInsets;
+    // Always the same widget shape, so the app's state is never rebuilt
+    // when the insets flip sign.
+    return MediaQuery(
+      data: v.isNonNegative
+          ? mq
+          : mq.copyWith(
+              viewInsets: EdgeInsets.fromLTRB(
+                v.left < 0 ? 0 : v.left,
+                v.top < 0 ? 0 : v.top,
+                v.right < 0 ? 0 : v.right,
+                v.bottom < 0 ? 0 : v.bottom,
+              ),
+            ),
+      child: child,
     );
   }
 }

@@ -43,7 +43,7 @@ class UpdateService {
       final config = await repo.fetch();
       if (config == null) {
         AppLogger.info(
-          'Update check: server config unavailable — skipping',
+          'Update check: server config unavailable, skipping',
           tag: 'UpdateService',
         );
         return;

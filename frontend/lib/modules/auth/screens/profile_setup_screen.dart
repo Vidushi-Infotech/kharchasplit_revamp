@@ -131,7 +131,8 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final mq = MediaQuery.of(context);
     final screenWidth = mq.size.width;
-    final bottomInset = mq.viewInsets.bottom;
+    // iOS can report a briefly negative inset while the keyboard animates.
+    final bottomInset = mq.viewInsets.bottom.clamp(0.0, double.infinity);
     final canContinue = _isValid && !_saving;
 
     return Scaffold(

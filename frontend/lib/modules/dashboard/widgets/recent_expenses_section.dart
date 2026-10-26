@@ -116,7 +116,7 @@ class _Header extends StatelessWidget {
 
     return Semantics(
       button: true,
-      label: 'Recent Expenses — see all',
+      label: 'Recent Expenses, see all',
       child: InkWell(
         onTap: onSeeAll,
         borderRadius: BorderRadius.circular(6),

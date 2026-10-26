@@ -14,7 +14,7 @@ const String _kPlayStoreUrl =
 const String _kAppStoreUrl =
     'https://apps.apple.com/in/app/kharchasplit/id6754237285';
 const String _kInviteMessage =
-    "Hey! You've been added to a group on KharchaSplit — the easiest way to "
+    "Hey! You've been added to a group on KharchaSplit, the easiest way to "
     "split expenses with friends. Download the app to get started!\n\n"
     "Android: $_kPlayStoreUrl\n"
     "iOS: $_kAppStoreUrl";

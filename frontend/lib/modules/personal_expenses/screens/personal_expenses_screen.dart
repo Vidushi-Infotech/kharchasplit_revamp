@@ -928,7 +928,7 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            "Track expenses that aren't shared — rent, fuel, subscriptions.",
+            "Track expenses that aren't shared, like rent, fuel and subscriptions.",
             textAlign: TextAlign.center,
             style: AppTextStyles.body2(
               isDark,

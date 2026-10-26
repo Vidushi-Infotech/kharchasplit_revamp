@@ -31,7 +31,7 @@ class PaymentHistoryRowView {
   final String status;
   final PaymentStatusKind statusKind;
 
-  /// Free text such as "Written off — Test Four removed by admin".
+  /// Free text such as "Written off: Test Four removed by admin".
   final String? note;
 
   /// Formatted amount for the trailing column.

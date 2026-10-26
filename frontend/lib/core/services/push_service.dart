@@ -72,7 +72,7 @@ class PushService {
 
     final fcm = _fcm;
     if (fcm == null) {
-      debugPrint('[PushService] Skipping FCM init — Firebase not initialized');
+      debugPrint('[PushService] Skipping FCM init, Firebase not initialized');
       return;
     }
 

@@ -45,7 +45,7 @@ final List<_OnboardingSlide> _slides = [
     previewBuilder: () => const SettlePreview(),
     headline: 'Settle without doubt',
     body:
-        'See exactly who you owe. Tap Settle — both sides confirm. Pair history stays clean.',
+        'See exactly who you owe. Tap Settle and both sides confirm. Pair history stays clean.',
     accent: AppColors.greenLight,
   ),
 ];

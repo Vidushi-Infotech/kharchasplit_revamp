@@ -113,7 +113,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final mq = MediaQuery.of(context);
     final screenWidth = mq.size.width;
-    final bottomInset = mq.viewInsets.bottom;
+    // iOS can report a briefly negative inset while the keyboard animates.
+    final bottomInset = mq.viewInsets.bottom.clamp(0.0, double.infinity);
     final authState = ref.watch(authProvider);
     final loading = authState.state == AuthState.loading;
 

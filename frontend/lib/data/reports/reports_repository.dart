@@ -102,7 +102,7 @@ class ReportsRepository {
     }
     final data = body['data'];
     if (data is! Map<String, dynamic>) {
-      throw ReportsApiException('Malformed response — expected object in data');
+      throw ReportsApiException('Malformed response: expected object in data');
     }
     return data;
   }
