@@ -87,7 +87,7 @@ class FriendsScreen extends ConsumerWidget {
           // floating "Add expense" button off the footer.
           final list = _FriendsList(
             padding: EdgeInsets.only(
-              bottom: bottomNavReserve(context.widthTier, compact: 88),
+              bottom: shellBottomReserve(context, context.widthTier, compact: 88),
             ),
             isDark: isDark,
           );

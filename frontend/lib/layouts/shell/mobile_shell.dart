@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/lifecycle/app_lifecycle_refresher.dart';
+import 'glass_shell_bar.dart';
 import 'pick_group_for_expense_sheet.dart';
 import 'shell_bottom_bar.dart';
 import 'shell_state.dart';
@@ -14,10 +15,7 @@ import 'whats_new_sheet.dart';
 class MobileShell extends ConsumerWidget {
   final Widget child;
 
-  const MobileShell({
-    Key? key,
-    required this.child,
-  }) : super(key: key);
+  const MobileShell({Key? key, required this.child}) : super(key: key);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -52,28 +50,63 @@ class MobileShell extends ConsumerWidget {
           } else if (selectedIndex != ShellTab.groups) {
             // Back from any other tab returns to Groups (the home tab);
             // back on Groups leaves the app.
-            ref.read(selectedNavIndexProvider.notifier).state =
-                ShellTab.groups;
+            ref.read(selectedNavIndexProvider.notifier).state = ShellTab.groups;
             context.go(ShellTab.locations[ShellTab.groups]!);
           } else {
             SystemNavigator.pop();
           }
         },
-        child: Scaffold(
-          body: child,
-          floatingActionButton: _showsAddExpense(routerState.uri.path)
-              ? ShellAddExpenseButton(
-                  onPressed: () => PickGroupForExpenseSheet.show(context),
-                )
-              : null,
-          bottomNavigationBar: ShellBottomBar(
-            selectedTab: selectedIndex,
-            onTabSelected: (index) {
-              ref.read(selectedNavIndexProvider.notifier).state = index;
-              _navigateToTab(context, index);
-            },
-          ),
+        child: _buildScaffold(
+          context,
+          ref,
+          routerState.uri.path,
+          selectedIndex,
         ),
+      ),
+    );
+  }
+
+  Widget _buildScaffold(
+    BuildContext context,
+    WidgetRef ref,
+    String path,
+    int? selectedIndex,
+  ) {
+    void onTab(int index) {
+      ref.read(selectedNavIndexProvider.notifier).state = index;
+      _navigateToTab(context, index);
+    }
+
+    void addExpense() => PickGroupForExpenseSheet.show(context);
+    final showAdd = _showsAddExpense(path);
+
+    if (useGlassShell) {
+      // iOS 26: native Liquid Glass bar and button; content scrolls under
+      // the glass (extendBody). Both native views hide while a page or a
+      // sheet covers the shell.
+      final onTop = ModalRoute.of(context)?.isCurrent ?? true;
+      return Scaffold(
+        extendBody: true,
+        body: child,
+        floatingActionButton: showAdd
+            ? GlassAddExpenseButton(onPressed: addExpense, visible: onTop)
+            : null,
+        bottomNavigationBar: GlassShellTabBar(
+          selectedTab: selectedIndex,
+          onTabSelected: onTab,
+          visible: onTop,
+        ),
+      );
+    }
+
+    return Scaffold(
+      body: child,
+      floatingActionButton: showAdd
+          ? ShellAddExpenseButton(onPressed: addExpense)
+          : null,
+      bottomNavigationBar: ShellBottomBar(
+        selectedTab: selectedIndex,
+        onTabSelected: onTab,
       ),
     );
   }

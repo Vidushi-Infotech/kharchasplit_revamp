@@ -13,20 +13,17 @@ import 'whats_new_sheet.dart';
 class TabletShell extends ConsumerWidget {
   final Widget child;
 
-  const TabletShell({
-    Key? key,
-    required this.child,
-  }) : super(key: key);
+  const TabletShell({Key? key, required this.child}) : super(key: key);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     // Route first, last-tapped index as the fallback — mirrors the mobile
     // shell so a deep link or notification tap highlights the right tab.
-    final routeIndex =
-        ShellTab.fromLocation(GoRouterState.of(context).uri.path);
-    final selectedIndex =
-        routeIndex ?? ref.watch(selectedNavIndexProvider);
+    final routeIndex = ShellTab.fromLocation(
+      GoRouterState.of(context).uri.path,
+    );
+    final selectedIndex = routeIndex ?? ref.watch(selectedNavIndexProvider);
 
     // One-time "A new look" intro to the new tab bar.
     WhatsNewSheet.maybeShow(context);

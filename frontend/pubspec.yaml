@@ -101,6 +101,7 @@ dependencies:
   # On-device receipt OCR (Android + iOS only; Latin script, bundled model).
   # iOS needs deployment target 15.5+ (see ios/Podfile).
   google_mlkit_text_recognition: ^0.16.0
+  adaptive_platform_ui: ^1.0.2
 
 
 dev_dependencies:

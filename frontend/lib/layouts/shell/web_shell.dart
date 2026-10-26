@@ -168,8 +168,8 @@ class _Sidebar extends StatelessWidget {
                       isDark: isDark,
                       collapsed: collapsed,
                       isSelected: dest.isActive(path),
-                      badge: dest.label == AppStrings.activity &&
-                              unreadCount > 0
+                      badge:
+                          dest.label == AppStrings.activity && unreadCount > 0
                           ? (unreadCount > 99 ? '99+' : '$unreadCount')
                           : null,
                     ),

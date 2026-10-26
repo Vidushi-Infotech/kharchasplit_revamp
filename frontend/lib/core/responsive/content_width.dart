@@ -1,3 +1,5 @@
+import 'package:flutter/widgets.dart';
+
 import 'breakpoints.dart';
 
 /// How wide a page's content column is allowed to grow.
@@ -110,3 +112,15 @@ class Space {
   static const double xxl = 32;
   static const double xxxl = 48;
 }
+
+/// [bottomNavReserve] for the tab screens, plus whatever the shell's bar
+/// overlaps: the iOS 26 glass tab bar floats over the content (the shell
+/// extends the body under it), so lists must also clear its height. Zero
+/// where the bar sits below the content (Android, older iOS).
+double shellBottomReserve(
+  BuildContext context,
+  WidthTier tier, {
+  double compact = 110,
+}) =>
+    bottomNavReserve(tier, compact: compact) +
+    MediaQuery.paddingOf(context).bottom;

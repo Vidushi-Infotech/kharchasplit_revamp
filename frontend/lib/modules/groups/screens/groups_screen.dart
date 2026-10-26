@@ -174,7 +174,7 @@ class _GroupsList extends ConsumerWidget {
         // Room for the floating "Add expense" button over the last row.
         SliverToBoxAdapter(
           child: SizedBox(
-            height: bottomNavReserve(context.widthTier, compact: 88),
+            height: shellBottomReserve(context, context.widthTier, compact: 88),
           ),
         ),
       ],

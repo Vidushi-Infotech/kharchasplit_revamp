@@ -9,7 +9,7 @@ import '../../../core/theme/app_text_styles.dart';
 /// Space under the last row so the floating "Add expense" button never
 /// covers it (the web shell has no such button).
 double activityBottomReserve(BuildContext context) =>
-    bottomNavReserve(context.widthTier, compact: 88);
+    shellBottomReserve(context, context.widthTier, compact: 88);
 
 /// Nothing in the feed (or nothing under the chosen filter).
 class ActivityEmptyState extends StatelessWidget {

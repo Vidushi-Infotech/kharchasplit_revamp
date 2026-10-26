@@ -87,8 +87,7 @@ class _PickGroupForExpenseSheetState
         return Container(
           decoration: BoxDecoration(
             color: AppColors.background(isDark),
-            borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(24)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
             border: Border.all(color: AppColors.divider(isDark)),
           ),
           child: Column(
@@ -124,9 +123,9 @@ class _PickGroupForExpenseSheetState
                           const SizedBox(height: 2),
                           Text(
                             AppStrings.pickGroupOrFriend,
-                            style: AppTextStyles.caption(isDark).copyWith(
-                              color: AppColors.textSecondary(isDark),
-                            ),
+                            style: AppTextStyles.caption(
+                              isDark,
+                            ).copyWith(color: AppColors.textSecondary(isDark)),
                           ),
                         ],
                       ),
@@ -162,8 +161,9 @@ class _PickGroupForExpenseSheetState
                         focusNode: _searchFocus,
                         onChanged: (q) => setState(() => _query = q),
                         textInputAction: TextInputAction.search,
-                        style: AppTextStyles.body2(isDark)
-                            .copyWith(fontSize: 14),
+                        style: AppTextStyles.body2(
+                          isDark,
+                        ).copyWith(fontSize: 14),
                         decoration: InputDecoration(
                           filled: true,
                           fillColor: AppColors.cardBg(isDark),
@@ -179,35 +179,41 @@ class _PickGroupForExpenseSheetState
                             color: AppColors.textSecondary(isDark),
                           ),
                           prefixIconConstraints: const BoxConstraints(
-                              minWidth: 40, minHeight: 40),
+                            minWidth: 40,
+                            minHeight: 40,
+                          ),
                           suffixIcon: _query.isEmpty
                               ? null
                               : IconButton(
-                                  icon: const Icon(Icons.close_rounded,
-                                      size: 16),
+                                  icon: const Icon(
+                                    Icons.close_rounded,
+                                    size: 16,
+                                  ),
                                   color: AppColors.textSecondary(isDark),
                                   onPressed: () {
                                     _searchController.clear();
                                     setState(() => _query = '');
                                   },
                                 ),
-                          contentPadding:
-                              const EdgeInsets.symmetric(vertical: 12),
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: 12,
+                          ),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide:
-                                BorderSide(color: AppColors.divider(isDark)),
+                            borderSide: BorderSide(
+                              color: AppColors.divider(isDark),
+                            ),
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide:
-                                BorderSide(color: AppColors.divider(isDark)),
+                            borderSide: BorderSide(
+                              color: AppColors.divider(isDark),
+                            ),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
                             borderSide: BorderSide(
-                              color: AppColors.tealDark
-                                  .withValues(alpha: 0.45),
+                              color: AppColors.tealDark.withValues(alpha: 0.45),
                             ),
                           ),
                         ),
@@ -227,8 +233,7 @@ class _PickGroupForExpenseSheetState
                   error: (err, _) => _ErrorState(
                     isDark: isDark,
                     message: err.toString(),
-                    onRetry: () =>
-                        ref.read(groupsProvider.notifier).refresh(),
+                    onRetry: () => ref.read(groupsProvider.notifier).refresh(),
                   ),
                   data: (allGroups) {
                     // Archived groups reject new expenses (409
@@ -275,9 +280,7 @@ class _PickGroupForExpenseSheetState
                                   Navigator.of(context).pop();
                                   context.pushNamed(
                                     'add-expense-to-group',
-                                    pathParameters: {
-                                      'groupId': visible[i].id,
-                                    },
+                                    pathParameters: {'groupId': visible[i].id},
                                   );
                                 },
                               ),
@@ -333,11 +336,7 @@ class _CircleIconButton extends StatelessWidget {
               shape: BoxShape.circle,
               border: Border.all(color: AppColors.divider(isDark)),
             ),
-            child: Icon(
-              icon,
-              size: 18,
-              color: AppColors.textPrimary(isDark),
-            ),
+            child: Icon(icon, size: 18, color: AppColors.textPrimary(isDark)),
           ),
         ),
       ),
@@ -361,8 +360,7 @@ class _GroupRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final emoji = group.coverEmoji;
-    final hasCustomEmoji =
-        emoji.isNotEmpty && emoji != _defaultPeopleEmoji;
+    final hasCustomEmoji = emoji.isNotEmpty && emoji != _defaultPeopleEmoji;
 
     return Material(
       color: Colors.transparent,
@@ -370,8 +368,7 @@ class _GroupRow extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(14),
         child: Container(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
             color: AppColors.cardBg(isDark),
             borderRadius: BorderRadius.circular(14),
@@ -387,13 +384,11 @@ class _GroupRow extends StatelessWidget {
                   color: AppColors.surface(isDark),
                   borderRadius: BorderRadius.circular(11),
                   border: Border.all(
-                    color:
-                        AppColors.divider(isDark).withValues(alpha: 0.6),
+                    color: AppColors.divider(isDark).withValues(alpha: 0.6),
                   ),
                 ),
                 child: hasCustomEmoji
-                    ? Text(emoji,
-                        style: const TextStyle(fontSize: 20))
+                    ? Text(emoji, style: const TextStyle(fontSize: 20))
                     : Icon(
                         Icons.group_rounded,
                         size: 20,
@@ -408,10 +403,9 @@ class _GroupRow extends StatelessWidget {
                   children: [
                     Text(
                       group.name,
-                      style: AppTextStyles.body1(isDark).copyWith(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14,
-                      ),
+                      style: AppTextStyles.body1(
+                        isDark,
+                      ).copyWith(fontWeight: FontWeight.w700, fontSize: 14),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -456,8 +450,7 @@ class _CreateGroupCta extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(14),
           child: Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
               color: AppColors.cardBg(isDark),
               borderRadius: BorderRadius.circular(14),
@@ -549,19 +542,18 @@ class _EmptyState extends StatelessWidget {
           const SizedBox(height: 14),
           Text(
             'No groups yet',
-            style: AppTextStyles.headline3(isDark).copyWith(
-              fontWeight: FontWeight.w700,
-              fontSize: 17,
-            ),
+            style: AppTextStyles.headline3(
+              isDark,
+            ).copyWith(fontWeight: FontWeight.w700, fontSize: 17),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 6),
           Text(
             'Create a group first, then you can split expenses with its members.',
             textAlign: TextAlign.center,
-            style: AppTextStyles.body2(isDark).copyWith(
-              color: AppColors.textSecondary(isDark),
-            ),
+            style: AppTextStyles.body2(
+              isDark,
+            ).copyWith(color: AppColors.textSecondary(isDark)),
           ),
           const SizedBox(height: 18),
           FilledButton.icon(
@@ -570,10 +562,7 @@ class _EmptyState extends StatelessWidget {
             label: const Text('Create a group'),
             style: FilledButton.styleFrom(
               backgroundColor: AppColors.tealDark,
-              padding: const EdgeInsets.symmetric(
-                horizontal: 18,
-                vertical: 12,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
             ),
           ),
         ],
@@ -602,12 +591,10 @@ class _NoResults extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             Text(
-              query.isEmpty
-                  ? 'Nothing matches'
-                  : 'Nothing matches "$query"',
-              style: AppTextStyles.body1(isDark).copyWith(
-                fontWeight: FontWeight.w600,
-              ),
+              query.isEmpty ? 'Nothing matches' : 'Nothing matches "$query"',
+              style: AppTextStyles.body1(
+                isDark,
+              ).copyWith(fontWeight: FontWeight.w600),
               textAlign: TextAlign.center,
             ),
           ],
@@ -643,16 +630,16 @@ class _ErrorState extends StatelessWidget {
             const SizedBox(height: 10),
             Text(
               "Couldn't load groups",
-              style: AppTextStyles.body1(isDark).copyWith(
-                fontWeight: FontWeight.w700,
-              ),
+              style: AppTextStyles.body1(
+                isDark,
+              ).copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 4),
             Text(
               message,
-              style: AppTextStyles.caption(isDark).copyWith(
-                color: AppColors.textSecondary(isDark),
-              ),
+              style: AppTextStyles.caption(
+                isDark,
+              ).copyWith(color: AppColors.textSecondary(isDark)),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 14),

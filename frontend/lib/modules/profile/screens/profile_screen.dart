@@ -81,7 +81,7 @@ class _AccountList extends ConsumerWidget {
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: EdgeInsets.only(
-          bottom: bottomNavReserve(context.widthTier, compact: 32),
+          bottom: shellBottomReserve(context, context.widthTier, compact: 32),
         ),
         children: [
           AccountHeader(

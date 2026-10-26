@@ -64,8 +64,10 @@ class ShellBottomBar extends StatelessWidget {
           ),
           NavigationDestination(
             icon: Icon(Icons.account_circle_outlined),
-            selectedIcon:
-                Icon(Icons.account_circle_rounded, color: AppColors.brand),
+            selectedIcon: Icon(
+              Icons.account_circle_rounded,
+              color: AppColors.brand,
+            ),
             label: AppStrings.account,
           ),
         ],
