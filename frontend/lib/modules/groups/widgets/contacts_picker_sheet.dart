@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/constants/app_strings.dart';
+import '../../../core/services/contacts_access.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../core/responsive/breakpoints.dart';
 import '../../../core/theme/app_colors.dart';
@@ -10,6 +12,7 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../data/contacts/device_contacts_provider.dart';
 import '../../../data/users/users_repository.dart';
 import '../state/registered_users_provider.dart';
+import 'contacts_access_views.dart';
 
 /// Link surfaced by the Copy / Share buttons inside the invite bottom
 /// sheet. Intentionally NOT used inside the SMTP email template — the
@@ -89,7 +92,8 @@ class ContactsPickerSheet extends ConsumerStatefulWidget {
       _ContactsPickerSheetState();
 }
 
-class _ContactsPickerSheetState extends ConsumerState<ContactsPickerSheet> {
+class _ContactsPickerSheetState extends ConsumerState<ContactsPickerSheet>
+    with WidgetsBindingObserver {
   late Set<String> _selectedIds;
   late TextEditingController _searchController;
   String _query = '';
@@ -117,6 +121,7 @@ class _ContactsPickerSheetState extends ConsumerState<ContactsPickerSheet> {
     super.initState();
     _selectedIds = widget.initialSelected.map((c) => c.id).toSet();
     _searchController = TextEditingController();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(deviceContactsProvider.notifier).silentRefresh();
     });
@@ -144,9 +149,54 @@ class _ContactsPickerSheetState extends ConsumerState<ContactsPickerSheet> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _searchController.dispose();
     _phoneDebounce?.cancel();
     super.dispose();
+  }
+
+  /// Back from Settings (or the iOS picker): the access level and the
+  /// shared contacts may have changed.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    ref.invalidate(contactsAccessProvider);
+    ref.read(deviceContactsProvider.notifier).silentRefresh();
+  }
+
+  /// iOS limited access: Apple's picker to share more contacts.
+  Future<void> _addMoreContacts() async {
+    await ContactsAccessService.addMoreContacts();
+    if (!mounted) return;
+    ref.invalidate(contactsAccessProvider);
+    await ref.read(deviceContactsProvider.notifier).refresh();
+  }
+
+  /// The system picker works without contacts permission: add the picked
+  /// person to the selection like a number-search hit.
+  Future<void> _pickSystemContact() async {
+    final picked = await ContactsAccessService.pickContact();
+    if (picked == null || !mounted) return;
+    if (picked.phones.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(AppStrings.contactHasNoNumber)),
+      );
+      return;
+    }
+    final id = picked.id.isEmpty ? 'picked:${picked.phones.first.number}' : picked.id;
+    if (_selectedIds.contains(id)) return;
+    HapticService.instance.success();
+    setState(() {
+      _extraContacts.add(picked.id == id ? picked : Contact(
+        id: id,
+        displayName: picked.displayName,
+        phones: picked.phones,
+      ));
+      _selectedIds.add(id);
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(AppStrings.contactPicked(picked.displayName))),
+    );
   }
 
   // -- Unified search handler --
@@ -429,6 +479,14 @@ class _ContactsPickerSheetState extends ConsumerState<ContactsPickerSheet> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final asyncContacts = ref.watch(deviceContactsProvider);
+    final access =
+        ref.watch(contactsAccessProvider).value ?? ContactsAccess.unknown;
+    Widget accessEmpty(ContactsAccess a) => ContactsAccessEmpty(
+          access: a,
+          onAddMore: _addMoreContacts,
+          onOpenSettings: ContactsAccessService.openSettings,
+          onPickContact: _pickSystemContact,
+        );
 
     asyncContacts.whenData((c) {
       if (!_registrationLookupStarted && c.isNotEmpty) {
@@ -478,18 +536,35 @@ class _ContactsPickerSheetState extends ConsumerState<ContactsPickerSheet> {
                   child: _buildPhoneResultCard(isDark),
                 ),
               ],
+              if (access == ContactsAccess.limited &&
+                  (asyncContacts.value?.isNotEmpty ?? false))
+                ContactsLimitedBanner(
+                  sharedCount: asyncContacts.value!.length,
+                  onAddMore: _addMoreContacts,
+                  onAllowAll: ContactsAccessService.openSettings,
+                ),
               const SizedBox(height: 8),
               Expanded(
                 child: asyncContacts.when(
                   loading: () =>
                       _ContactsSkeleton(controller: scrollController),
-                  error: (err, _) => _ContactsError(
+                  error: (err, _) => err is ContactsPermissionDenied &&
+                          access != ContactsAccess.unknown
+                      ? accessEmpty(ContactsAccess.denied)
+                      : _ContactsError(
                     error: err,
                     onRetry: () =>
                         ref.read(deviceContactsProvider.notifier).refresh(),
                   ),
                   data: (contacts) {
                     final filtered = _filter(contacts);
+                    // Empty because of the permission, not the phone book.
+                    if (contacts.isEmpty &&
+                        _query.isEmpty &&
+                        (access == ContactsAccess.limited ||
+                            access == ContactsAccess.denied)) {
+                      return accessEmpty(access);
+                    }
                     if (filtered.isEmpty) {
                       return Center(
                         child: Text(

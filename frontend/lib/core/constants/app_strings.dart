@@ -866,4 +866,24 @@ abstract final class AppStrings {
 
   // ── New-feature highlight ──
   static const newBadge = 'NEW';
+
+  // ── Contacts access (iOS limited / off) ──
+  static String contactsSharedCount(int n) =>
+      'You shared $n contact${n == 1 ? '' : 's'} with KharchaSplit';
+  static const contactsAddMore = 'Add more';
+  static const contactsAllowAll = 'Allow all';
+  static const contactsNoneSharedTitle = 'No contacts shared yet';
+  static const contactsNoneSharedBody =
+      'You chose to share only some contacts. Pick the friends you split with.';
+  static const contactsAccessOffTitle = 'Contacts access is off';
+  static const contactsAccessOffBody =
+      'Turn on Contacts for KharchaSplit in Settings, or pick a friend below.';
+  static const contactsChooseToShare = 'Choose contacts to share';
+  static const openSettings = 'Open Settings';
+  static const contactsPickOne = 'Pick a contact';
+  static const contactsAllowAllInSettings = 'Allow all contacts in Settings';
+  static const contactsOrTypeNumber =
+      'You can also type a 10-digit number in the search box above.';
+  static String contactPicked(String name) => 'Added $name';
+  static const contactHasNoNumber = 'That contact has no phone number';
 }
