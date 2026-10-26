@@ -280,7 +280,7 @@ export async function runDue(today = todayIST()) {
         }
       }
       if (due.length > MAX_CATCH_UP) {
-        await pauseRule(rule, 'more occurrences were missed than can be added automatically — check the group and resume');
+        await pauseRule(rule, 'more occurrences were missed than can be added automatically. Check the group and resume');
         paused += 1;
       }
     } catch (e) {

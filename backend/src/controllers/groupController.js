@@ -908,7 +908,7 @@ const removeGroupMember = async (req, res, next) => {
           amount,
           currency: group?.currency || 'INR',
           status: 'paid',
-          notes: `Written off — ${member?.name || 'member'} removed by admin`,
+          notes: `Written off: ${member?.name || 'member'} removed by admin`,
         });
       }
     }
@@ -1637,7 +1637,7 @@ const exportGroup = async (req, res, next) => {
     const totalExpenseAmt = expenses.reduce((sum, e) => sum + parseFloat(e.amount), 0);
     const summaryRows = [
       ['Group Name', group.name],
-      ['Description', group.description || '—'],
+      ['Description', group.description || '-'],
       ['Currency', group.currency || 'INR'],
       ['Created At', group.created_at],
       ['Total Members', members.length],
@@ -1672,8 +1672,8 @@ const exportGroup = async (req, res, next) => {
       const net = totals.paid - totals.share;
       memberSheet.addRow({
         name: m.name,
-        phone: m.phone_number || '—',
-        email: m.email || '—',
+        phone: m.phone_number || '-',
+        email: m.email || '-',
         role: m.role,
         paid: +totals.paid.toFixed(2),
         share: +totals.share.toFixed(2),
@@ -1705,7 +1705,7 @@ const exportGroup = async (req, res, next) => {
       const row = expSheet.addRow({
         date: e.expense_date ? new Date(e.expense_date) : null,
         desc: e.description,
-        cat: e.category || '—',
+        cat: e.category || '-',
         amount: parseFloat(e.amount),
         curr: e.currency || 'INR',
         payer: e.paid_by_name || 'Unknown',
@@ -1727,7 +1727,7 @@ const exportGroup = async (req, res, next) => {
     ];
     applyHeader(debtSheet.getRow(1));
     if (netDebts.length === 0) {
-      debtSheet.addRow({ from: 'All settled up — no outstanding debts', to: '', amount: '' });
+      debtSheet.addRow({ from: 'All settled up, no outstanding debts', to: '', amount: '' });
     } else {
       for (const d of netDebts) {
         const r = debtSheet.addRow(d);

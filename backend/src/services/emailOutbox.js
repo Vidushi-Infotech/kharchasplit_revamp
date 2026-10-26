@@ -135,7 +135,7 @@ export function startEmailOutboxWorker() {
   // Same rule as emailVerifyReminderJob: only PM2 instance 0 runs timers.
   const instance = process.env.NODE_APP_INSTANCE ?? process.env.pm_id;
   if (instance !== undefined && String(instance) !== '0') {
-    logger.info({ instance }, '[EmailOutbox] not instance 0 — worker skipped');
+    logger.info({ instance }, '[EmailOutbox] not instance 0, worker skipped');
     return () => {};
   }
   const tick = async () => {

@@ -27,7 +27,7 @@ export function startDailyJob({ name, disableEnv, hour, weekday, run }) {
   }
   const instance = process.env.NODE_APP_INSTANCE ?? process.env.pm_id;
   if (instance !== undefined && String(instance) !== '0') {
-    logger.info({ instance }, `[${name}] not instance 0 — scheduler skipped`);
+    logger.info({ instance }, `[${name}] not instance 0, scheduler skipped`);
     return () => {};
   }
 

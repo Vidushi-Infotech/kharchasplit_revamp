@@ -53,7 +53,7 @@ class EmailService {
     if (!transporter) {
       return {
         success: false,
-        error: 'SMTP not configured — set SMTP_HOST / SMTP_USER / SMTP_PASSWORD in .env',
+        error: 'SMTP not configured. Set SMTP_HOST / SMTP_USER / SMTP_PASSWORD in .env',
       };
     }
 
@@ -86,7 +86,7 @@ class EmailService {
       `Android (Play Store): ${playStoreUrl}`,
       `iPhone (App Store): ${appStoreUrl}`,
       ``,
-      `— The KharchaSplit Team`,
+      `The KharchaSplit Team`,
     ].join('\n');
 
     const html = `
@@ -111,7 +111,7 @@ class EmailService {
                   <strong>"${escapeHtml(safeGroup)}"</strong> group on KharchaSplit.
                 </p>
                 <p style="margin:0 0 24px;font-size:15px;line-height:1.55;color:#5a6478;">
-                  Install the app to view shared expenses, see who owes what, and settle up — all in one place.
+                  Install the app to view shared expenses, see who owes what, and settle up, all in one place.
                 </p>
 
                 <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;">
@@ -127,8 +127,8 @@ class EmailService {
                 <p style="margin:24px 0 12px;font-size:13px;color:#5a6478;text-align:center;">Or download directly:</p>
                 <!--
                   Official badge URLs:
-                    Google Play  — play.google.com/intl/en_us/badges (hosted by Google).
-                    App Store    — tools.applemediaservices.com/api/badges (hosted by Apple).
+                    Google Play: play.google.com/intl/en_us/badges (hosted by Google).
+                    App Store: tools.applemediaservices.com/api/badges (hosted by Apple).
                   Both render as PNGs in every email client and don't get blocked
                   the way generic image hosts can.
                 -->
@@ -209,7 +209,7 @@ class EmailService {
     if (!transporter) {
       return {
         success: false,
-        error: 'SMTP not configured — set SMTP_HOST / SMTP_USER / SMTP_PASSWORD in .env',
+        error: 'SMTP not configured. Set SMTP_HOST / SMTP_USER / SMTP_PASSWORD in .env',
       };
     }
 
@@ -226,9 +226,9 @@ class EmailService {
       ``,
       `This code expires in ${expiresInMinutes} minutes. Enter it in the app to set a new password.`,
       ``,
-      `If you didn't request a password reset, you can safely ignore this email — your account stays unchanged.`,
+      `If you didn't request a password reset, you can safely ignore this email. Your account stays unchanged.`,
       ``,
-      `— The KharchaSplit Team`,
+      `The KharchaSplit Team`,
     ].join('\n');
 
     const html = `
@@ -267,13 +267,13 @@ class EmailService {
                   Enter this code in the app on the password reset screen, then choose a new password.
                 </p>
                 <p style="margin:0;font-size:13px;line-height:1.55;color:#7a8499;">
-                  Didn't request a reset? You can safely ignore this email — your account stays unchanged.
+                  Didn't request a reset? You can safely ignore this email. Your account stays unchanged.
                 </p>
               </td>
             </tr>
             <tr>
               <td style="padding:18px 32px;background:#f5f7fa;color:#7a8499;font-size:12px;line-height:1.5;text-align:center;">
-                For your security, never share this code with anyone — not even someone claiming to be from KharchaSplit.
+                For your security, never share this code with anyone, not even someone claiming to be from KharchaSplit.
               </td>
             </tr>
           </table>
@@ -314,7 +314,7 @@ EmailService.sendEmailVerificationEmail = async function ({ toEmail, recipientNa
   if (!transporter) {
     return {
       success: false,
-      error: 'SMTP not configured — set SMTP_HOST / SMTP_USER / SMTP_PASSWORD in .env',
+      error: 'SMTP not configured. Set SMTP_HOST / SMTP_USER / SMTP_PASSWORD in .env',
     };
   }
 
@@ -332,7 +332,7 @@ EmailService.sendEmailVerificationEmail = async function ({ toEmail, recipientNa
     ``,
     `If you didn't request this, you can safely ignore this email.`,
     ``,
-    `— The KharchaSplit Team`,
+    `The KharchaSplit Team`,
   ].join('\n');
 
   const html = `
@@ -362,7 +362,7 @@ EmailService.sendEmailVerificationEmail = async function ({ toEmail, recipientNa
             </p>
           </td></tr>
           <tr><td style="padding:18px 32px;background:#f5f7fa;color:#7a8499;font-size:12px;line-height:1.5;text-align:center;">
-            Never share this code with anyone — not even someone claiming to be from KharchaSplit.
+            Never share this code with anyone, not even someone claiming to be from KharchaSplit.
           </td></tr>
         </table>
       </td></tr>
@@ -391,14 +391,14 @@ EmailService.sendEmailVerifyReminderEmail = async function ({ toEmail, recipient
   }
   const transporter = getTransporter();
   if (!transporter) {
-    return { success: false, error: 'SMTP not configured — set SMTP_HOST / SMTP_USER / SMTP_PASSWORD in .env' };
+    return { success: false, error: 'SMTP not configured. Set SMTP_HOST / SMTP_USER / SMTP_PASSWORD in .env' };
   }
   const fromAddr = process.env.SMTP_FROM || 'noreply@kharchasplit.com';
   const safeRecipient = (recipientName || 'there').trim();
   const subject = 'Verify your email on KharchaSplit';
   const usage = activityCount > 0
-    ? `You've been busy on KharchaSplit this week (${activityCount} update${activityCount === 1 ? '' : 's'} in the last ${windowDays} days) — nice.`
-    : `You've been using KharchaSplit recently — nice.`;
+    ? `You've been busy on KharchaSplit this week (${activityCount} update${activityCount === 1 ? '' : 's'} in the last ${windowDays} days). Nice.`
+    : `You've been using KharchaSplit recently. Nice.`;
 
   const text = [
     `Hi ${safeRecipient},`,
@@ -409,9 +409,9 @@ EmailService.sendEmailVerifyReminderEmail = async function ({ toEmail, recipient
     ``,
     `How: open the app → Profile → tap "Not verified · Verify" → enter the 6-digit code we send you.`,
     ``,
-    `If you don't want to verify, you can ignore this — we'll only remind you a couple more times.`,
+    `If you don't want to verify, you can ignore this. We'll only remind you a couple more times.`,
     ``,
-    `— The KharchaSplit Team`,
+    `The KharchaSplit Team`,
   ].join('\n');
 
   const html = `
@@ -438,7 +438,7 @@ EmailService.sendEmailVerifyReminderEmail = async function ({ toEmail, recipient
               </td></tr>
             </table>
             <p style="margin:0;font-size:13px;line-height:1.55;color:#7a8499;">
-              Don't want to verify? Ignore this email — we'll only remind you a couple more times.
+              Don't want to verify? Ignore this email. We'll only remind you a couple more times.
             </p>
           </td></tr>
         </table>
@@ -467,7 +467,7 @@ EmailService.sendRaw = async function ({ to, subject, text, html }) {
   }
   const transporter = getTransporter();
   if (!transporter) {
-    return { success: false, error: 'SMTP not configured — set SMTP_HOST / SMTP_USER / SMTP_PASSWORD in .env' };
+    return { success: false, error: 'SMTP not configured. Set SMTP_HOST / SMTP_USER / SMTP_PASSWORD in .env' };
   }
   const fromAddr = process.env.SMTP_FROM || 'noreply@kharchasplit.com';
   try {

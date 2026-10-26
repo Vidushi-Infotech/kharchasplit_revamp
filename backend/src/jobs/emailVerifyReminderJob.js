@@ -130,7 +130,7 @@ export function startEmailVerifyReminderScheduler() {
   // worker would send the same reminders on the same day.
   const instance = process.env.NODE_APP_INSTANCE ?? process.env.pm_id;
   if (instance !== undefined && String(instance) !== '0') {
-    logger.info({ instance }, '[emailVerifyReminder] not instance 0 — scheduler skipped');
+    logger.info({ instance }, '[emailVerifyReminder] not instance 0, scheduler skipped');
     return () => {};
   }
   const tick = async () => {

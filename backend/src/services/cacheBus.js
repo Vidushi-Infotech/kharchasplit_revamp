@@ -97,7 +97,7 @@ async function connect() {
     if (client === c) client = null;
     c.removeAllListeners('notification');
     c.end().catch(() => {});
-    if (!stopped) logger.warn({ err: err?.message }, '[cacheBus] listener lost — cache bypassed until reconnect');
+    if (!stopped) logger.warn({ err: err?.message }, '[cacheBus] listener lost, cache bypassed until reconnect');
     scheduleReconnect();
   };
   c.on('error', onDrop);

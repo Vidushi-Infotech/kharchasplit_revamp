@@ -32,7 +32,7 @@ export async function initFirebase() {
         raw = await fsp.readFile(filePath, 'utf8');
       } catch (err) {
         if (err.code === 'ENOENT') {
-          console.warn('[Firebase] No service account found — push notifications disabled');
+          console.warn('[Firebase] No service account found, push notifications disabled');
           return null;
         }
         throw err;

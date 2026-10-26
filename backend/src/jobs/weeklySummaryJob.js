@@ -60,7 +60,7 @@ async function weekStats(userId) {
          JOIN groups g ON g.id = s.group_id AND g.deleted_at IS NULL
         WHERE s.deleted_at IS NULL AND s.status = 'paid'
           -- Write-offs from member removal aren't real payments.
-          AND COALESCE(s.notes, '') NOT LIKE 'Written off —%'
+          AND COALESCE(s.notes, '') NOT LIKE 'Written off%'
           AND (s.from_user_id = $1 OR s.to_user_id = $1)
           AND s.created_at > NOW() - ($2 || ' days')::interval
         GROUP BY g.currency`,

@@ -48,7 +48,7 @@ export function renderLayout({ heading, greetingName, paragraphs = [], highlight
     ...(details.length ? [''] : []),
     ...sections.flatMap((sec) => [sec.title, ...sec.rows.map(([k, v]) => `  ${k}: ${v}`), '']),
     ...(footnote ? [footnote, ''] : []),
-    '— The KharchaSplit Team',
+    'The KharchaSplit Team',
   ].join('\n');
 
   const paragraphHtml = paragraphs
@@ -270,7 +270,7 @@ export function groupClosedSummary(d, r) {
     formatMoney(b.amount, d.currencyCode),
   ]);
   return {
-    subject: `"${d.groupName}" was ${verb} — your summary`,
+    subject: `"${d.groupName}" was ${verb}: your summary`,
     ...renderLayout({
       heading: d.closeKind === 'completed' ? 'Group completed' : 'Group archived',
       greetingName: r.name,

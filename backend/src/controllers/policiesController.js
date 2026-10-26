@@ -17,7 +17,7 @@ const PRIVACY_POLICY = {
       paragraphs: [
         'Account info: your phone number, name, and (optionally) email and profile photo.',
         'Activity in the app: the groups you create or join, the expenses you add, settlements, and your wallet sources for personal expenses.',
-        'Device session info: the device name, OS version, app version, and IP address of every signed-in session — so you can see and revoke them in Active Sessions.',
+        'Device session info: the device name, OS version, app version, and IP address of every signed-in session, so you can see and revoke them in Active Sessions.',
         'Diagnostic info: occasional anonymized error reports that help us fix crashes.',
       ],
     },
@@ -76,7 +76,7 @@ const TERMS = {
       heading: 'Your account',
       paragraphs: [
         'You are responsible for the activity on your account. Keep your phone number secure.',
-        'Use the app for personal expense splitting only — not for commercial transactions or anything illegal.',
+        'Use the app for personal expense splitting only, not for commercial transactions or anything illegal.',
       ],
     },
     {

@@ -476,7 +476,7 @@ class NotificationService {
 
   static async _pushMany(tokens, type, data, additionalData) {
     if (!isFirebaseReady()) {
-      logger.debug({ type }, '[NotificationService] Skipping — Firebase not initialized');
+      logger.debug({ type }, '[NotificationService] Skipping, Firebase not initialized');
       return { success: false, reason: 'firebase_not_ready' };
     }
     if (tokens.length === 0) {
@@ -631,7 +631,7 @@ class NotificationService {
         error.code === 'messaging/invalid-registration-token' ||
         error.code === 'messaging/invalid-argument';
       if (isInvalidToken) {
-        logger.warn({ code: error.code }, '[NotificationService] Stale FCM token — invalidating');
+        logger.warn({ code: error.code }, '[NotificationService] Stale FCM token, invalidating');
         await this.invalidateToken(token);
       } else {
         logger.error({ err: error, type }, '[NotificationService] FCM send failed');
