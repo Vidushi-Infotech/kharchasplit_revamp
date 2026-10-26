@@ -68,8 +68,8 @@ class SettingsActionRow extends StatelessWidget {
   }
 }
 
-/// Cover, name and (admins) an Edit button that opens the rename / cover
-/// sheet.
+/// Cover, name and an Edit button that opens the rename / cover sheet
+/// (any member can edit, as in Splitwise).
 class GroupSettingsHeader extends StatelessWidget {
   const GroupSettingsHeader({
     super.key,
@@ -81,7 +81,7 @@ class GroupSettingsHeader extends StatelessWidget {
   final GroupDetail detail;
   final String? myId;
 
-  /// Null for non-admins: no edit button.
+  /// Null hides the edit button.
   final VoidCallback? onEdit;
 
   @override

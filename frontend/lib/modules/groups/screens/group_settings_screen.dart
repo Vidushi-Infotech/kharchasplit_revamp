@@ -62,7 +62,8 @@ class _SettingsList extends ConsumerWidget {
       (_) => GroupSettingsHeader(
         detail: detail,
         myId: myId,
-        onEdit: isAdmin ? () => openEditGroupSheet(context, ref, group) : null,
+        // Any member can rename the group or change its photo (Splitwise).
+        onEdit: () => openEditGroupSheet(context, ref, group),
       ),
       (_) => const GroupSectionTitle(AppStrings.groupMembers),
       if (!group.isDirect)
