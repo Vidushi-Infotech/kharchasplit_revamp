@@ -164,13 +164,16 @@ class _GlassLargeTitleFrameState extends State<GlassLargeTitleFrame> {
                     left: 12,
                     right: 12,
                     height: rowH,
-                    child: Row(
-                      children: [
-                        if (widget.leading != null) widget.leading!,
-                        const Spacer(),
-                        if (widget.actions.isNotEmpty)
-                          GlassActionGroup(children: widget.actions),
-                      ],
+                    child: _HeaderCollapse(
+                      progress: t,
+                      child: Row(
+                        children: [
+                          if (widget.leading != null) widget.leading!,
+                          const Spacer(),
+                          if (widget.actions.isNotEmpty)
+                            GlassActionGroup(children: widget.actions),
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -220,4 +223,46 @@ class GlassCapsuleScope extends InheritedWidget {
 
   @override
   bool updateShouldNotify(GlassCapsuleScope oldWidget) => false;
+}
+
+/// How collapsed the header is (0 resting → 1 collapsed), for
+/// [HideOnCollapse] actions in the button row.
+class _HeaderCollapse extends InheritedWidget {
+  const _HeaderCollapse({required this.progress, required super.child});
+
+  final double progress;
+
+  @override
+  bool updateShouldNotify(_HeaderCollapse old) => old.progress != progress;
+}
+
+/// A header action that only shows while the large title does: as the
+/// header collapses it shrinks and fades away, making room for the small
+/// centred title (e.g. the donate heart on Groups). Outside a
+/// [GlassLargeTitleFrame] it's always shown.
+class HideOnCollapse extends StatelessWidget {
+  const HideOnCollapse({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final t =
+        context
+            .dependOnInheritedWidgetOfExactType<_HeaderCollapse>()
+            ?.progress ??
+        0;
+    if (t >= 1) return const SizedBox.shrink();
+    final visible = 1 - Curves.easeOut.transform(t);
+    return ClipRect(
+      child: Align(
+        alignment: Alignment.centerLeft,
+        widthFactor: visible,
+        child: Opacity(
+          opacity: visible,
+          child: IgnorePointer(ignoring: t > 0.5, child: child),
+        ),
+      ),
+    );
+  }
 }

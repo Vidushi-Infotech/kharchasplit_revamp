@@ -11,6 +11,7 @@ import '../../../core/utils/currency_formatter.dart';
 import '../../dashboard/state/dashboard_provider.dart';
 import '../state/groups_list_view.dart';
 import '../../../components/buttons/glass_icon_button.dart';
+import '../../../components/headers/glass_large_title.dart' show HideOnCollapse;
 import 'groups_notifications_button.dart';
 
 /// "Groups" title with the bell, donate heart, search and create-group
@@ -19,7 +20,8 @@ import 'groups_notifications_button.dart';
 /// [GroupsTopBar] and the iOS 26 large-title header.
 List<Widget> groupsHeaderActions(BuildContext context) => [
   const GroupsNotificationsButton(size: 36),
-  const DonateHeartButton(size: 36, iconSize: 17),
+  // Hidden once the header collapses, so the small "Groups" title fits.
+  const HideOnCollapse(child: DonateHeartButton(size: 36, iconSize: 17)),
   GlassIconButton(
     icon: Icons.search_rounded,
     sfSymbol: 'magnifyingglass',
