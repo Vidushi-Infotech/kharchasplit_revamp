@@ -3,6 +3,7 @@ import 'package:adaptive_platform_ui/adaptive_platform_ui.dart'
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../headers/glass_large_title.dart' show GlassCapsuleScope;
 import 'glass_surface.dart';
 
 /// Header icon button. On iOS 26+ it's a Liquid Glass circle drawn by
@@ -44,7 +45,19 @@ class GlassIconButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final fg = color ?? AppColors.textPrimary(isDark);
-    final Widget button = isGlass
+    final inCapsule = isGlass && GlassCapsuleScope.of(context);
+    final Widget button = inCapsule
+        // Inside a shared capsule: just the icon, the capsule is the glass.
+        ? GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onPressed,
+            child: SizedBox(
+              width: 40,
+              height: size,
+              child: Center(child: Icon(icon, size: 21, color: fg)),
+            ),
+          )
+        : isGlass
         ? SizedBox.square(
             dimension: size,
             child: GlassSurface(

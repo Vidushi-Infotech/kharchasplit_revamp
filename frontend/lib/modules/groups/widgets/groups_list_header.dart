@@ -15,6 +15,25 @@ import 'groups_notifications_button.dart';
 
 /// "Groups" title with the bell, donate heart, search and create-group
 /// actions. Shows a back arrow only when the screen was pushed.
+/// The Groups header actions (bell, heart, search, new group), shared by
+/// [GroupsTopBar] and the iOS 26 large-title header.
+List<Widget> groupsHeaderActions(BuildContext context) => [
+  const GroupsNotificationsButton(size: 36),
+  const DonateHeartButton(size: 36, iconSize: 17),
+  GlassIconButton(
+    icon: Icons.search_rounded,
+    sfSymbol: 'magnifyingglass',
+    tooltip: AppStrings.search,
+    onPressed: () => context.push('/search'),
+  ),
+  GlassIconButton(
+    icon: Icons.group_add_outlined,
+    sfSymbol: 'person.badge.plus',
+    tooltip: AppStrings.createGroupTooltip,
+    onPressed: () => context.push('/home/create-group'),
+  ),
+];
+
 class GroupsTopBar extends StatelessWidget {
   const GroupsTopBar({super.key});
 

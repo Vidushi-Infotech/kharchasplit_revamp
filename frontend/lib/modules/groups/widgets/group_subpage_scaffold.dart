@@ -30,9 +30,8 @@ class GroupSubpageScaffold extends ConsumerWidget {
   final Widget Function(BuildContext context, GroupDetail detail, double pad)
   builder;
 
-  void _back(BuildContext context) => context.canPop()
-      ? context.pop()
-      : context.go('/home/groups/$groupId');
+  void _back(BuildContext context) =>
+      context.canPop() ? context.pop() : context.go('/home/groups/$groupId');
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -52,15 +51,19 @@ class GroupSubpageScaffold extends ConsumerWidget {
       backgroundColor: AppColors.background(isDark),
       appBar: AppBar(
         elevation: 0,
-        scrolledUnderElevation: 0.5,
+        scrolledUnderElevation: GlassIconButton.isGlass ? 0 : 0.5,
         backgroundColor: AppColors.background(isDark),
         foregroundColor: AppColors.textPrimary(isDark),
         leading: GlassIconButton.isGlass
             ? GlassBackButton(onPressed: () => _back(context))
             : BackButton(onPressed: () => _back(context)),
         titleSpacing: 0,
+        // iOS 26: centred like the system navigation bar.
+        centerTitle: GlassIconButton.isGlass ? true : null,
         title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: GlassIconButton.isGlass
+              ? CrossAxisAlignment.center
+              : CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(title),

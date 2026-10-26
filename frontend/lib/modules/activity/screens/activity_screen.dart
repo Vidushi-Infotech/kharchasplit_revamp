@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../components/buttons/donate_heart_button.dart';
 import '../../../components/buttons/glass_icon_button.dart';
+import '../../../components/headers/glass_large_title.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../models/activity_model.dart';
@@ -31,6 +32,74 @@ class ActivityScreen extends ConsumerWidget {
         .where((a) => !a.isRead)
         .length;
     final notifier = ref.read(activityFeedProvider.notifier);
+    final maxWidth = width < 600
+        ? double.infinity
+        : (width < 1100 ? 640.0 : 760.0);
+    final filterStrip = _FilterStrip(
+      selected: filter,
+      onSelect: (f) => ref.read(activityFilterProvider.notifier).state = f,
+    );
+    final divider = Divider(height: 1, color: AppColors.divider(isDark));
+
+    if (GlassIconButton.isGlass) {
+      // iOS 26: large title that collapses into the button row on scroll;
+      // the filter strip scrolls with the feed, right under the title.
+      final top = GlassLargeTitleFrame.topInset(context);
+      return Scaffold(
+        backgroundColor: AppColors.background(isDark),
+        body: GlassLargeTitleFrame(
+          title: AppStrings.activity,
+          leading: GlassBackButton.appBarLeading(
+            context,
+            implyLeading: context.canPop(),
+          ),
+          actions: [
+            if (unreadCount > 0)
+              GlassIconButton(
+                icon: Icons.done_all_rounded,
+                sfSymbol: 'checkmark.circle',
+                tooltip: AppStrings.markAllRead,
+                onPressed: notifier.markAllAsRead,
+              ),
+            const DonateHeartButton(size: 38, iconSize: 18),
+          ],
+          child: Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: maxWidth),
+              child: RefreshIndicator(
+                color: AppColors.brand,
+                edgeOffset: top,
+                onRefresh: notifier.refresh,
+                child: CustomScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  slivers: [
+                    SliverToBoxAdapter(child: SizedBox(height: top)),
+                    SliverToBoxAdapter(child: filterStrip),
+                    SliverToBoxAdapter(child: divider),
+                    feedAsync.when(
+                      loading: () => const SliverToBoxAdapter(
+                        child: ActivityLoadingState(embedded: true),
+                      ),
+                      error: (_, _) => SliverToBoxAdapter(
+                        child: ActivityErrorState(
+                          onRetry: notifier.refresh,
+                          embedded: true,
+                        ),
+                      ),
+                      data: (items) => items.isEmpty
+                          ? const SliverToBoxAdapter(
+                              child: ActivityEmptyState(embedded: true),
+                            )
+                          : _ActivityList(items: items, sliver: true),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: AppColors.background(isDark),
@@ -67,19 +136,11 @@ class ActivityScreen extends ConsumerWidget {
       ),
       body: Center(
         child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: width < 600
-                ? double.infinity
-                : (width < 1100 ? 640 : 760),
-          ),
+          constraints: BoxConstraints(maxWidth: maxWidth),
           child: Column(
             children: [
-              _FilterStrip(
-                selected: filter,
-                onSelect: (f) =>
-                    ref.read(activityFilterProvider.notifier).state = f,
-              ),
-              Divider(height: 1, color: AppColors.divider(isDark)),
+              filterStrip,
+              divider,
               Expanded(
                 child: RefreshIndicator(
                   color: AppColors.brand,
@@ -103,45 +164,58 @@ class ActivityScreen extends ConsumerWidget {
 }
 
 class _ActivityList extends ConsumerWidget {
-  const _ActivityList({required this.items});
+  const _ActivityList({required this.items, this.sliver = false});
 
   final List<ActivityModel> items;
+
+  /// Rows as a sliver for the iOS 26 large-title scroll view; a
+  /// [ListView] otherwise.
+  final bool sliver;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final me = ref.watch(authProvider).user;
     final notifier = ref.read(activityFeedProvider.notifier);
+    final bottom = EdgeInsets.only(bottom: activityBottomReserve(context));
+    Widget row(BuildContext context, int i) {
+      final a = items[i];
+      final sentence = buildActivitySentence(
+        a,
+        myUserId: me?.id,
+        myName: me?.name,
+      );
+      final tap = activityTap(a, myUserId: me?.id);
+      final isMine = me != null && a.actorId == me.id;
+      return ActivityRow(
+        activity: a,
+        sentence: sentence,
+        badgeName: isMine ? me.name : sentence.actorName,
+        showDivider: i < items.length - 1,
+        onTap: () {
+          if (!a.isRead) notifier.markAsRead(a.id);
+          final notice = tap.notice;
+          if (notice != null) {
+            ScaffoldMessenger.of(context)
+              ..hideCurrentSnackBar()
+              ..showSnackBar(SnackBar(content: Text(notice)));
+          }
+          final route = tap.route;
+          if (route != null) context.push(route);
+        },
+      );
+    }
+
+    if (sliver) {
+      return SliverPadding(
+        padding: bottom,
+        sliver: SliverList.builder(itemCount: items.length, itemBuilder: row),
+      );
+    }
     return ListView.builder(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: EdgeInsets.only(bottom: activityBottomReserve(context)),
+      padding: bottom,
       itemCount: items.length,
-      itemBuilder: (context, i) {
-        final a = items[i];
-        final sentence = buildActivitySentence(
-          a,
-          myUserId: me?.id,
-          myName: me?.name,
-        );
-        final tap = activityTap(a, myUserId: me?.id);
-        final isMine = me != null && a.actorId == me.id;
-        return ActivityRow(
-          activity: a,
-          sentence: sentence,
-          badgeName: isMine ? me.name : sentence.actorName,
-          showDivider: i < items.length - 1,
-          onTap: () {
-            if (!a.isRead) notifier.markAsRead(a.id);
-            final notice = tap.notice;
-            if (notice != null) {
-              ScaffoldMessenger.of(context)
-                ..hideCurrentSnackBar()
-                ..showSnackBar(SnackBar(content: Text(notice)));
-            }
-            final route = tap.route;
-            if (route != null) context.push(route);
-          },
-        );
-      },
+      itemBuilder: row,
     );
   }
 }

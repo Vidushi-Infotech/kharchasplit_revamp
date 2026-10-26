@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../components/buttons/donate_heart_button.dart';
 import '../../../components/buttons/glass_icon_button.dart';
 import '../../../components/dialogs/donate_sheet.dart';
+import '../../../components/headers/glass_large_title.dart';
 import '../../../components/list/list_components.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/responsive/breakpoints.dart';
@@ -43,6 +44,31 @@ class ProfileScreen extends ConsumerWidget {
         ? double.infinity
         : (width < 1100 ? 640.0 : 820.0);
 
+    // iOS 26: large title that collapses into the button row on scroll.
+    final glass = GlassIconButton.isGlass;
+    final top = glass ? GlassLargeTitleFrame.topInset(context) : 0.0;
+    final body = Center(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxWidth),
+        child: _AccountList(top: top),
+      ),
+    );
+
+    if (glass) {
+      return Scaffold(
+        backgroundColor: AppColors.background(isDark),
+        body: GlassLargeTitleFrame(
+          title: AppStrings.account,
+          leading: GlassBackButton.appBarLeading(
+            context,
+            implyLeading: context.canPop(),
+          ),
+          actions: const [DonateHeartButton(size: 38, iconSize: 18)],
+          child: body,
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppColors.background(isDark),
       appBar: AppBar(
@@ -61,18 +87,16 @@ class ProfileScreen extends ConsumerWidget {
           SizedBox(width: 12),
         ],
       ),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: maxWidth),
-          child: const _AccountList(),
-        ),
-      ),
+      body: body,
     );
   }
 }
 
 class _AccountList extends ConsumerWidget {
-  const _AccountList();
+  const _AccountList({required this.top});
+
+  /// Space under the iOS 26 large-title header; 0 elsewhere.
+  final double top;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -82,10 +106,12 @@ class _AccountList extends ConsumerWidget {
 
     return RefreshIndicator(
       color: AppColors.brand,
+      edgeOffset: top,
       onRefresh: () => ref.read(authProvider.notifier).refreshProfile(),
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: EdgeInsets.only(
+          top: top,
           bottom: shellBottomReserve(context, context.widthTier, compact: 32),
         ),
         children: [

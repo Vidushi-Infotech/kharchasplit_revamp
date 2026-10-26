@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../components/components.dart';
+import '../../../components/headers/glass_large_title.dart';
 import '../../../components/list/list_components.dart';
 import '../../../components/web/web_page.dart';
 import '../../../components/web/web_page_header.dart';
@@ -30,6 +31,137 @@ class FriendsScreen extends ConsumerWidget {
     // Compact < 600 / standard 600–1100 / large > 1100.
     final gutter = width < 600 ? 16.0 : (width < 1100 ? 24.0 : 32.0);
 
+    // iOS 26 (phone/tablet tiers): large title that collapses into the
+    // button row on scroll.
+    final glass = GlassIconButton.isGlass && !isWeb;
+    final top = glass ? GlassLargeTitleFrame.topInset(context) : 0.0;
+    final actions = <Widget>[
+      // Global search (expenses, groups, friends).
+      GlassIconButton(
+        icon: Icons.search_rounded,
+        sfSymbol: 'magnifyingglass',
+        tooltip: 'Search',
+        onPressed: () => context.push('/search'),
+      ),
+      if (!glass) const GlassGap(),
+      GlassIconButton(
+        icon: Icons.person_add_alt_1_rounded,
+        sfSymbol: 'person.badge.plus',
+        tooltip: AppStrings.addFriend,
+        onPressed: () => showAddFriendSheet(context),
+      ),
+    ];
+
+    final body = friendsAsync.when(
+      loading: () => Padding(
+        padding: EdgeInsets.all(gutter).copyWith(top: gutter + top),
+        child: const ShimmerList(type: ShimmerListType.friend, itemCount: 6),
+      ),
+      error: (err, _) => Padding(
+        padding: EdgeInsets.only(top: top),
+        child: ErrorStateWidget(
+          title: "Couldn't load friends",
+          message: err.toString(),
+          onRetry: () => ref.invalidate(friendsProvider),
+        ),
+      ),
+      data: (friends) {
+        if (friends.isEmpty) {
+          return RefreshIndicator(
+            edgeOffset: top,
+            onRefresh: () => _refresh(ref),
+            child: LayoutBuilder(
+              builder: (context, c) => SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: EdgeInsets.only(top: top),
+                child: SizedBox(
+                  height: c.maxHeight - top,
+                  child: EmptyStateWidget.noFriends(
+                    onAddFriend: () => showAddFriendSheet(context),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
+        // Rows are flat and full-bleed; the bottom reserve keeps the
+        // floating "Add expense" button off the footer.
+        final list = _FriendsList(
+          padding: EdgeInsets.only(
+            top: top,
+            bottom: shellBottomReserve(context, context.widthTier, compact: 88),
+          ),
+          isDark: isDark,
+        );
+
+        if (!isWeb) {
+          // Standard (600–1100): same list, centered.
+          return RefreshIndicator(
+            edgeOffset: top,
+            onRefresh: () => _refresh(ref),
+            child: WebContentColumn(
+              width: ContentWidth.reading,
+              gutter: false,
+              applyBelowWebTier: true,
+              child: list,
+            ),
+          );
+        }
+
+        return WebContentColumn(
+          width: ContentWidth.reading,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 32),
+              WebPageHeader(
+                title: AppStrings.friends,
+                subtitle: friends.length == 1
+                    ? '1 person'
+                    : '${friends.length} people',
+                actions: [
+                  OutlinedButton.icon(
+                    onPressed: () => context.push('/search'),
+                    icon: const Icon(Icons.search_rounded),
+                    label: const Text('Search'),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.brand,
+                      foregroundColor: Colors.white,
+                    ),
+                    onPressed: () => showAddFriendSheet(context),
+                    icon: const Icon(Icons.person_add_alt_1_rounded),
+                    label: const Text(AppStrings.addFriend),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Expanded(
+                child: RefreshIndicator(
+                  onRefresh: () => _refresh(ref),
+                  child: list,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (glass) {
+      return Scaffold(
+        backgroundColor: AppColors.background(isDark),
+        body: GlassLargeTitleFrame(
+          title: AppStrings.friends,
+          leading: GlassBackButton.appBarLeading(context),
+          actions: actions,
+          child: body,
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppColors.background(isDark),
       // The web shell already names the section in the sidebar and the page
@@ -43,114 +175,9 @@ class FriendsScreen extends ConsumerWidget {
               surfaceTintColor: Colors.transparent,
               backgroundColor: AppColors.background(isDark),
               leading: GlassBackButton.appBarLeading(context),
-              actions: [
-                // Global search (expenses, groups, friends).
-                GlassIconButton(
-                  icon: Icons.search_rounded,
-                  sfSymbol: 'magnifyingglass',
-                  tooltip: 'Search',
-                  onPressed: () => context.push('/search'),
-                ),
-                const GlassGap(),
-                GlassIconButton(
-                  icon: Icons.person_add_alt_1_rounded,
-                  sfSymbol: 'person.badge.plus',
-                  tooltip: AppStrings.addFriend,
-                  onPressed: () => showAddFriendSheet(context),
-                ),
-                const GlassGap(width: 8),
-              ],
+              actions: [...actions, const GlassGap(width: 8)],
             ),
-      body: friendsAsync.when(
-        loading: () => Padding(
-          padding: EdgeInsets.all(gutter),
-          child: const ShimmerList(type: ShimmerListType.friend, itemCount: 6),
-        ),
-        error: (err, _) => ErrorStateWidget(
-          title: "Couldn't load friends",
-          message: err.toString(),
-          onRetry: () => ref.invalidate(friendsProvider),
-        ),
-        data: (friends) {
-          if (friends.isEmpty) {
-            return RefreshIndicator(
-              onRefresh: () => _refresh(ref),
-              child: LayoutBuilder(
-                builder: (context, c) => SingleChildScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  child: SizedBox(
-                    height: c.maxHeight,
-                    child: EmptyStateWidget.noFriends(
-                      onAddFriend: () => showAddFriendSheet(context),
-                    ),
-                  ),
-                ),
-              ),
-            );
-          }
-          // Rows are flat and full-bleed; the bottom reserve keeps the
-          // floating "Add expense" button off the footer.
-          final list = _FriendsList(
-            padding: EdgeInsets.only(
-              bottom: shellBottomReserve(context, context.widthTier, compact: 88),
-            ),
-            isDark: isDark,
-          );
-
-          if (!isWeb) {
-            // Standard (600–1100): same list, centered.
-            return RefreshIndicator(
-              onRefresh: () => _refresh(ref),
-              child: WebContentColumn(
-                width: ContentWidth.reading,
-                gutter: false,
-                applyBelowWebTier: true,
-                child: list,
-              ),
-            );
-          }
-
-          return WebContentColumn(
-            width: ContentWidth.reading,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const SizedBox(height: 32),
-                WebPageHeader(
-                  title: AppStrings.friends,
-                  subtitle: friends.length == 1
-                      ? '1 person'
-                      : '${friends.length} people',
-                  actions: [
-                    OutlinedButton.icon(
-                      onPressed: () => context.push('/search'),
-                      icon: const Icon(Icons.search_rounded),
-                      label: const Text('Search'),
-                    ),
-                    const SizedBox(width: 8),
-                    FilledButton.icon(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.brand,
-                        foregroundColor: Colors.white,
-                      ),
-                      onPressed: () => showAddFriendSheet(context),
-                      icon: const Icon(Icons.person_add_alt_1_rounded),
-                      label: const Text(AppStrings.addFriend),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                Expanded(
-                  child: RefreshIndicator(
-                    onRefresh: () => _refresh(ref),
-                    child: list,
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
+      body: body,
     );
   }
 

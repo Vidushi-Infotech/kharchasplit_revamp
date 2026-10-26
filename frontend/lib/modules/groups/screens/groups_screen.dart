@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../components/components.dart';
+import '../../../components/headers/glass_large_title.dart';
 import '../../../components/list/list_components.dart';
 import '../../../components/web/web_page.dart';
 import '../../../core/constants/app_strings.dart';
@@ -32,6 +33,54 @@ class GroupsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final groupsAsync = ref.watch(groupsProvider);
+    // iOS 26: large title that collapses into the button row on scroll.
+    final glass = GlassIconButton.isGlass;
+    final top = glass ? GlassLargeTitleFrame.topInset(context) : 0.0;
+    final Widget topBar = glass ? SizedBox(height: top) : const GroupsTopBar();
+
+    final body = groupsAsync.when(
+      loading: () => Column(
+        children: [
+          topBar,
+          const Expanded(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: ShimmerList(type: ShimmerListType.group, itemCount: 6),
+            ),
+          ),
+        ],
+      ),
+      error: (err, _) => Column(
+        children: [
+          topBar,
+          Expanded(
+            child: GroupsErrorState(
+              message: err.toString(),
+              onRetry: () => ref.read(groupsProvider.notifier).refresh(),
+            ),
+          ),
+        ],
+      ),
+      data: (groups) => RefreshIndicator(
+        color: AppColors.brand,
+        edgeOffset: top,
+        // Dashboard refresh reloads the groups list first, so one call
+        // refreshes both the overall line and the rows.
+        onRefresh: () => ref.read(dashboardProvider.notifier).refresh(),
+        child: _GroupsList(groups: groups, topBar: topBar),
+      ),
+    );
+
+    if (glass) {
+      return Scaffold(
+        backgroundColor: AppColors.background(isDark),
+        body: GlassLargeTitleFrame(
+          title: AppStrings.groups,
+          actions: groupsHeaderActions(context),
+          child: body,
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: AppColors.background(isDark),
@@ -41,40 +90,7 @@ class GroupsScreen extends ConsumerWidget {
           width: ContentWidth.reading,
           gutter: false,
           applyBelowWebTier: true,
-          child: groupsAsync.when(
-            loading: () => const Column(
-              children: [
-                GroupsTopBar(),
-                Expanded(
-                  child: Padding(
-                    padding: EdgeInsets.all(16),
-                    child: ShimmerList(
-                      type: ShimmerListType.group,
-                      itemCount: 6,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            error: (err, _) => Column(
-              children: [
-                const GroupsTopBar(),
-                Expanded(
-                  child: GroupsErrorState(
-                    message: err.toString(),
-                    onRetry: () => ref.read(groupsProvider.notifier).refresh(),
-                  ),
-                ),
-              ],
-            ),
-            data: (groups) => RefreshIndicator(
-              color: AppColors.brand,
-              // Dashboard refresh reloads the groups list first, so one call
-              // refreshes both the overall line and the rows.
-              onRefresh: () => ref.read(dashboardProvider.notifier).refresh(),
-              child: _GroupsList(groups: groups),
-            ),
-          ),
+          child: body,
         ),
       ),
     );
@@ -82,9 +98,12 @@ class GroupsScreen extends ConsumerWidget {
 }
 
 class _GroupsList extends ConsumerWidget {
-  const _GroupsList({required this.groups});
+  const _GroupsList({required this.groups, required this.topBar});
 
   final List<GroupModel> groups;
+
+  /// [GroupsTopBar], or the space under the iOS 26 large-title header.
+  final Widget topBar;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -114,7 +133,7 @@ class _GroupsList extends ConsumerWidget {
     return CustomScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       slivers: [
-        const SliverToBoxAdapter(child: GroupsTopBar()),
+        SliverToBoxAdapter(child: topBar),
         const SliverToBoxAdapter(
           child: Padding(
             padding: EdgeInsets.symmetric(horizontal: 16),

@@ -11,15 +11,26 @@ import '../../../core/theme/app_text_styles.dart';
 double activityBottomReserve(BuildContext context) =>
     shellBottomReserve(context, context.widthTier, compact: 88);
 
+/// Physics for a state's list: its own scroll view normally, or laid out
+/// in full inside the iOS 26 large-title scroll view when [embedded].
+ScrollPhysics _statePhysics(bool embedded) => embedded
+    ? const NeverScrollableScrollPhysics()
+    : const AlwaysScrollableScrollPhysics();
+
 /// Nothing in the feed (or nothing under the chosen filter).
 class ActivityEmptyState extends StatelessWidget {
-  const ActivityEmptyState({super.key});
+  const ActivityEmptyState({super.key, this.embedded = false});
+
+  /// Inside an outer scroll view (iOS 26 large title): no scrolling of
+  /// its own, sized to its content.
+  final bool embedded;
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
+      physics: _statePhysics(embedded),
+      shrinkWrap: embedded,
       padding: EdgeInsets.fromLTRB(20, 80, 20, activityBottomReserve(context)),
       children: [
         Icon(Icons.timeline_rounded, size: 40, color: AppColors.brand),
@@ -46,7 +57,10 @@ class ActivityEmptyState extends StatelessWidget {
 
 /// Skeleton rows while the first page loads.
 class ActivityLoadingState extends StatelessWidget {
-  const ActivityLoadingState({super.key});
+  const ActivityLoadingState({super.key, this.embedded = false});
+
+  /// See [ActivityEmptyState.embedded].
+  final bool embedded;
 
   @override
   Widget build(BuildContext context) {
@@ -64,6 +78,8 @@ class ActivityLoadingState extends StatelessWidget {
       ),
     );
     return ListView.builder(
+      physics: embedded ? _statePhysics(embedded) : null,
+      shrinkWrap: embedded,
       padding: EdgeInsets.only(bottom: activityBottomReserve(context)),
       itemCount: 6,
       itemBuilder: (_, _) => Padding(
@@ -93,15 +109,23 @@ class ActivityLoadingState extends StatelessWidget {
 
 /// Load failed with nothing cached.
 class ActivityErrorState extends StatelessWidget {
-  const ActivityErrorState({super.key, required this.onRetry});
+  const ActivityErrorState({
+    super.key,
+    required this.onRetry,
+    this.embedded = false,
+  });
 
   final Future<void> Function() onRetry;
+
+  /// See [ActivityEmptyState.embedded].
+  final bool embedded;
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
+      physics: _statePhysics(embedded),
+      shrinkWrap: embedded,
       padding: EdgeInsets.fromLTRB(20, 80, 20, activityBottomReserve(context)),
       children: [
         Icon(
