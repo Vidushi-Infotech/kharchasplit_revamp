@@ -1,10 +1,13 @@
-import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart'
+    show PlatformInfo;
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
+import 'glass_surface.dart';
 
-/// Header icon button. On iOS 26+ it's a native Liquid Glass circle with an
-/// SF Symbol (adaptive_platform_ui); elsewhere a plain [IconButton].
+/// Header icon button. On iOS 26+ it's a Liquid Glass circle drawn by
+/// Flutter ([GlassSurface]), so it animates with the page; elsewhere a
+/// plain [IconButton].
 ///
 /// Use it for every header action (back, search, settings, more…) so all
 /// headers look the same. [sfSymbol] is the iOS name for [icon], e.g.
@@ -34,29 +37,19 @@ class GlassIconButton extends StatelessWidget {
 
   static const double size = 44;
 
-  /// Whether headers draw native glass buttons on this device.
+  /// Whether headers draw glass buttons on this device (iOS 26+).
   static bool get isGlass => PlatformInfo.isIOS26OrHigher();
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final fg = color ?? AppColors.textPrimary(isDark);
-    // While a page or sheet covers this one, swap the native view for the
-    // Flutter button so the glass can't show through what's on top.
-    final onTop = ModalRoute.of(context)?.isCurrent ?? true;
-
-    final Widget button = isGlass && onTop
-        ? SizedBox(
-            width: size,
-            height: size,
-            child: AdaptiveButton.sfSymbol(
-              onPressed: onPressed,
-              enabled: onPressed != null,
-              sfSymbol: SFSymbol(sfSymbol, size: 18, color: fg),
-              style: AdaptiveButtonStyle.glass,
-              size: AdaptiveButtonSize.large,
-              useSmoothRectangleBorder: false,
-              borderRadius: BorderRadius.circular(size / 2),
+    final Widget button = isGlass
+        ? SizedBox.square(
+            dimension: size,
+            child: GlassSurface(
+              onTap: onPressed,
+              child: Center(child: Icon(icon, size: 21, color: fg)),
             ),
           )
         : IconButton(
@@ -73,15 +66,13 @@ class GlassIconButton extends StatelessWidget {
             child: button,
           );
 
-    return Tooltip(
-      message: tooltip,
-      child: Semantics(
-        button: true,
-        label: badgeCount > 0 ? '$tooltip, $badgeCount' : tooltip,
-        excludeSemantics: true,
-        child: withBadge,
-      ),
+    final labelled = Semantics(
+      button: true,
+      label: badgeCount > 0 ? '$tooltip, $badgeCount' : tooltip,
+      excludeSemantics: true,
+      child: withBadge,
     );
+    return Tooltip(message: tooltip, child: labelled);
   }
 }
 
@@ -119,7 +110,7 @@ class GlassBackButton extends StatelessWidget {
 }
 
 /// Text action for headers (Save, Settle up, Done…). On iOS 26+ it's a
-/// native prominent-glass pill in the brand color; elsewhere a
+/// brand-tinted Liquid Glass pill ([GlassSurface]); elsewhere a
 /// [TextButton] (with [icon] when given). A disabled pill still calls
 /// [onBlocked] so the screen can say what's missing.
 class GlassTextButton extends StatelessWidget {
@@ -142,37 +133,34 @@ class GlassTextButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final tap = enabled ? onPressed : onBlocked;
-    final onTop = ModalRoute.of(context)?.isCurrent ?? true;
-    if (GlassIconButton.isGlass && onTop) {
-      // A native view takes all the width it's given: size the pill to
-      // its label.
-      final text = TextPainter(
-        text: TextSpan(
-          text: label,
-          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
-        ),
-        maxLines: 1,
-        textDirection: TextDirection.ltr,
-      )..layout();
+    if (GlassIconButton.isGlass) {
       return Semantics(
         button: true,
         enabled: enabled,
         label: label,
         excludeSemantics: true,
         child: SizedBox(
-          width: text.width + 36,
           height: GlassIconButton.size,
-          child: AdaptiveButton(
-            onPressed: tap,
-            label: label,
-            style: enabled
-                ? AdaptiveButtonStyle.prominentGlass
-                : AdaptiveButtonStyle.glass,
-            size: AdaptiveButtonSize.large,
-            color: enabled ? AppColors.brand : null,
-            textColor: enabled ? Colors.white : AppColors.textSecondary(isDark),
-            useSmoothRectangleBorder: false,
-            borderRadius: BorderRadius.circular(GlassIconButton.size / 2),
+          child: GlassSurface(
+            circle: false,
+            onTap: tap,
+            tint: enabled ? AppColors.tealDark.withValues(alpha: 0.96) : null,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 18),
+              child: Center(
+                widthFactor: 1,
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: enabled
+                        ? Colors.white
+                        : AppColors.textSecondary(isDark),
+                  ),
+                ),
+              ),
+            ),
           ),
         ),
       );

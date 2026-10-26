@@ -9,6 +9,7 @@ import '../../../core/state/feature_flags_provider.dart';
 import '../../../data/groups/groups_repository.dart';
 import '../../auth/state/auth_provider.dart';
 import '../state/group_detail_provider.dart';
+import '../state/groups_provider.dart';
 import '../state/group_member_balances.dart';
 import '../widgets/group_detail_action_chips.dart';
 import '../widgets/group_detail_layouts.dart';
@@ -39,6 +40,44 @@ class GroupDetailScreen extends ConsumerWidget {
     final myId = ref.watch(myIdProvider);
     final recurringOn = watchFeature(ref, 'recurring');
     final detail = detailAsync.value;
+
+    // Opened from the list: draw the banner straight away from the list's
+    // copy of the group and shimmer the rest, so the page slides in looking
+    // like itself instead of blank.
+    final listed = ref
+        .watch(groupsProvider)
+        .value
+        ?.where((g) => g.id == groupId)
+        .firstOrNull;
+    if (detail == null && listed != null && !detailAsync.hasError) {
+      return Scaffold(
+        backgroundColor: AppColors.background(isDark),
+        body: CustomScrollView(
+          physics: const NeverScrollableScrollPhysics(),
+          slivers: [
+            GroupDetailSliverBar(
+              detail: GroupDetail(
+                group: listed,
+                members: listed.members,
+                expenses: const [],
+                settlements: const [],
+                totalExpense: listed.totalExpenses,
+              ),
+              myId: myId,
+              onBack: () => _back(context),
+              // Actions need the loaded group; they appear with it.
+              onSettings: null,
+              onRecurring: null,
+              onMenuExport: (_) {},
+            ),
+            // ShimmerList is itself a list: give it the remaining height.
+            const SliverFillRemaining(
+              child: ShimmerList(type: ShimmerListType.group),
+            ),
+          ],
+        ),
+      );
+    }
 
     if (detail == null) {
       return Scaffold(

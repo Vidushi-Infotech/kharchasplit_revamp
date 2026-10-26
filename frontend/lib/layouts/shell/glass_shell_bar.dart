@@ -1,6 +1,7 @@
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/material.dart';
 
+import '../../components/buttons/glass_surface.dart';
 import '../../core/constants/app_strings.dart';
 import '../../core/services/haptic_service.dart';
 import '../../core/theme/app_colors.dart';
@@ -12,20 +13,18 @@ import 'shell_state.dart';
 bool get useGlassShell => PlatformInfo.isIOS26OrHigher();
 
 /// Native iOS 26 tab bar: Groups · Friends · Activity · Account, with SF
-/// Symbols. [visible] false hides the native view while a page or sheet
-/// covers the shell, so it can't show through Flutter content.
+/// Symbols. It stays in place while a page slides in: Flutter draws the
+/// incoming page over the native view, like iOS covering its tab bar.
 class GlassShellTabBar extends StatelessWidget {
   const GlassShellTabBar({
     super.key,
     required this.selectedTab,
     required this.onTabSelected,
-    required this.visible,
   });
 
   /// A [ShellTab] index, or null when no tab owns the current route.
   final int? selectedTab;
   final ValueChanged<int> onTabSelected;
-  final bool visible;
 
   static const _tabs = [
     ShellTab.groups,
@@ -63,7 +62,6 @@ class GlassShellTabBar extends StatelessWidget {
       destinations: _destinations,
       selectedIndex: selected < 0 ? 0 : selected,
       tint: AppColors.brand,
-      showNativeView: visible,
       onTap: (i) {
         if (i != selected) HapticService.instance.selection();
         onTabSelected(_tabs[i]);
@@ -72,42 +70,47 @@ class GlassShellTabBar extends StatelessWidget {
   }
 }
 
-/// "Add expense" as a native Liquid Glass button, tinted with the brand
-/// color, floating above the glass tab bar.
+/// "Add expense" as a brand-tinted Liquid Glass pill floating above the
+/// glass tab bar. Drawn by Flutter (like the header buttons), so it is
+/// there immediately and moves with the page.
 class GlassAddExpenseButton extends StatelessWidget {
-  const GlassAddExpenseButton({
-    super.key,
-    required this.onPressed,
-    required this.visible,
-  });
+  const GlassAddExpenseButton({super.key, required this.onPressed});
 
   final VoidCallback onPressed;
-  final bool visible;
 
   @override
   Widget build(BuildContext context) {
-    // Offstage keeps the native view out of the way while covered, the
-    // same rule as the tab bar.
-    return Offstage(
-      offstage: !visible,
-      child: Semantics(
-        button: true,
-        label: AppStrings.addExpense,
-        excludeSemantics: true,
-        // A native view takes all the width it's given; keep it a pill.
-        child: SizedBox(
-          width: 168,
-          height: 50,
-          child: AdaptiveButton(
-            onPressed: () {
-              HapticService.instance.tap();
-              onPressed();
-            },
-            label: AppStrings.addExpense,
-            style: AdaptiveButtonStyle.prominentGlass,
-            size: AdaptiveButtonSize.large,
-            color: AppColors.brand,
-            textColor: Colors.white,
+    return Semantics(
+      button: true,
+      label: AppStrings.addExpense,
+      excludeSemantics: true,
+      child: SizedBox(
+        height: 52,
+        child: GlassSurface(
+          circle: false,
+          radius: 26,
+          tint: AppColors.tealDark.withValues(alpha: 0.96),
+          onTap: () {
+            HapticService.instance.tap();
+            onPressed();
+          },
+          child: const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.receipt_long_rounded, color: Colors.white, size: 20),
+                SizedBox(width: 8),
+                Text(
+                  AppStrings.addExpense,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

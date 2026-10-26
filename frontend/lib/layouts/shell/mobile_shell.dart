@@ -81,20 +81,17 @@ class MobileShell extends ConsumerWidget {
     final showAdd = _showsAddExpense(path);
 
     if (useGlassShell) {
-      // iOS 26: native Liquid Glass bar and button; content scrolls under
-      // the glass (extendBody). Both native views hide while a page or a
-      // sheet covers the shell.
-      final onTop = ModalRoute.of(context)?.isCurrent ?? true;
+      // iOS 26: native Liquid Glass tab bar; content scrolls under it
+      // (extendBody) and pushed pages slide over it.
       return Scaffold(
         extendBody: true,
         body: child,
         floatingActionButton: showAdd
-            ? GlassAddExpenseButton(onPressed: addExpense, visible: onTop)
+            ? GlassAddExpenseButton(onPressed: addExpense)
             : null,
         bottomNavigationBar: GlassShellTabBar(
           selectedTab: selectedIndex,
           onTabSelected: onTab,
-          visible: onTop,
         ),
       );
     }
