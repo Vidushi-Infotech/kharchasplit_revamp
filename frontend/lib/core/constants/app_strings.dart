@@ -863,4 +863,7 @@ abstract final class AppStrings {
 
   // ── Record a payment button ──
   static const recordLabel = 'Record';
+
+  // ── New-feature highlight ──
+  static const newBadge = 'NEW';
 }

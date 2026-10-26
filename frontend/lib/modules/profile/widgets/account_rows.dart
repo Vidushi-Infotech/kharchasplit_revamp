@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import '../../../components/badges/new_badge.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -18,6 +19,7 @@ class AccountRow extends StatelessWidget {
     this.value,
     this.valueColor,
     this.trailing,
+    this.isNew = false,
     this.color,
     this.showChevron = true,
     this.showDivider = true,
@@ -34,6 +36,9 @@ class AccountRow extends StatelessWidget {
   /// Replaces [value] with a widget, e.g. the UPI row's "+ Add" pill.
   final Widget? trailing;
 
+  /// Shows a "NEW" pill after the label.
+  final bool isNew;
+
   /// Icon and label color (Log out uses the warning tone).
   final Color? color;
   final bool showChevron;
@@ -46,7 +51,7 @@ class AccountRow extends StatelessWidget {
     final secondary = AppColors.textSecondary(isDark);
     return Semantics(
       button: true,
-      label: value == null ? label : '$label: $value',
+      label: [label, if (isNew) AppStrings.newBadge, ?value].join(', '),
       excludeSemantics: true,
       child: Material(
         color: Colors.transparent,
@@ -69,16 +74,26 @@ class AccountRow extends StatelessWidget {
                 Icon(icon, size: 22, color: color ?? secondary),
                 const SizedBox(width: 16),
                 Expanded(
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.body1(isDark).copyWith(
-                      color: fg,
-                      fontWeight: color == null
-                          ? FontWeight.w500
-                          : FontWeight.w700,
-                    ),
+                  child: Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.body1(isDark).copyWith(
+                            color: fg,
+                            fontWeight: color == null
+                                ? FontWeight.w500
+                                : FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      if (isNew) ...[
+                        const SizedBox(width: 8),
+                        const NewBadge(),
+                      ],
+                    ],
                   ),
                 ),
                 // Value hugs the chevron at the right edge; long values
