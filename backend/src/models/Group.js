@@ -143,7 +143,9 @@ class Group {
        RETURNING id, name, description, currency, created_by, created_at, updated_at`,
       [name, description, coverImageBase64, currency, id]
     );
-    if (result.rows[0]) cache.del(`group:${id}`);
+    // Every cached view of the group (detail, members…), not just one key,
+    // so a new name or photo shows straight away.
+    if (result.rows[0]) this.invalidateGroup(id);
     return result.rows[0] || null;
   }
 

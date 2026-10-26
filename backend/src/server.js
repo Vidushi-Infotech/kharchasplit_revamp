@@ -107,10 +107,33 @@ app.use('/api', limiter);
 // or form payload). The handful of endpoints that genuinely need ~10MB
 // for inline base64 receipts / cover / profile photos opt in via their
 // own route-level `express.json({ limit: '10mb' })` middleware (see
-// expenseRoutes, groupRoutes, userRoutes). Trade-off avoided: a global
+// expenseRoutes, groupRoutes, userRoutes) and LARGE_BODY_ROUTES below.
+// Trade-off avoided: a global
 // 10MB limit meant any endpoint — including bare /auth/login — could
 // be hit with a 10MB body and tie up the event loop for ~200ms.
-app.use(express.json({ limit: '256kb' }));
+//
+// The global parser runs before any route, so a route-level 10MB parser
+// alone never got a chance: anything over 256KB was rejected here with
+// 413 (a group cover photo, a big receipt). Pick the limit up front from
+// this list instead; the route-level parsers then see an already-parsed
+// body and skip.
+const LARGE_BODY_ROUTES = [
+  ['POST', /^\/api\/v\d+\/groups\/?$/],
+  ['PUT', /^\/api\/v\d+\/groups\/[^/]+\/?$/],
+  ['POST', /^\/api\/v\d+\/expenses\/?$/],
+  ['PUT', /^\/api\/v\d+\/expenses\/[^/]+\/?$/],
+  ['PUT', /^\/api\/v\d+\/users\/[^/]+\/?$/],
+  ['POST', /^\/api\/v\d+\/personal-expenses\/?$/],
+  ['PUT', /^\/api\/v\d+\/personal-expenses\/[^/]+\/?$/],
+];
+const smallJson = express.json({ limit: '256kb' });
+const largeBodyJson = express.json({ limit: '10mb' });
+app.use((req, res, next) => {
+  const large = LARGE_BODY_ROUTES.some(
+    ([method, path]) => method === req.method && path.test(req.path),
+  );
+  return (large ? largeBodyJson : smallJson)(req, res, next);
+});
 app.use(express.urlencoded({ extended: true, limit: '256kb' }));
 
 // Compression — skip responses under 1KB (overhead not worth it for small JSON)

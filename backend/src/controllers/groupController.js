@@ -290,6 +290,9 @@ const updateGroup = async (req, res, next) => {
       });
     }
 
+    // Members' home screens show the group's name and photo too.
+    await GroupService.invalidateMemberDashboards(id);
+
     // Log activity
     const changes = { name, description };
     await ActivityService.logGroupUpdated(id, req.user.id, group.name, changes);
