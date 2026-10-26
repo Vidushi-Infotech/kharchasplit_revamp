@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
@@ -11,8 +9,8 @@ import '../buttons/glass_surface.dart';
 /// - at rest: a row of glass buttons, and a large bold title under it on
 ///   the left that scrolls away with the content;
 /// - scrolled: a small title fades in at the centre of the button row,
-///   and a soft scroll-edge effect (blur + fade, no bar, no line) keeps
-///   the buttons readable over the content.
+///   and the content fades out as it reaches the top edge (no bar, no
+///   blur band, no line), as iOS 26's scroll edge effect does.
 ///
 /// The page's scroll view must start with [topInset] of empty space (the
 /// header is drawn over it). Used on iOS 26+ only; elsewhere screens keep
@@ -68,14 +66,35 @@ class _GlassLargeTitleFrameState extends State<GlassLargeTitleFrame> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final topPad = MediaQuery.paddingOf(context).top;
     const rowH = GlassLargeTitleFrame._rowHeight;
-    final bg = AppColors.background(isDark);
     final textTheme = Theme.of(context).textTheme;
 
     return NotificationListener<ScrollNotification>(
       onNotification: _onScroll,
       child: Stack(
         children: [
-          widget.child,
+          // iOS 26 scroll edge: content dissolves into the page as it nears
+          // the top (an alpha fade), it isn't blurred behind a band. At
+          // rest this strip is the empty space above the content, so the
+          // mask only shows once something scrolls into it.
+          ShaderMask(
+            blendMode: BlendMode.dstIn,
+            shaderCallback: (bounds) {
+              final h = bounds.height <= 0 ? 1.0 : bounds.height;
+              final clear = (topPad + rowH * 0.45) / h;
+              final solid = (topPad + rowH + 22) / h;
+              return LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: const [
+                  Color(0x00000000),
+                  Color(0x00000000),
+                  Color(0xFF000000),
+                ],
+                stops: [0, clear.clamp(0.0, 1.0), solid.clamp(0.0, 1.0)],
+              ).createShader(bounds);
+            },
+            child: widget.child,
+          ),
           // Only the header repaints while scrolling.
           ValueListenableBuilder<double>(
             valueListenable: _offset,
@@ -85,37 +104,6 @@ class _GlassLargeTitleFrameState extends State<GlassLargeTitleFrame> {
               final largeTop = topPad + rowH - offset.clamp(-200.0, 200.0);
               return Stack(
                 children: [
-                  // Soft scroll-edge effect: blur that fades out downward.
-                  Positioned(
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    height: topPad + rowH + 18,
-                    child: IgnorePointer(
-                      child: Opacity(
-                        opacity: t,
-                        child: ClipRect(
-                          child: BackdropFilter(
-                            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                            child: DecoratedBox(
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                  colors: [
-                                    bg.withValues(alpha: 0.92),
-                                    bg.withValues(alpha: 0.7),
-                                    bg.withValues(alpha: 0),
-                                  ],
-                                  stops: const [0, 0.65, 1],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
                   // Large title, moving with the content.
                   if (offset < GlassLargeTitleFrame._largeTitleHeight + 8)
                     Positioned(

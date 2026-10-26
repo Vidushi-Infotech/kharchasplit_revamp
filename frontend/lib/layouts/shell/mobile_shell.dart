@@ -81,8 +81,8 @@ class MobileShell extends ConsumerWidget {
     final showAdd = _showsAddExpense(path);
 
     if (useGlassShell) {
-      // iOS 26: native Liquid Glass tab bar; content scrolls under it
-      // (extendBody) and pushed pages slide over it.
+      // iOS 26: Liquid Glass tab bar floating over the content, which
+      // scrolls under it (extendBody); pushed pages slide over it.
       return Scaffold(
         extendBody: true,
         body: child,

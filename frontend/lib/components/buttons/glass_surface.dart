@@ -59,7 +59,6 @@ class GlassSurface extends StatelessWidget {
                 width: 0.8,
               ),
             ),
-            child: child,
           )
         : LiquidGlass.withOwnLayer(
             settings: LiquidGlassSettings(
@@ -70,8 +69,18 @@ class GlassSurface extends StatelessWidget {
               saturation: 1.4,
             ),
             shape: shape,
-            child: child,
+            child: const SizedBox.expand(),
           );
+
+    // The glass is only the backdrop: LiquidGlass draws its child into a
+    // shader layer that doesn't take taps, so buttons sit on top of it.
+    final Widget body = Stack(
+      alignment: Alignment.center,
+      children: [
+        Positioned.fill(child: glass),
+        child,
+      ],
+    );
 
     return DecoratedBox(
       // A soft shadow lifts clear glass off white pages, as on iOS 26.
@@ -86,15 +95,18 @@ class GlassSurface extends StatelessWidget {
           ),
         ],
       ),
-      child: LiquidStretch(
-        interactionScale: 1.06,
-        stretch: 0.3,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: onTap,
-          child: glass,
-        ),
-      ),
+      // A container (tab bar, button capsule) leaves taps to its children.
+      child: onTap == null
+          ? body
+          : LiquidStretch(
+              interactionScale: 1.06,
+              stretch: 0.3,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: onTap,
+                child: body,
+              ),
+            ),
     );
   }
 }
