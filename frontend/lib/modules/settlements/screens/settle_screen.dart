@@ -12,7 +12,10 @@ import '../../../models/settlement_model.dart';
 import '../../../models/user_model.dart';
 import '../../auth/state/auth_provider.dart';
 import '../../expenses/widgets/add_expense_top_bar.dart';
+import '../../groups/state/group_balance_helpers.dart';
+import '../../groups/state/group_detail_provider.dart';
 import '../state/record_payment_controller.dart';
+import '../state/settle_button_label.dart';
 import '../state/settle_group_options_provider.dart';
 import '../widgets/record_payment_header.dart';
 import '../widgets/record_payment_options.dart';
@@ -61,10 +64,27 @@ class _SettleScreenState extends ConsumerState<SettleScreen> {
     if (widget.initialAmount != null && widget.initialAmount! > 0) {
       _amountController.text = widget.initialAmount!.toStringAsFixed(2);
     }
+    // The button reads "Settle up" or "Record" depending on the amount.
+    _amountController.addListener(_onAmountChanged);
+  }
+
+  void _onAmountChanged() => setState(() {});
+
+  /// What you owe the recipient in the chosen group (> 0), from the
+  /// group's own balances; the pre-filled amount until it has loaded.
+  double? _owedInGroup(GroupModel? group, String? myId) {
+    if (group == null || myId == null) return widget.initialAmount;
+    final detail = ref.watch(groupDetailProvider(group.id)).value;
+    if (detail == null) return widget.initialAmount;
+    return groupVisibleDebts(
+      myId: myId,
+      detail: detail,
+    )[widget.recipientUserId];
   }
 
   @override
   void dispose() {
+    _amountController.removeListener(_onAmountChanged);
     _amountController.dispose();
     _notesController.dispose();
     super.dispose();
@@ -168,6 +188,10 @@ class _SettleScreenState extends ConsumerState<SettleScreen> {
         saving: _submitting,
         onSave: _handleSubmit,
         onSaveBlocked: () => _toast(AppStrings.noSharedGroups),
+        saveLabel: settleButtonLabel(
+          owed: _owedInGroup(group, me?.id),
+          amount: double.tryParse(_amountController.text.trim()),
+        ),
       ),
       body: SafeArea(
         child: SingleChildScrollView(

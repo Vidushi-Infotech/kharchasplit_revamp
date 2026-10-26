@@ -19,6 +19,7 @@ class AddExpenseTopBar extends StatelessWidget implements PreferredSizeWidget {
     this.onSaveBlocked,
     this.saveEnabled = true,
     this.saving = false,
+    this.saveLabel = AppStrings.saveLabel,
   });
 
   final String title;
@@ -28,6 +29,9 @@ class AddExpenseTopBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback? onSaveBlocked;
   final bool saveEnabled;
   final bool saving;
+
+  /// The button's text; Record a payment uses "Settle up" / "Record".
+  final String saveLabel;
 
   @override
   Size get preferredSize => const Size.fromHeight(56);
@@ -81,7 +85,7 @@ class AddExpenseTopBar extends StatelessWidget implements PreferredSizeWidget {
                     enabled: ready,
                     label: saving
                         ? AppStrings.savingLabel
-                        : AppStrings.saveLabel,
+                        : saveLabel,
                     excludeSemantics: true,
                     child: saving
                         ? const Padding(
@@ -97,7 +101,7 @@ class AddExpenseTopBar extends StatelessWidget implements PreferredSizeWidget {
                             // what's missing instead of doing nothing.
                             onPressed: ready ? onSave : onSaveBlocked,
                             icon: const Icon(Icons.check_rounded, size: 20),
-                            label: const Text(AppStrings.saveLabel),
+                            label: Text(saveLabel),
                             style: TextButton.styleFrom(
                               foregroundColor: ready
                                   ? AppColors.tealDark

@@ -860,4 +860,7 @@ abstract final class AppStrings {
   static const activityExpenseDeleted = 'This expense was deleted';
   static const activityGroupDeleted = 'This group was deleted';
   static const activityNotInGroup = "You're no longer in this group";
+
+  // ── Record a payment button ──
+  static const recordLabel = 'Record';
 }
