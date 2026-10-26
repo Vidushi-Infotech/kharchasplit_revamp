@@ -268,8 +268,13 @@ const updateGroup = async (req, res, next) => {
     const { id } = req.params;
     const { name, description, coverImageBase64, currency } = req.body;
 
-    // Verify user is admin
-    await GroupService.validateAdminAccess(id, req.user.id);
+    // Like Splitwise, any member can rename the group or change its photo
+    // and description. Changing the currency re-labels every amount, so
+    // that stays with the admin.
+    await GroupService.validateGroupAccess(id, req.user.id);
+    if (currency !== undefined && currency !== null) {
+      await GroupService.validateAdminAccess(id, req.user.id);
+    }
 
     const group = await Group.update(id, {
       name,
@@ -295,7 +300,8 @@ const updateGroup = async (req, res, next) => {
       data: group,
     });
   } catch (error) {
-    if (error.message === 'User is not an admin of this group') {
+    if (error.message === 'User is not an admin of this group'
+      || error.message === 'User is not a member of this group') {
       return res.status(403).json({
         success: false,
         error: error.message,
