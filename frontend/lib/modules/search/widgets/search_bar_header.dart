@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../components/buttons/glass_icon_button.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -40,12 +41,8 @@ class SearchBarHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
-          IconButton(
-            onPressed: onBack,
-            icon: const Icon(Icons.arrow_back_rounded),
-            color: AppColors.textPrimary(isDark),
-            tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-          ),
+          GlassBackButton(onPressed: onBack),
+          const GlassGap(width: 8),
           Expanded(
             child: TextField(
               controller: controller,

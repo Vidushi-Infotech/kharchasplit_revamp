@@ -680,6 +680,7 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
               const SizedBox(width: 8),
               _CircleIcon(
                 icon: Icons.arrow_back_rounded,
+                sfSymbol: 'chevron.left',
                 isDark: isDark,
                 onTap: onBack,
                 label: 'Back',
@@ -698,6 +699,7 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
               ),
               _CircleIcon(
                 icon: Icons.refresh_rounded,
+                sfSymbol: 'arrow.clockwise',
                 isDark: isDark,
                 onTap: onRefresh,
                 label: 'Refresh',
@@ -714,18 +716,28 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
 class _CircleIcon extends StatelessWidget {
   const _CircleIcon({
     required this.icon,
+    required this.sfSymbol,
     required this.isDark,
     required this.onTap,
     required this.label,
   });
 
   final IconData icon;
+  final String sfSymbol;
   final bool isDark;
   final VoidCallback onTap;
   final String label;
 
   @override
   Widget build(BuildContext context) {
+    if (GlassIconButton.isGlass) {
+      return GlassIconButton(
+        icon: icon,
+        sfSymbol: sfSymbol,
+        tooltip: label,
+        onPressed: onTap,
+      );
+    }
     return Semantics(
       button: true,
       label: label,

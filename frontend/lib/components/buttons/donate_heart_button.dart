@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
+import 'glass_icon_button.dart';
 import '../dialogs/donate_sheet.dart';
 
 /// Small circular heart button for app headers — opens the donate (UPI QR)
@@ -22,6 +23,15 @@ class DonateHeartButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (GlassIconButton.isGlass) {
+      return GlassIconButton(
+        icon: Icons.favorite_rounded,
+        sfSymbol: 'heart.fill',
+        tooltip: 'Support KharchaSplit',
+        color: const Color(0xFFE53935),
+        onPressed: () => showDonateSheet(context),
+      );
+    }
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final isCircle = cornerRadius == null;
     final shape = isCircle

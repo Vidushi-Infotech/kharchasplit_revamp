@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import '../../../components/buttons/glass_icon_button.dart';
 import '../../../components/list/list_components.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
@@ -115,10 +116,23 @@ class _ExpenseDetailReceiptState extends State<ExpenseDetailReceipt> {
                 Positioned(
                   top: 8,
                   right: 8,
-                  child: IconButton(
-                    icon: const Icon(Icons.close_rounded, color: Colors.white),
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
+                  child: GlassIconButton.isGlass
+                      ? GlassIconButton(
+                          icon: Icons.close_rounded,
+                          sfSymbol: 'xmark',
+                          tooltip: MaterialLocalizations.of(
+                            context,
+                          ).closeButtonTooltip,
+                          color: Colors.white,
+                          onPressed: () => Navigator.of(context).pop(),
+                        )
+                      : IconButton(
+                          icon: const Icon(
+                            Icons.close_rounded,
+                            color: Colors.white,
+                          ),
+                          onPressed: () => Navigator.of(context).pop(),
+                        ),
                 ),
               ],
             ),

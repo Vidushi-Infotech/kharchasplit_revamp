@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../components/buttons/donate_heart_button.dart';
+import '../../../components/buttons/glass_icon_button.dart';
 import '../../../components/dialogs/donate_sheet.dart';
 import '../../../components/list/list_components.dart';
 import '../../../core/constants/app_strings.dart';
@@ -51,6 +52,10 @@ class ProfileScreen extends ConsumerWidget {
         surfaceTintColor: Colors.transparent,
         backgroundColor: AppColors.background(isDark),
         automaticallyImplyLeading: context.canPop(),
+        leading: GlassBackButton.appBarLeading(
+          context,
+          implyLeading: context.canPop(),
+        ),
         actions: const [
           DonateHeartButton(size: 38, iconSize: 18),
           SizedBox(width: 12),

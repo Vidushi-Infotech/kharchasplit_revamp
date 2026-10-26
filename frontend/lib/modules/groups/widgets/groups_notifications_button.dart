@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../components/buttons/glass_icon_button.dart';
 import '../../notifications/state/notifications_inbox_provider.dart';
 
 /// Bell with an unread badge for the Groups header. The notifications inbox
@@ -21,6 +22,15 @@ class GroupsNotificationsButton extends ConsumerWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final unread = ref.watch(unreadNotificationsCountProvider);
     final hasUnread = unread > 0;
+    if (GlassIconButton.isGlass) {
+      return GlassIconButton(
+        icon: Icons.notifications_outlined,
+        sfSymbol: 'bell',
+        tooltip: AppStrings.notifications,
+        badgeCount: unread,
+        onPressed: () => context.pushNamed('notifications-inbox'),
+      );
+    }
 
     return Semantics(
       button: true,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../components/buttons/glass_icon_button.dart';
 import '../../../components/states/empty_state_widget.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
@@ -29,21 +30,18 @@ class UnsyncedChangesScreen extends ConsumerWidget {
         // Pushed into the content shell's own navigator, where the implied
         // back button never shows — ask go_router instead.
         leading: context.canPop()
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back_rounded),
-                tooltip: 'Back',
-                onPressed: () => context.pop(),
-              )
+            ? GlassBackButton(onPressed: () => context.pop())
             : null,
         title: const Text(AppStrings.unsyncedChanges),
         backgroundColor: AppColors.surface(isDark),
         elevation: 0,
         actions: [
           if (items.any((i) => !i.isFailed))
-            TextButton(
+            GlassTextButton(
+              label: AppStrings.syncAllNow,
               onPressed: () => ref.read(outboxProvider.notifier).drain(),
-              child: const Text(AppStrings.syncAllNow),
             ),
+          const GlassGap(width: 8),
         ],
       ),
       body: items.isEmpty

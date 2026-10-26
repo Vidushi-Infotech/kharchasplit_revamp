@@ -7,6 +7,7 @@ import '../../../core/services/notification_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../state/notifications_inbox_provider.dart';
+import '../../../components/buttons/glass_icon_button.dart';
 
 class NotificationsInboxScreen extends ConsumerWidget {
   const NotificationsInboxScreen({super.key});
@@ -109,34 +110,37 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
           child: Row(
             children: [
               const SizedBox(width: 8),
-              Semantics(
-                button: true,
-                label: 'Back',
-                child: Material(
-                  color: Colors.transparent,
-                  shape: const CircleBorder(),
-                  clipBehavior: Clip.antiAlias,
-                  child: InkWell(
-                    onTap: onBack,
-                    customBorder: const CircleBorder(),
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: AppColors.cardBg(isDark),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: AppColors.divider(isDark)),
-                      ),
-                      child: Icon(
-                        Icons.arrow_back_rounded,
-                        size: 18,
-                        color: AppColors.textPrimary(isDark),
+              if (GlassIconButton.isGlass)
+                GlassBackButton(onPressed: onBack)
+              else
+                Semantics(
+                  button: true,
+                  label: 'Back',
+                  child: Material(
+                    color: Colors.transparent,
+                    shape: const CircleBorder(),
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      onTap: onBack,
+                      customBorder: const CircleBorder(),
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: AppColors.cardBg(isDark),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: AppColors.divider(isDark)),
+                        ),
+                        child: Icon(
+                          Icons.arrow_back_rounded,
+                          size: 18,
+                          color: AppColors.textPrimary(isDark),
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
               const SizedBox(width: 14),
               Expanded(
                 child: Row(
@@ -177,7 +181,12 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
                   ],
                 ),
               ),
-              if (hasUnread)
+              if (hasUnread && GlassIconButton.isGlass)
+                GlassTextButton(
+                  label: 'Mark all read',
+                  onPressed: () => onMarkAllRead(),
+                )
+              else if (hasUnread)
                 TextButton(
                   onPressed: () => onMarkAllRead(),
                   style: TextButton.styleFrom(

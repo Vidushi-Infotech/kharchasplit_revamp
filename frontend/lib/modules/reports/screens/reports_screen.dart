@@ -35,11 +35,7 @@ class ReportsScreen extends ConsumerWidget {
               // own navigator, where the implied back button never shows —
               // ask go_router instead.
               leading: context.canPop()
-                  ? IconButton(
-                      icon: const Icon(Icons.arrow_back_rounded),
-                      tooltip: 'Back',
-                      onPressed: () => context.pop(),
-                    )
+                  ? GlassBackButton(onPressed: () => context.pop())
                   : null,
               title: const Text('Reports'),
               elevation: 0,

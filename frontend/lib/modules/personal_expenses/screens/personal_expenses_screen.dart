@@ -473,6 +473,7 @@ class _Header extends StatelessWidget {
             _IconButton(
               isDark: isDark,
               icon: Icons.arrow_back_rounded,
+              sfSymbol: 'chevron.left',
               onTap: () => context.pop(),
               label: 'Back',
             ),
@@ -510,6 +511,7 @@ class _Header extends StatelessWidget {
             _IconButton(
               isDark: isDark,
               icon: Icons.search_rounded,
+              sfSymbol: 'magnifyingglass',
               onTap: onSearch!,
               label: 'Search expenses',
             ),
@@ -518,6 +520,7 @@ class _Header extends StatelessWidget {
           _IconButton(
             isDark: isDark,
             icon: Icons.add_rounded,
+            sfSymbol: 'plus',
             onTap: onAdd,
             label: 'Add personal expense',
           ),
@@ -531,17 +534,27 @@ class _IconButton extends StatelessWidget {
   const _IconButton({
     required this.isDark,
     required this.icon,
+    required this.sfSymbol,
     required this.onTap,
     required this.label,
   });
 
   final bool isDark;
   final IconData icon;
+  final String sfSymbol;
   final VoidCallback onTap;
   final String label;
 
   @override
   Widget build(BuildContext context) {
+    if (GlassIconButton.isGlass) {
+      return GlassIconButton(
+        icon: icon,
+        sfSymbol: sfSymbol,
+        tooltip: label,
+        onPressed: onTap,
+      );
+    }
     return Semantics(
       button: true,
       label: label,

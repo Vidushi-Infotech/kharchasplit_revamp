@@ -42,7 +42,9 @@ class FriendDetailScreen extends ConsumerWidget {
         appBar: AppBar(
           elevation: 0,
           backgroundColor: AppColors.background(isDark),
-          leading: BackButton(onPressed: () => _back(context)),
+          leading: GlassIconButton.isGlass
+              ? GlassBackButton(onPressed: () => _back(context))
+              : BackButton(onPressed: () => _back(context)),
           title: const Text(AppStrings.friendFallbackTitle),
         ),
         body: friendAsync.isLoading && !friendAsync.hasValue

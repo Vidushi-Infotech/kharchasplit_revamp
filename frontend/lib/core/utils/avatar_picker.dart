@@ -4,6 +4,7 @@ import 'package:crop_your_image/crop_your_image.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../components/buttons/glass_icon_button.dart';
 import '../theme/app_colors.dart';
 import 'base64_async.dart';
 import '../theme/app_text_styles.dart';
@@ -131,6 +132,11 @@ class _CropScreenState extends State<_CropScreen> {
   final _controller = CropController();
   bool _cropping = false;
 
+  void _crop() {
+    setState(() => _cropping = true);
+    _controller.crop();
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -140,35 +146,42 @@ class _CropScreenState extends State<_CropScreen> {
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
         title: const Text('Crop Photo'),
-        leading: IconButton(
-          icon: const Icon(Icons.close_rounded),
-          onPressed: () => Navigator.pop(context),
-        ),
+        leading: GlassIconButton.isGlass
+            ? GlassIconButton(
+                icon: Icons.close_rounded,
+                sfSymbol: 'xmark',
+                tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+                color: Colors.white,
+                onPressed: () => Navigator.pop(context),
+              )
+            : IconButton(
+                icon: const Icon(Icons.close_rounded),
+                onPressed: () => Navigator.pop(context),
+              ),
         actions: [
-          TextButton(
-            onPressed: _cropping
-                ? null
-                : () {
-                    setState(() => _cropping = true);
-                    _controller.crop();
-                  },
-            child: _cropping
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation(Colors.white),
+          if (GlassIconButton.isGlass && !_cropping)
+            GlassTextButton(label: 'Done', onPressed: _crop)
+          else
+            TextButton(
+              onPressed: _cropping ? null : _crop,
+              child: _cropping
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation(Colors.white),
+                      ),
+                    )
+                  : Text(
+                      'Done',
+                      style: AppTextStyles.body1(isDark).copyWith(
+                        color: AppColors.tealDark,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  )
-                : Text(
-                    'Done',
-                    style: AppTextStyles.body1(isDark).copyWith(
-                      color: AppColors.tealDark,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-          ),
+            ),
+          const GlassGap(width: 8),
         ],
       ),
       body: Crop(

@@ -50,24 +50,34 @@ class FriendDetailSliverBar extends StatelessWidget {
       foregroundColor: Colors.white,
       systemOverlayStyle: SystemUiOverlayStyle.light,
       automaticallyImplyLeading: false,
-      leading: IconButton(
-        tooltip: AppStrings.groupBack,
-        onPressed: onBack,
-        icon: Container(
-          width: 36,
-          height: 36,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.22),
-            shape: BoxShape.circle,
-          ),
-          child: const Icon(
-            Icons.arrow_back_rounded,
-            size: 20,
-            color: Colors.white,
-          ),
-        ),
-      ),
+      leading: GlassIconButton.isGlass
+          ? Center(
+              child: GlassIconButton(
+                icon: Icons.arrow_back_rounded,
+                sfSymbol: 'chevron.left',
+                tooltip: AppStrings.groupBack,
+                color: Colors.white,
+                onPressed: onBack,
+              ),
+            )
+          : IconButton(
+              tooltip: AppStrings.groupBack,
+              onPressed: onBack,
+              icon: Container(
+                width: 36,
+                height: 36,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.22),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.arrow_back_rounded,
+                  size: 20,
+                  color: Colors.white,
+                ),
+              ),
+            ),
       flexibleSpace: LayoutBuilder(
         builder: (context, c) {
           final minH = kToolbarHeight + topPad;

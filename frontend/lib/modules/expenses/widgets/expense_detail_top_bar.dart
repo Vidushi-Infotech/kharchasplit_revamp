@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../../components/system/page_status_bar.dart';
 
 import '../../../components/buttons/donate_heart_button.dart';
+import '../../../components/buttons/glass_icon_button.dart';
+import '../../../components/buttons/glass_menu_button.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
 
@@ -46,51 +48,65 @@ class ExpenseDetailTopBar extends StatelessWidget
             child: Row(
               children: [
                 const SizedBox(width: 4),
-                IconButton(
+                GlassIconButton(
+                  icon: Icons.arrow_back_rounded,
+                  sfSymbol: 'chevron.left',
                   tooltip: 'Back',
+                  color: iconColor,
                   onPressed: onBack,
-                  icon: Icon(Icons.arrow_back_rounded, color: iconColor),
                 ),
                 const Spacer(),
                 const DonateHeartButton(),
-                if (canEdit && onDelete != null)
-                  IconButton(
+                if (canEdit && onDelete != null) ...[
+                  const GlassGap(),
+                  GlassIconButton(
+                    icon: Icons.delete_outline_rounded,
+                    sfSymbol: 'trash',
                     tooltip: AppStrings.deleteLabel,
+                    color: iconColor,
                     onPressed: onDelete,
-                    icon: Icon(Icons.delete_outline_rounded, color: iconColor),
                   ),
-                if (canEdit && onEdit != null)
-                  IconButton(
+                ],
+                if (canEdit && onEdit != null) ...[
+                  const GlassGap(),
+                  GlassIconButton(
+                    icon: Icons.edit_outlined,
+                    sfSymbol: 'pencil',
                     tooltip: AppStrings.editExpense,
+                    color: iconColor,
                     onPressed: onEdit,
-                    icon: Icon(Icons.edit_outlined, color: iconColor),
                   ),
+                ],
+                if (onHistory != null) const GlassGap(),
                 if (onHistory != null)
-                  PopupMenuButton<String>(
-                    tooltip: AppStrings.moreOptions,
-                    icon: Icon(Icons.more_vert_rounded, color: iconColor),
-                    color: AppColors.cardBg(isDark),
-                    onSelected: (v) {
-                      if (v == 'history') onHistory!();
-                    },
-                    itemBuilder: (_) => [
-                      PopupMenuItem(
-                        value: 'history',
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.history_rounded,
-                              size: 18,
-                              color: iconColor,
-                            ),
-                            const SizedBox(width: 10),
-                            const Text(AppStrings.editHistory),
-                          ],
+                  GlassMenuButton<String>(
+                    menu: PopupMenuButton<String>(
+                      tooltip: AppStrings.moreOptions,
+                      icon: Icon(Icons.more_vert_rounded, color: iconColor),
+                      color: AppColors.cardBg(isDark),
+                      onSelected: (v) {
+                        if (v == 'history') onHistory!();
+                      },
+                      itemBuilder: (_) => [
+                        PopupMenuItem(
+                          value: 'history',
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.history_rounded,
+                                size: 18,
+                                color: iconColor,
+                              ),
+                              const SizedBox(width: 10),
+                              const Text(AppStrings.editHistory),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 const SizedBox(width: 4),
+                const GlassGap(width: 4),
               ],
             ),
           ),

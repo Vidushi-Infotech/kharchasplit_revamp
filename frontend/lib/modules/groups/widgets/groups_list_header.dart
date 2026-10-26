@@ -10,6 +10,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../dashboard/state/dashboard_provider.dart';
 import '../state/groups_list_view.dart';
+import '../../../components/buttons/glass_icon_button.dart';
 import 'groups_notifications_button.dart';
 
 /// "Groups" title with the bell, donate heart, search and create-group
@@ -25,14 +26,7 @@ class GroupsTopBar extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(4, 8, 8, 4),
       child: Row(
         children: [
-          if (canPop)
-            IconButton(
-              tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-              icon: const Icon(Icons.arrow_back_rounded),
-              onPressed: () => Navigator.of(context).pop(),
-            )
-          else
-            const SizedBox(width: 12),
+          if (canPop) const GlassBackButton() else const SizedBox(width: 12),
           Expanded(
             child: Semantics(
               header: true,
@@ -48,16 +42,18 @@ class GroupsTopBar extends StatelessWidget {
           const GroupsNotificationsButton(size: 36),
           const SizedBox(width: 6),
           const DonateHeartButton(size: 36, iconSize: 17),
-          IconButton(
+          const SizedBox(width: 6),
+          GlassIconButton(
+            icon: Icons.search_rounded,
+            sfSymbol: 'magnifyingglass',
             tooltip: AppStrings.search,
-            icon: const Icon(Icons.search_rounded),
-            color: AppColors.textPrimary(isDark),
             onPressed: () => context.push('/search'),
           ),
-          IconButton(
+          const SizedBox(width: 6),
+          GlassIconButton(
+            icon: Icons.group_add_outlined,
+            sfSymbol: 'person.badge.plus',
             tooltip: AppStrings.createGroupTooltip,
-            icon: const Icon(Icons.group_add_outlined),
-            color: AppColors.textPrimary(isDark),
             onPressed: () => context.push('/home/create-group'),
           ),
         ],

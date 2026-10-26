@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../state/policy_provider.dart';
+import '../../../components/buttons/glass_icon_button.dart';
 
 /// Generic policy viewer — fetches `GET /policies/:kind` from the backend
 /// and renders the document. Used for both Privacy Policy and Terms.
@@ -279,34 +280,37 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
           child: Row(
             children: [
               const SizedBox(width: 8),
-              Semantics(
-                button: true,
-                label: 'Back',
-                child: Material(
-                  color: Colors.transparent,
-                  shape: const CircleBorder(),
-                  clipBehavior: Clip.antiAlias,
-                  child: InkWell(
-                    onTap: onBack,
-                    customBorder: const CircleBorder(),
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: AppColors.cardBg(isDark),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: AppColors.divider(isDark)),
-                      ),
-                      child: Icon(
-                        Icons.arrow_back_rounded,
-                        size: 18,
-                        color: AppColors.textPrimary(isDark),
+              if (GlassIconButton.isGlass)
+                GlassBackButton(onPressed: onBack)
+              else
+                Semantics(
+                  button: true,
+                  label: 'Back',
+                  child: Material(
+                    color: Colors.transparent,
+                    shape: const CircleBorder(),
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      onTap: onBack,
+                      customBorder: const CircleBorder(),
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: AppColors.cardBg(isDark),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: AppColors.divider(isDark)),
+                        ),
+                        child: Icon(
+                          Icons.arrow_back_rounded,
+                          size: 18,
+                          color: AppColors.textPrimary(isDark),
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
               const SizedBox(width: 14),
               Expanded(
                 child: Text(

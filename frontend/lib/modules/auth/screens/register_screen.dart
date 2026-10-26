@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../components/buttons/glass_icon_button.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../state/auth_provider.dart';
@@ -106,6 +107,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     }
     // Backend signed us in already; profile setup is required next.
     context.go('/profile-setup');
+  }
+
+  void _back() {
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go('/login');
+    }
   }
 
   @override
@@ -265,7 +274,15 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             child: SafeArea(
               child: Padding(
                 padding: const EdgeInsets.only(left: 8, top: 8),
-                child: Material(
+                child: GlassIconButton.isGlass
+                    ? GlassIconButton(
+                        icon: Icons.arrow_back_rounded,
+                        sfSymbol: 'chevron.left',
+                        tooltip:
+                            MaterialLocalizations.of(context).backButtonTooltip,
+                        onPressed: loading ? null : _back,
+                      )
+                    : Material(
                   color: Colors.transparent,
                   shape: const CircleBorder(),
                   clipBehavior: Clip.antiAlias,
@@ -274,15 +291,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       Icons.arrow_back_rounded,
                       color: AppColors.textPrimary(isDark),
                     ),
-                    onPressed: loading
-                        ? null
-                        : () {
-                            if (context.canPop()) {
-                              context.pop();
-                            } else {
-                              context.go('/login');
-                            }
-                          },
+                    onPressed: loading ? null : _back,
                   ),
                 ),
               ),

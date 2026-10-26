@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../components/buttons/glass_icon_button.dart';
 import '../../../components/system/page_status_bar.dart';
 
 import '../../../core/constants/app_strings.dart';
@@ -59,13 +60,12 @@ class AddExpenseTopBar extends StatelessWidget implements PreferredSizeWidget {
             child: Row(
               children: [
                 const SizedBox(width: 4),
-                IconButton(
-                  onPressed: onClose,
+                GlassIconButton(
+                  icon: Icons.close_rounded,
+                  sfSymbol: 'xmark',
                   tooltip: 'Close',
-                  icon: Icon(
-                    Icons.close_rounded,
-                    color: AppColors.textPrimary(isDark),
-                  ),
+                  color: AppColors.textPrimary(isDark),
+                  onPressed: onClose,
                 ),
                 const SizedBox(width: 4),
                 Expanded(
@@ -83,9 +83,7 @@ class AddExpenseTopBar extends StatelessWidget implements PreferredSizeWidget {
                   Semantics(
                     button: true,
                     enabled: ready,
-                    label: saving
-                        ? AppStrings.savingLabel
-                        : saveLabel,
+                    label: saving ? AppStrings.savingLabel : saveLabel,
                     excludeSemantics: true,
                     child: saving
                         ? const Padding(
@@ -95,6 +93,13 @@ class AddExpenseTopBar extends StatelessWidget implements PreferredSizeWidget {
                               height: 20,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             ),
+                          )
+                        : GlassIconButton.isGlass
+                        ? GlassTextButton(
+                            label: saveLabel,
+                            enabled: ready,
+                            onPressed: onSave,
+                            onBlocked: onSaveBlocked,
                           )
                         : TextButton.icon(
                             // Still tappable while not ready: the tap explains

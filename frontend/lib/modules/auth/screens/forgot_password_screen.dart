@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../components/buttons/glass_icon_button.dart';
 import '../../../components/buttons/primary_button.dart';
 import '../../../components/inputs/app_text_field.dart';
 import '../../../core/theme/app_colors.dart';
@@ -127,6 +128,14 @@ class _ForgotPasswordScreenState
         auth.needsProfileSetup ? '/profile-setup' : '/home/groups');
   }
 
+  void _back(BuildContext context) {
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go('/login');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -155,19 +164,19 @@ class _ForgotPasswordScreenState
           children: [
             Align(
               alignment: Alignment.centerLeft,
-              child: IconButton(
-                icon: Icon(Icons.arrow_back_rounded,
-                    color: AppColors.textPrimary(isDark)),
-                onPressed: loading
-                    ? null
-                    : () {
-                        if (context.canPop()) {
-                          context.pop();
-                        } else {
-                          context.go('/login');
-                        }
-                      },
-              ),
+              child: GlassIconButton.isGlass
+                  ? GlassIconButton(
+                      icon: Icons.arrow_back_rounded,
+                      sfSymbol: 'chevron.left',
+                      tooltip:
+                          MaterialLocalizations.of(context).backButtonTooltip,
+                      onPressed: loading ? null : () => _back(context),
+                    )
+                  : IconButton(
+                      icon: Icon(Icons.arrow_back_rounded,
+                          color: AppColors.textPrimary(isDark)),
+                      onPressed: loading ? null : () => _back(context),
+                    ),
             ),
             const SizedBox(height: 16),
             _buildFormContent(isDark, loading),

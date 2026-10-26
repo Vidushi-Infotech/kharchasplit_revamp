@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../components/buttons/donate_heart_button.dart';
+import '../../../components/buttons/glass_icon_button.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../models/activity_model.dart';
@@ -39,15 +40,27 @@ class ActivityScreen extends ConsumerWidget {
         elevation: 0,
         // Activity is a bottom tab: back only when it was pushed.
         automaticallyImplyLeading: context.canPop(),
+        leading: GlassBackButton.appBarLeading(
+          context,
+          implyLeading: context.canPop(),
+        ),
         titleSpacing: context.canPop() ? 0 : 16,
         title: const Text(AppStrings.activity),
         actions: [
           if (unreadCount > 0)
-            TextButton(
-              onPressed: notifier.markAllAsRead,
-              style: TextButton.styleFrom(foregroundColor: AppColors.brand),
-              child: const Text(AppStrings.markAllRead),
-            ),
+            GlassIconButton.isGlass
+                ? GlassTextButton(
+                    label: AppStrings.markAllRead,
+                    onPressed: notifier.markAllAsRead,
+                  )
+                : TextButton(
+                    onPressed: notifier.markAllAsRead,
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.brand,
+                    ),
+                    child: const Text(AppStrings.markAllRead),
+                  ),
+          if (unreadCount > 0) const GlassGap(),
           const DonateHeartButton(size: 38, iconSize: 18),
           const SizedBox(width: 12),
         ],

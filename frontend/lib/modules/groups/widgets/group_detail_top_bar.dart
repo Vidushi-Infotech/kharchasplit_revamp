@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../components/buttons/glass_icon_button.dart';
+import '../../../components/buttons/glass_menu_button.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
 import '../state/group_display.dart';
@@ -56,6 +58,7 @@ class GroupDetailSliverBar extends StatelessWidget {
       automaticallyImplyLeading: false,
       leading: _BarIcon(
         icon: Icons.arrow_back_rounded,
+        sfSymbol: 'chevron.left',
         label: AppStrings.groupBack,
         onTap: onBack,
       ),
@@ -63,11 +66,14 @@ class GroupDetailSliverBar extends StatelessWidget {
         if (onSettings != null)
           _BarIcon(
             icon: Icons.settings_outlined,
+            sfSymbol: 'gearshape',
             label: AppStrings.groupSettings,
             onTap: onSettings!,
           ),
-        _menu(isDark),
+        if (onSettings != null) const GlassGap(),
+        GlassMenuButton<String>(menu: _menu(isDark), color: Colors.white),
         const SizedBox(width: 4),
+        const GlassGap(width: 4),
       ],
       flexibleSpace: LayoutBuilder(
         builder: (context, c) {
@@ -145,7 +151,7 @@ class GroupDetailSliverBar extends StatelessWidget {
     );
   }
 
-  Widget _menu(bool isDark) {
+  PopupMenuButton<String> _menu(bool isDark) {
     return PopupMenuButton<String>(
       tooltip: AppStrings.groupMoreOptions,
       color: AppColors.cardBg(isDark),
@@ -200,16 +206,30 @@ class GroupDetailSliverBar extends StatelessWidget {
 class _BarIcon extends StatelessWidget {
   const _BarIcon({
     required this.icon,
+    required this.sfSymbol,
     required this.label,
     required this.onTap,
   });
 
   final IconData icon;
+  final String sfSymbol;
   final String label;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    if (GlassIconButton.isGlass) {
+      // Glass over the banner: no dark disc, white symbol.
+      return Center(
+        child: GlassIconButton(
+          icon: icon,
+          sfSymbol: sfSymbol,
+          tooltip: label,
+          color: Colors.white,
+          onPressed: onTap,
+        ),
+      );
+    }
     return IconButton(
       tooltip: label,
       onPressed: onTap,

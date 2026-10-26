@@ -30,6 +30,10 @@ class GroupSubpageScaffold extends ConsumerWidget {
   final Widget Function(BuildContext context, GroupDetail detail, double pad)
   builder;
 
+  void _back(BuildContext context) => context.canPop()
+      ? context.pop()
+      : context.go('/home/groups/$groupId');
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -51,11 +55,9 @@ class GroupSubpageScaffold extends ConsumerWidget {
         scrolledUnderElevation: 0.5,
         backgroundColor: AppColors.background(isDark),
         foregroundColor: AppColors.textPrimary(isDark),
-        leading: BackButton(
-          onPressed: () => context.canPop()
-              ? context.pop()
-              : context.go('/home/groups/$groupId'),
-        ),
+        leading: GlassIconButton.isGlass
+            ? GlassBackButton(onPressed: () => _back(context))
+            : BackButton(onPressed: () => _back(context)),
         titleSpacing: 0,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

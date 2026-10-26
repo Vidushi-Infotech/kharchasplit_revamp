@@ -46,7 +46,9 @@ class GroupDetailScreen extends ConsumerWidget {
         appBar: AppBar(
           elevation: 0,
           backgroundColor: AppColors.background(isDark),
-          leading: BackButton(onPressed: () => _back(context)),
+          leading: GlassIconButton.isGlass
+              ? GlassBackButton(onPressed: () => _back(context))
+              : BackButton(onPressed: () => _back(context)),
         ),
         body: detailAsync.hasError
             ? _buildErrorState(context, ref, detailAsync.error!)

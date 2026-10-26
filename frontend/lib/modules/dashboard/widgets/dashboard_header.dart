@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../components/buttons/donate_heart_button.dart';
+import '../../../components/buttons/glass_icon_button.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../auth/state/auth_provider.dart';
@@ -190,6 +191,15 @@ class _NotificationButton extends StatelessWidget {
     final label = hasUnread
         ? 'Notifications, $unreadCount unread'
         : 'Notifications';
+    if (GlassIconButton.isGlass) {
+      return GlassIconButton(
+        icon: Icons.notifications_outlined,
+        sfSymbol: 'bell',
+        tooltip: 'Notifications',
+        badgeCount: unreadCount,
+        onPressed: onTap,
+      );
+    }
 
     return Semantics(
       label: label,

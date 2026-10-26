@@ -42,18 +42,23 @@ class FriendsScreen extends ConsumerWidget {
               elevation: 0,
               surfaceTintColor: Colors.transparent,
               backgroundColor: AppColors.background(isDark),
+              leading: GlassBackButton.appBarLeading(context),
               actions: [
                 // Global search (expenses, groups, friends).
-                IconButton(
+                GlassIconButton(
+                  icon: Icons.search_rounded,
+                  sfSymbol: 'magnifyingglass',
                   tooltip: 'Search',
-                  icon: const Icon(Icons.search_rounded),
                   onPressed: () => context.push('/search'),
                 ),
-                IconButton(
+                const GlassGap(),
+                GlassIconButton(
+                  icon: Icons.person_add_alt_1_rounded,
+                  sfSymbol: 'person.badge.plus',
                   tooltip: AppStrings.addFriend,
-                  icon: const Icon(Icons.person_add_alt_1_rounded),
                   onPressed: () => showAddFriendSheet(context),
                 ),
+                const GlassGap(width: 8),
               ],
             ),
       body: friendsAsync.when(

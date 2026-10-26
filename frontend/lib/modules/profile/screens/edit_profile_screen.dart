@@ -13,6 +13,7 @@ import '../../../data/users/users_repository.dart';
 import '../../auth/state/auth_provider.dart';
 import '../state/upi_id_controller.dart';
 import '../widgets/email_verify_sheet.dart';
+import '../../../components/buttons/glass_icon_button.dart';
 
 class EditProfileScreen extends ConsumerStatefulWidget {
   const EditProfileScreen({super.key});
@@ -376,34 +377,37 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
           child: Row(
             children: [
               const SizedBox(width: 8),
-              Semantics(
-                button: true,
-                label: 'Back',
-                child: Material(
-                  color: Colors.transparent,
-                  shape: const CircleBorder(),
-                  clipBehavior: Clip.antiAlias,
-                  child: InkWell(
-                    onTap: onBack,
-                    customBorder: const CircleBorder(),
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: AppColors.cardBg(isDark),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: AppColors.divider(isDark)),
-                      ),
-                      child: Icon(
-                        Icons.arrow_back_rounded,
-                        size: 18,
-                        color: AppColors.textPrimary(isDark),
+              if (GlassIconButton.isGlass)
+                GlassBackButton(onPressed: onBack)
+              else
+                Semantics(
+                  button: true,
+                  label: 'Back',
+                  child: Material(
+                    color: Colors.transparent,
+                    shape: const CircleBorder(),
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      onTap: onBack,
+                      customBorder: const CircleBorder(),
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: AppColors.cardBg(isDark),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: AppColors.divider(isDark)),
+                        ),
+                        child: Icon(
+                          Icons.arrow_back_rounded,
+                          size: 18,
+                          color: AppColors.textPrimary(isDark),
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
               const SizedBox(width: 14),
               Expanded(
                 child: Text(
