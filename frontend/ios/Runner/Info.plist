@@ -76,6 +76,10 @@
 		<string>KharchaSplit reads from your photo library so you can attach a receipt image to an expense.</string>
 		<key>NSPhotoLibraryAddOnlyUsageDescription</key>
 		<string>KharchaSplit saves exported expense reports back to your photo library.</string>
+		<key>NSMicrophoneUsageDescription</key>
+		<string>KharchaSplit listens when you tap the mic so you can add an expense by saying it, like "200 rupees petrol".</string>
+		<key>NSSpeechRecognitionUsageDescription</key>
+		<string>KharchaSplit turns what you say into an expense (amount, category and note) for you to check before saving.</string>
 		<key>UIStatusBarHidden</key>
 		<false/>
 	</dict>

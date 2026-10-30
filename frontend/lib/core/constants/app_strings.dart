@@ -352,6 +352,27 @@ abstract final class AppStrings {
   static String billDueOn(String date) => 'Due $date';
   static String billOverdueBy(int days) =>
       'Overdue by ${days == 1 ? '1 day' : '$days days'}';
+  // ── Personal mode: voice entry ──────────────────────────────────────
+  static const voiceAdd = 'Add by voice';
+  static const voiceTitle = 'Say it';
+  static const voiceStarting = 'Getting the mic ready…';
+  static const voiceListening = 'Listening…';
+  static const voiceExamples =
+      'Try "200 rupees petrol", "kal 450 ka khana cash se" or '
+      '"got salary 50000"';
+  static const voiceUnavailable =
+      "Voice isn't available. Allow the microphone for KharchaSplit in "
+      'Settings, or type it instead.';
+  static const voiceNothingHeard = "Didn't catch that.";
+  static const voiceNoAmount = "No amount heard. Say it with a number.";
+  static const voiceAgain = 'Say again';
+  static const voiceUse = 'Use this';
+  static const voiceStart = 'Start listening';
+  static const voiceStop = 'Stop listening';
+  static const voiceYesterday = 'Yesterday';
+  static String voiceDaysAgo(int days) => '$days days ago';
+  static const voiceFilled = 'Filled in from your voice. Check and save.';
+
   static String billRemindDays(int days) => switch (days) {
     0 => 'On the day',
     1 => '1 day before',

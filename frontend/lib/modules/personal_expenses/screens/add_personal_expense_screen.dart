@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -18,6 +19,7 @@ import '../state/personal_expenses_provider.dart';
 import '../state/wallet_provider.dart';
 import '../widgets/account_style.dart';
 import '../widgets/entry_kind_toggle.dart';
+import '../widgets/voice_entry_sheet.dart';
 import '../widgets/wallet_setup_sheet.dart';
 
 /// Adds a personal expense or, with the `personalIncome` flag, an income
@@ -86,6 +88,50 @@ class _AddPersonalExpenseScreenState
     _isIncome = income;
     _category = income ? CategoryModel.otherIncome : CategoryModel.other;
   });
+
+  /// Voice entry (`personalVoice` flag) on phones: the recognizer is the
+  /// phone's own.
+  bool get _canUseVoice =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS) &&
+      watchFeature(ref, 'personalVoice');
+
+  Future<void> _voice() async {
+    final wallet = ref.read(walletProvider).value ?? WalletState.empty;
+    final draft = await VoiceEntrySheet.show(
+      context,
+      accounts: wallet.sources,
+    );
+    if (draft == null || !mounted) return;
+    final income =
+        draft.isIncome &&
+        (ref.read(featureFlagsProvider).value?.contains('personalIncome') ??
+            false);
+    final day = DateTime.now().subtract(Duration(days: draft.daysAgo));
+    setState(() {
+      _isIncome = income;
+      _category =
+          (income == draft.isIncome ? draft.category : null) ??
+          (income ? CategoryModel.otherIncome : CategoryModel.other);
+      final amount = draft.amount;
+      if (amount != null) {
+        _amountController.text = amount == amount.roundToDouble()
+            ? amount.toStringAsFixed(0)
+            : amount.toStringAsFixed(2);
+      }
+      if (draft.description.isNotEmpty) {
+        _titleController.text = draft.description;
+      }
+      _date = DateTime(day.year, day.month, day.day);
+      if (wallet.sources.any((s) => s.id == draft.accountId)) {
+        _selectedSourceId = draft.accountId;
+      }
+    });
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text(AppStrings.voiceFilled)));
+  }
 
   Future<void> _handleSave() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
@@ -180,6 +226,7 @@ class _AddPersonalExpenseScreenState
         isDark: isDark,
         title: _isIncome ? AppStrings.addIncome : AppStrings.addPersonalExpense,
         onBack: () => Navigator.of(context).pop(),
+        onVoice: _canUseVoice ? _voice : null,
       ),
       body: SafeArea(
         bottom: false,
@@ -532,11 +579,15 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
     required this.isDark,
     required this.title,
     required this.onBack,
+    this.onVoice,
   });
 
   final bool isDark;
   final String title;
   final VoidCallback onBack;
+
+  /// Shows the mic (voice entry) when set.
+  final VoidCallback? onVoice;
 
   @override
   Size get preferredSize => const Size.fromHeight(56);
@@ -596,6 +647,15 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
+              if (onVoice != null) ...[
+                const SizedBox(width: 8),
+                GlassIconButton(
+                  icon: Icons.mic_rounded,
+                  sfSymbol: 'mic.fill',
+                  tooltip: AppStrings.voiceAdd,
+                  onPressed: onVoice!,
+                ),
+              ],
               const SizedBox(width: 16),
             ],
           ),
