@@ -388,6 +388,16 @@ CREATE TABLE IF NOT EXISTS activity_reads (
 CREATE INDEX IF NOT EXISTS idx_activity_reads_user ON activity_reads(user_id);
 CREATE INDEX IF NOT EXISTS idx_group_members_user_group ON group_members(user_id, group_id);
 
+-- Personal mode monthly budgets (migration 026).
+CREATE TABLE IF NOT EXISTS personal_budgets (
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  category VARCHAR(50) NOT NULL,
+  amount DECIMAL(12, 2) NOT NULL CHECK (amount > 0),
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, category)
+);
+
 -- State of an expense before each edit (services/expenseHistory.js).
 CREATE TABLE IF NOT EXISTS expense_revisions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

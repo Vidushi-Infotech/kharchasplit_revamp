@@ -76,7 +76,7 @@ const _secondaryNav = <_NavDest>[
     label: AppStrings.personalExpenses,
     location: '/personal',
     matches: ['/personal', '/home/personal'],
-    excludes: ['/personal/insights'],
+    excludes: ['/personal/insights', '/personal/budgets'],
   ),
   _NavDest(
     icon: Icons.bar_chart_rounded,
@@ -92,6 +92,14 @@ const _insightsDest = _NavDest(
   label: AppStrings.insights,
   location: '/personal/insights',
   matches: ['/personal/insights'],
+);
+
+/// Personal mode's Budgets, under Personal (flag `personalBudgets`).
+const _budgetsDest = _NavDest(
+  icon: Icons.savings_rounded,
+  label: AppStrings.budgets,
+  location: '/personal/budgets',
+  matches: ['/personal/budgets'],
 );
 
 const _profileDest = _NavDest(
@@ -139,6 +147,7 @@ class WebShell extends ConsumerWidget {
             path: path,
             unreadCount: unreadCount,
             showInsights: watchFeature(ref, 'personalInsights'),
+            showBudgets: watchFeature(ref, 'personalBudgets'),
             width: collapsed ? _railWidth : _expandedWidth,
           ),
           Expanded(child: child),
@@ -155,6 +164,7 @@ class _Sidebar extends StatelessWidget {
     required this.path,
     required this.unreadCount,
     required this.showInsights,
+    required this.showBudgets,
     required this.width,
   });
 
@@ -163,6 +173,7 @@ class _Sidebar extends StatelessWidget {
   final String path;
   final int unreadCount;
   final bool showInsights;
+  final bool showBudgets;
   final double width;
 
   @override
@@ -204,6 +215,7 @@ class _Sidebar extends StatelessWidget {
                   for (final dest in [
                     _secondaryNav.first,
                     if (showInsights) _insightsDest,
+                    if (showBudgets) _budgetsDest,
                     ..._secondaryNav.skip(1),
                   ])
                     _NavItem(

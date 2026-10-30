@@ -248,6 +248,39 @@ abstract final class AppStrings {
   static const insightsEmptyBody =
       'Add expenses or income and see where your money goes.';
   static const insightsLoadError = "Couldn't load insights";
+
+  // ── Personal mode: Budgets ──────────────────────────────────────────
+  static const budgets = 'Budgets';
+  static const budgetMonth = 'Monthly budget';
+  static const budgetCategories = 'Category budgets';
+  static const budgetNotBudgeted = 'Spent without a budget';
+  static const budgetOf = 'of';
+  static const budgetLeft = 'left';
+  static const budgetOver = 'over';
+  static const budgetSetMonth = 'Set a monthly budget';
+  static const budgetSetMonthBody =
+      'One limit for everything you spend in a month.';
+  static const budgetAdd = 'Add budget';
+  static const budgetEdit = 'Edit budget';
+  static const budgetSet = 'Set budget';
+  static const budgetRemove = 'Remove budget';
+  static const budgetAmount = 'Monthly limit';
+  static const budgetWholeMonth = 'Whole month';
+  static const budgetPickCategory = 'For';
+  static const budgetSaved = 'Budget saved';
+  static const budgetRemoved = 'Budget removed';
+  static const budgetSaveFailed = "Couldn't save the budget. Try again.";
+  static const budgetLoadError = "Couldn't load budgets";
+  static const budgetEmptyTitle = 'No budgets yet';
+  static const budgetEmptyBody =
+      'Set a limit for the month or for a category. You get an alert at 80% '
+      'and when you go over.';
+  static String budgetSafePerDay(String amount, int days) =>
+      '$amount a day for the next ${days == 1 ? 'day' : '$days days'}';
+  static const budgetNearTitle = 'Budget almost used';
+  static const budgetOverTitle = 'Over budget';
+  static String budgetSpentThisMonth(String amount) =>
+      '$amount spent this month';
   static const reports = 'Reports';
   static const notifications = 'Notifications';
   static const goToGroups = 'Go to groups';

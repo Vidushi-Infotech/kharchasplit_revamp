@@ -164,6 +164,42 @@ class PushService {
     );
   }
 
+  /// Shows a notification made on the phone (e.g. a budget alert), on the
+  /// same channel as pushes. [payload] uses the push data format
+  /// ("type=…;key=value") so a tap is routed like a push. Best-effort.
+  Future<void> showLocal({
+    required int id,
+    required String title,
+    required String body,
+    String? payload,
+  }) async {
+    try {
+      if (!_initialized) await init();
+      await _local.show(
+        id: id,
+        title: title,
+        body: body,
+        notificationDetails: const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'default_channel',
+            'General',
+            channelDescription: 'KharchaSplit notifications',
+            importance: Importance.high,
+            priority: Priority.high,
+          ),
+          iOS: DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+          ),
+        ),
+        payload: payload,
+      );
+    } catch (e) {
+      debugPrint('[PushService] local notification failed: $e');
+    }
+  }
+
   /// Registers the current FCM token with the backend for [userId].
   /// Also wires a refresh listener so token rotation auto-re-registers.
   Future<void> registerWithBackend({

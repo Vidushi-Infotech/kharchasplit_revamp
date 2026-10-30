@@ -18,6 +18,20 @@ export function isMonthString(value) {
   return typeof value === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(value);
 }
 
+/**
+ * `?month=YYYY-MM&tzOffset=330` → { month, tzOffset }: the month (default:
+ * this month in India) and the phone's minutes east of UTC, so days split
+ * at its midnight (default IST, clamped to real offsets).
+ */
+export function parseMonthQuery(query, today) {
+  const month = isMonthString(query.month) ? query.month : today.slice(0, 7);
+  const offset = Number.parseInt(query.tzOffset, 10);
+  const tzOffset = Number.isFinite(offset)
+    ? Math.max(-840, Math.min(840, offset))
+    : 330;
+  return { month, tzOffset };
+}
+
 function daysIn(month) {
   const [y, m] = month.split('-').map(Number);
   return new Date(Date.UTC(y, m, 0)).getUTCDate();

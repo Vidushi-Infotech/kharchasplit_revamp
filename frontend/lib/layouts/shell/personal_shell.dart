@@ -23,6 +23,7 @@ class PersonalShell extends ConsumerWidget {
 
   static const expensesLocation = '/personal';
   static const insightsLocation = '/personal/insights';
+  static const budgetsLocation = '/personal/budgets';
   static const accountLocation = '/personal/account';
 
   static const _home = (
@@ -39,6 +40,14 @@ class PersonalShell extends ConsumerWidget {
       icon: Icons.pie_chart_outline_rounded,
       selectedIcon: Icons.pie_chart_rounded,
       label: AppStrings.insights,
+    ),
+  );
+  static const _budgets = (
+    budgetsLocation,
+    ShellNavItem(
+      icon: Icons.savings_outlined,
+      selectedIcon: Icons.savings_rounded,
+      label: AppStrings.budgets,
     ),
   );
   static const _account = (
@@ -80,6 +89,7 @@ class PersonalShell extends ConsumerWidget {
     final tabs = [
       _home,
       if (watchFeature(ref, 'personalInsights')) _insights,
+      if (watchFeature(ref, 'personalBudgets')) _budgets,
       _account,
     ];
     final locations = [for (final t in tabs) t.$1];

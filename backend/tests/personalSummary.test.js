@@ -50,3 +50,16 @@ test('an empty month', () => {
   assert.equal(s.spent, 0);
   assert.deepEqual(s.categories, []);
 });
+
+test('month and time zone from the query', async () => {
+  const { parseMonthQuery } = await import('../src/utils/personalSummary.js');
+  assert.deepEqual(parseMonthQuery({}, '2026-10-30'), { month: '2026-10', tzOffset: 330 });
+  assert.deepEqual(
+    parseMonthQuery({ month: '2026-02', tzOffset: '-420' }, '2026-10-30'),
+    { month: '2026-02', tzOffset: -420 },
+  );
+  assert.deepEqual(
+    parseMonthQuery({ month: 'bad', tzOffset: '99999' }, '2026-10-30'),
+    { month: '2026-10', tzOffset: 840 },
+  );
+});

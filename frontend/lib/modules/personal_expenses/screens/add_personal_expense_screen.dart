@@ -14,6 +14,7 @@ import '../../../core/utils/currency_formatter.dart';
 import '../../../models/category_model.dart';
 import '../../../models/wallet_source_model.dart';
 import '../../dashboard/state/dashboard_provider.dart';
+import '../state/budget_alerts.dart';
 import '../state/personal_expenses_provider.dart';
 import '../state/wallet_provider.dart';
 import '../widgets/entry_kind_toggle.dart';
@@ -49,6 +50,14 @@ class _AddPersonalExpenseScreenState
 
   DateTime get _dateTime =>
       DateTime(_date.year, _date.month, _date.day, _time.hour, _time.minute);
+
+  @override
+  void initState() {
+    super.initState();
+    // Load budgets now, so saving can tell which one this expense pushes
+    // past 80% / 100%.
+    ref.read(budgetAlertsProvider).before();
+  }
 
   @override
   void dispose() {
@@ -103,6 +112,8 @@ class _AddPersonalExpenseScreenState
     final amount = double.parse(_amountController.text.trim());
 
     setState(() => _submitting = true);
+    final alerts = ref.read(budgetAlertsProvider);
+    final budgetsBefore = _isIncome ? null : alerts.before();
     try {
       final created = await ref
           .read(personalExpensesProvider.notifier)
@@ -127,11 +138,16 @@ class _AddPersonalExpenseScreenState
             amount: _isIncome ? -amount : amount,
           );
       ref.invalidate(dashboardProvider);
+      // An expense that took a budget past 80% / 100% says so instead.
+      final alert = _isIncome
+          ? null
+          : await alerts.after(budgetsBefore, _category.id);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            '✓ ${_isIncome ? AppStrings.incomeAdded : AppStrings.personalExpenseAdded}',
+            alert ??
+                '✓ ${_isIncome ? AppStrings.incomeAdded : AppStrings.personalExpenseAdded}',
           ),
         ),
       );

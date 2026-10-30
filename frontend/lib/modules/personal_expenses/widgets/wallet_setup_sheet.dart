@@ -7,6 +7,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../models/wallet_source_model.dart';
+import '../state/personal_expenses_provider.dart';
 import '../state/wallet_provider.dart';
 
 /// Bottom sheet for managing wallet sources.
@@ -504,8 +505,16 @@ class _SourceRow extends ConsumerWidget {
 
   Future<void> _confirmRemove(BuildContext context, WidgetRef ref) async {
     final wallet = ref.read(walletProvider).value ?? WalletState.empty;
-    final taggedCount = wallet.expenseSourceMap.values
-        .where((v) => v == source.id)
+    // Only entries that still exist count: one deleted on another device
+    // (or the web) stays in this phone's map and would block removal for
+    // good. The list holds the latest 50, so past that every tag counts.
+    final entries = ref.read(personalExpensesProvider).value;
+    final ids = entries == null || entries.length >= 50
+        ? null
+        : {for (final e in entries) e.id};
+    final taggedCount = wallet.expenseSourceMap.entries
+        .where((e) => e.value == source.id)
+        .where((e) => ids == null || ids.contains(e.key))
         .length;
 
     if (taggedCount > 0) {

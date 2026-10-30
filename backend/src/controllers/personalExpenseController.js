@@ -1,7 +1,7 @@
 import PersonalExpense from '../models/PersonalExpense.js';
 import {
   buildPersonalSummary,
-  isMonthString,
+  parseMonthQuery,
   shiftMonth,
   TREND_MONTHS,
 } from '../utils/personalSummary.js';
@@ -59,13 +59,7 @@ const getPersonalExpenses = async (req, res, next) => {
  */
 const getPersonalSummary = async (req, res, next) => {
   try {
-    const month = isMonthString(req.query.month)
-      ? req.query.month
-      : todayIST().slice(0, 7);
-    const offset = Number.parseInt(req.query.tzOffset, 10);
-    const tzOffset = Number.isFinite(offset)
-      ? Math.max(-840, Math.min(840, offset))
-      : 330;
+    const { month, tzOffset } = parseMonthQuery(req.query, todayIST());
     const rows = await PersonalExpense.dailyTotals(
       req.user.id,
       shiftMonth(month, -(TREND_MONTHS - 1)),

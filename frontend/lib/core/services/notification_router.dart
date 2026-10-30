@@ -26,6 +26,8 @@ import 'package:go_router/go_router.dart';
 ///   RECURRING_EXPENSE_ADDED → { type, groupId, expenseId }  (→ the expense)
 ///   RECURRING_PAUSED     → { type, groupId, description, reason }
 ///                          (→ the group's recurring expenses list)
+///   PERSONAL_BUDGET      → { type }  (a budget alert made on the phone
+///                          → Personal mode's Budgets)
 class NotificationRouter {
   NotificationRouter._();
 
@@ -47,6 +49,10 @@ class NotificationRouter {
     final expenseId = data['expenseId']?.toString();
 
     switch (type) {
+      case 'PERSONAL_BUDGET':
+        router.go('/personal/budgets');
+        return;
+
       case 'EXPENSE_ADDED':
       case 'EXPENSE_UPDATED':
       case 'EXPENSE_COMMENT':
