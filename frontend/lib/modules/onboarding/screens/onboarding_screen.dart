@@ -7,6 +7,7 @@ import '../../../core/theme/app_colors.dart';
 import '../state/onboarding_provider.dart';
 import '../widgets/onboarding_dots_widget.dart';
 import '../widgets/onboarding_preview_widgets.dart';
+import '../../../core/theme/system_ui.dart';
 import '../widgets/onboarding_slide_widget.dart';
 
 /// Per-slide content + preview widget builder. Kept here (not in a
@@ -108,7 +109,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     return Scaffold(
       backgroundColor: _bgTop,
       body: AnnotatedRegion<SystemUiOverlayStyle>(
-        value: SystemUiOverlayStyle.light,
+        value: AppSystemUi.alwaysDark(),
         child: Stack(
           children: [
             // Base gradient backdrop
@@ -146,8 +147,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                             itemBuilder: (context, index) {
                               final s = _slides[index];
                               return AnimatedSwitcher(
-                                duration:
-                                    const Duration(milliseconds: 320),
+                                duration: const Duration(milliseconds: 320),
                                 switchInCurve: Curves.easeOutCubic,
                                 transitionBuilder: (child, anim) {
                                   return FadeTransition(
@@ -187,8 +187,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                             onPageTapped: (i) {
                               _pageController.animateToPage(
                                 i,
-                                duration:
-                                    const Duration(milliseconds: 320),
+                                duration: const Duration(milliseconds: 320),
                                 curve: Curves.easeOutCubic,
                               );
                             },
@@ -198,8 +197,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                           label: (isWeb || currentPage == _slides.length - 1)
                               ? 'Get Started'
                               : 'Next',
-                          onTap: (isWeb ||
-                                  currentPage == _slides.length - 1)
+                          onTap: (isWeb || currentPage == _slides.length - 1)
                               ? _finishTour
                               : _goToNext,
                           accent: accent,
@@ -301,9 +299,7 @@ class _DotGridOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Positioned.fill(
-      child: IgnorePointer(
-        child: CustomPaint(painter: _DotGridPainter()),
-      ),
+      child: IgnorePointer(child: CustomPaint(painter: _DotGridPainter())),
     );
   }
 }
@@ -432,10 +428,7 @@ class _PrimaryCta extends StatelessWidget {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(14),
               gradient: LinearGradient(
-                colors: [
-                  Colors.white,
-                  Colors.white.withValues(alpha: 0.92),
-                ],
+                colors: [Colors.white, Colors.white.withValues(alpha: 0.92)],
               ),
               boxShadow: [
                 BoxShadow(

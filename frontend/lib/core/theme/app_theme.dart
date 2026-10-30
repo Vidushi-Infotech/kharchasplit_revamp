@@ -1,8 +1,8 @@
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart'
     show PlatformInfo;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'app_colors.dart';
+import 'system_ui.dart';
 
 /// Complete Material 3 theme system with dark and light variants
 class AppTheme {
@@ -31,11 +31,7 @@ class AppTheme {
         fontSize: 17,
         fontWeight: FontWeight.w600,
       ),
-      systemOverlayStyle: SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent,
-        statusBarIconBrightness: isLight ? Brightness.dark : Brightness.light,
-        statusBarBrightness: brightness,
-      ),
+      systemOverlayStyle: AppSystemUi.page(!isLight),
     );
   }
 
@@ -70,11 +66,7 @@ class AppTheme {
                 fontSize: 22,
                 fontWeight: FontWeight.w700,
               ),
-              systemOverlayStyle: SystemUiOverlayStyle(
-                statusBarColor: Colors.transparent,
-                statusBarIconBrightness: Brightness.dark,
-                statusBarBrightness: Brightness.light,
-              ),
+              systemOverlayStyle: AppSystemUi.page(false),
             ),
 
       // Input Fields
@@ -198,11 +190,7 @@ class AppTheme {
                 fontSize: 22,
                 fontWeight: FontWeight.w700,
               ),
-              systemOverlayStyle: SystemUiOverlayStyle(
-                statusBarColor: Colors.transparent,
-                statusBarIconBrightness: Brightness.light,
-                statusBarBrightness: Brightness.dark,
-              ),
+              systemOverlayStyle: AppSystemUi.page(true),
             ),
 
       // Input Fields

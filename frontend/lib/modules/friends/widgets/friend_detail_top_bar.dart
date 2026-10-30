@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../../components/components.dart';
 import '../../../core/constants/app_strings.dart';
@@ -7,6 +6,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../models/group_model.dart';
 import '../../groups/widgets/group_detail_banner.dart';
 import '../state/friend_detail_view.dart';
+import '../../../core/theme/system_ui.dart';
 import '../state/friends_provider.dart';
 
 const double _bannerHeight = 140;
@@ -48,7 +48,10 @@ class FriendDetailSliverBar extends StatelessWidget {
       backgroundColor: isDark ? AppColors.darkSurface : AppColors.brand,
       surfaceTintColor: Colors.transparent,
       foregroundColor: Colors.white,
-      systemOverlayStyle: SystemUiOverlayStyle.light,
+      // Light icons on the teal banner; navigation bar as the page.
+      systemOverlayStyle: AppSystemUi.overDarkHeader(
+        Theme.of(context).brightness == Brightness.dark,
+      ),
       automaticallyImplyLeading: false,
       leading: GlassIconButton.isGlass
           ? Center(

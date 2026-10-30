@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/theme/system_ui.dart';
 import 'package:flutter/services.dart';
 
 /// Status bar icons that suit a plain page background: dark icons in the
@@ -14,7 +15,7 @@ class PageStatusBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
+      value: AppSystemUi.page(isDark),
       child: child,
     );
   }

@@ -20,6 +20,7 @@ import 'core/state/connectivity_provider.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_provider.dart';
 import 'core/routing/app_router.dart';
+import 'core/theme/system_ui.dart';
 import 'modules/notifications/state/push_refresh_provider.dart';
 
 void main() async {
@@ -29,13 +30,13 @@ void main() async {
   runZonedGuarded<Future<void>>(() async {
     WidgetsFlutterBinding.ensureInitialized();
 
+    // Draw behind the status and navigation bars (Android), with both bars
+    // transparent. Until the first frame picks the theme's style (see
+    // _SystemBarsForTheme), follow the phone's light/dark setting.
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     SystemChrome.setSystemUIOverlayStyle(
-      const SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.dark,
-        statusBarBrightness: Brightness.light,
-        systemNavigationBarColor: Colors.transparent,
-        systemNavigationBarIconBrightness: Brightness.dark,
+      AppSystemUi.page(
+        PlatformDispatcher.instance.platformBrightness == Brightness.dark,
       ),
     );
 
@@ -162,9 +163,30 @@ class _KharchaSplitAppState extends ConsumerState<KharchaSplitApp> {
       debugShowCheckedModeBanner: false,
       scrollBehavior: const _AppScrollBehavior(),
       // The banner overlays every route by wrapping the router's content.
-      builder: (context, child) => _NonNegativeInsets(
-        child: OfflineBanner(child: child ?? const SizedBox.shrink()),
+      builder: (context, child) => _SystemBarsForTheme(
+        child: _NonNegativeInsets(
+          child: OfflineBanner(child: child ?? const SizedBox.shrink()),
+        ),
       ),
+    );
+  }
+}
+
+/// Default status / navigation bar style for every screen, from the app's
+/// theme (not the phone's): pages without their own app bar, the tab
+/// roots and sheets get readable icons. App bars, the teal banners and the
+/// always-dark screens set their own, which take precedence.
+class _SystemBarsForTheme extends StatelessWidget {
+  const _SystemBarsForTheme({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: AppSystemUi.page(isDark),
+      child: child,
     );
   }
 }

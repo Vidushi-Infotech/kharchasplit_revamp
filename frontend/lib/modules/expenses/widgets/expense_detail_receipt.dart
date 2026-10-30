@@ -1,11 +1,12 @@
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../components/buttons/glass_icon_button.dart';
 import '../../../components/list/list_components.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/system_ui.dart';
 import '../../../core/utils/base64_async.dart';
 
 /// "View receipt" row on the expense detail screen: decodes the saved
@@ -103,38 +104,42 @@ class _ExpenseDetailReceiptState extends State<ExpenseDetailReceipt> {
         barrierColor: Colors.black.withValues(alpha: 0.85),
         pageBuilder: (_, _, _) => Scaffold(
           backgroundColor: Colors.transparent,
-          body: SafeArea(
-            child: Stack(
-              children: [
-                Center(
-                  child: InteractiveViewer(
-                    minScale: 0.8,
-                    maxScale: 5,
-                    child: Image.memory(bytes, fit: BoxFit.contain),
+          // Over the near-black backdrop: light status bar icons.
+          body: AnnotatedRegion<SystemUiOverlayStyle>(
+            value: AppSystemUi.alwaysDark(),
+            child: SafeArea(
+              child: Stack(
+                children: [
+                  Center(
+                    child: InteractiveViewer(
+                      minScale: 0.8,
+                      maxScale: 5,
+                      child: Image.memory(bytes, fit: BoxFit.contain),
+                    ),
                   ),
-                ),
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: GlassIconButton.isGlass
-                      ? GlassIconButton(
-                          icon: Icons.close_rounded,
-                          sfSymbol: 'xmark',
-                          tooltip: MaterialLocalizations.of(
-                            context,
-                          ).closeButtonTooltip,
-                          color: Colors.white,
-                          onPressed: () => Navigator.of(context).pop(),
-                        )
-                      : IconButton(
-                          icon: const Icon(
-                            Icons.close_rounded,
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: GlassIconButton.isGlass
+                        ? GlassIconButton(
+                            icon: Icons.close_rounded,
+                            sfSymbol: 'xmark',
+                            tooltip: MaterialLocalizations.of(
+                              context,
+                            ).closeButtonTooltip,
                             color: Colors.white,
+                            onPressed: () => Navigator.of(context).pop(),
+                          )
+                        : IconButton(
+                            icon: const Icon(
+                              Icons.close_rounded,
+                              color: Colors.white,
+                            ),
+                            onPressed: () => Navigator.of(context).pop(),
                           ),
-                          onPressed: () => Navigator.of(context).pop(),
-                        ),
-                ),
-              ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),

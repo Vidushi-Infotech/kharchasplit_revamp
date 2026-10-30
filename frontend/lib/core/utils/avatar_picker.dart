@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../components/buttons/glass_icon_button.dart';
 import '../theme/app_colors.dart';
 import 'base64_async.dart';
+import '../theme/system_ui.dart';
 import '../theme/app_text_styles.dart';
 
 class AvatarPickResult {
@@ -145,6 +146,7 @@ class _CropScreenState extends State<_CropScreen> {
       appBar: AppBar(
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
+        systemOverlayStyle: AppSystemUi.alwaysDark(),
         title: const Text('Crop Photo'),
         leading: GlassIconButton.isGlass
             ? GlassIconButton(

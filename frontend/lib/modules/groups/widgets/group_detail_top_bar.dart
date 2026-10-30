@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../../components/buttons/glass_icon_button.dart';
 import '../../../components/buttons/glass_menu_button.dart';
@@ -10,6 +9,7 @@ import '../state/group_detail_provider.dart';
 import 'export_group_menu.dart';
 import 'group_detail_banner.dart';
 import '../../../components/menus/glass_menu.dart';
+import '../../../core/theme/system_ui.dart';
 import 'group_detail_cover.dart';
 
 /// Height of the cover banner, and how far the group avatar hangs below it.
@@ -55,7 +55,10 @@ class GroupDetailSliverBar extends StatelessWidget {
       backgroundColor: isDark ? AppColors.darkSurface : AppColors.brand,
       surfaceTintColor: Colors.transparent,
       foregroundColor: Colors.white,
-      systemOverlayStyle: SystemUiOverlayStyle.light,
+      // Light icons on the teal banner; navigation bar as the page.
+      systemOverlayStyle: AppSystemUi.overDarkHeader(
+        Theme.of(context).brightness == Brightness.dark,
+      ),
       automaticallyImplyLeading: false,
       leading: _BarIcon(
         icon: Icons.arrow_back_rounded,
