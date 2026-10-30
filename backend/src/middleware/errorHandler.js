@@ -31,22 +31,28 @@ const errorHandler = (err, req, res, next) => {
     // express.json() body limit exceeded
     status = 413;
     message = 'Request body too large. Try a smaller image.';
-  } else if (err.message) {
-    message = err.message;
+  } else if (err.type === 'entity.parse.failed') {
+    // Malformed JSON body: the client's fault, not a 500.
+    status = 400;
+    message = 'Invalid JSON in request body';
+  } else {
+    // Errors that carry their own 4xx status (body-parser, http-errors).
+    const own = err.status || err.statusCode;
+    if (own >= 400 && own < 500) status = own;
+    if (err.message) message = err.message;
   }
 
-  // Production: never expose stack traces or internal error messages on 5xx.
-  // Belt-and-braces: a positive check for production rather than negation, so
-  // any unset / typo'd NODE_ENV defaults to the safe (sanitised) branch.
-  const isProd = process.env.NODE_ENV === 'production';
-  if (isProd && status >= 500) {
+  // Stack traces and raw 5xx messages only on a developer's machine: any
+  // other NODE_ENV (production, unset, a typo) gets the sanitised reply.
+  const isDev = process.env.NODE_ENV === 'development';
+  if (!isDev && status >= 500) {
     message = 'Internal server error';
   }
 
   res.status(status).json({
     success: false,
     error: message,
-    ...(!isProd && err.stack ? { stack: err.stack } : {}),
+    ...(isDev && err.stack ? { stack: err.stack } : {}),
   });
 };
 

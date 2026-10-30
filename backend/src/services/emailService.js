@@ -62,7 +62,7 @@ class EmailService {
       'https://play.google.com/store/apps/details?id=com.kharchasplit';
     const appStoreUrl =
       process.env.APP_APP_STORE_URL ||
-      'https://apps.apple.com/app/kharchasplit/id000000000';
+      'https://apps.apple.com/app/id6754237285';
     // Universal landing page that sniffs the user-agent and redirects to
     // the right store (or deep-links into the app if installed). Falls back
     // to the Play Store link in dev.

@@ -64,6 +64,19 @@ export const otpRateLimit = rateLimit({
 });
 
 /**
+ * 10 email-verification code tries per account every 15 minutes (a
+ * 6-digit code must not be brute-forceable).
+ */
+export const emailVerifyConfirmRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: TOO_MANY_OTP,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `verify:${req.params.id || req.ip}`,
+});
+
+/**
  * 10 login attempts per phone every 15 min. Keyed on the body phone number
  * so a victim of credential stuffing isn't locked out by an attacker on the
  * same NAT.

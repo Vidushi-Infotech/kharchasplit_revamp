@@ -2,7 +2,7 @@ import express from 'express';
 import { body  } from 'express-validator';
 import { authenticate  } from '../middleware/auth.js';
 import { validate  } from '../middleware/validation.js';
-import { phoneLookupRateLimit } from '../middleware/rateLimits.js';
+import { emailVerifyConfirmRateLimit, phoneLookupRateLimit } from '../middleware/rateLimits.js';
 import userController from '../controllers/userController.js';
 import notificationController from '../controllers/notificationController.js';
 
@@ -23,7 +23,6 @@ router.post(
   userController.checkRegisteredUsers
 );
 
-router.get('/by-phone/:phoneNumber', authenticate, userController.getUserByPhone);
 
 // Privacy-trimmed lookup for the "Add member by phone" search box. Rate
 // limited per authenticated user so a logged-in client can't enumerate
@@ -71,6 +70,7 @@ router.post(
 router.post(
   '/:id/email/verify/confirm',
   authenticate,
+  emailVerifyConfirmRateLimit,
   [body('otp').trim().isLength({ min: 4, max: 10 }).isNumeric()],
   validate,
   userController.confirmEmailVerification

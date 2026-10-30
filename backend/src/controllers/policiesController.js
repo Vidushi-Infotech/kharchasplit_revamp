@@ -52,14 +52,14 @@ const PRIVACY_POLICY = {
       heading: 'Data retention',
       paragraphs: [
         'Expense history is kept for as long as you have an account.',
-        'Sign-in sessions expire after 30 days of inactivity. Revoked sessions are deleted immediately.',
+        'Sign-in sessions expire 30 days after you sign in. Signed-out and revoked sessions are deleted immediately.',
         'When you delete your account, all your data is removed within 30 days.',
       ],
     },
     {
       heading: 'Contact',
       paragraphs: [
-        'Questions or requests about your data? Email privacy@kharchasplit.app.',
+        'Questions or requests about your data? Email privacy@kharchasplit.com.',
       ],
     },
   ],
@@ -103,7 +103,7 @@ const TERMS = {
     {
       heading: 'Contact',
       paragraphs: [
-        'Questions about these terms? Email support@kharchasplit.app.',
+        'Questions about these terms? Email support@kharchasplit.com.',
       ],
     },
   ],

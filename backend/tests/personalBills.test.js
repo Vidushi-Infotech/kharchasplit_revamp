@@ -41,3 +41,14 @@ test('reminder wording', async () => {
   assert.equal(dueWhen('2026-11-02', 3), 'on 2 Nov');
   assert.equal(dueWhen('2026-10-28', -2), 'since 28 Oct');
 });
+
+test('scheduler reads the hour, date and weekday in IST', async () => {
+  const { istNow } = await import('../src/jobs/scheduler.js');
+  // 20:00 UTC on Sun 1 Nov 2026 is 01:30 IST on Mon 2 Nov.
+  assert.deepEqual(istNow(new Date('2026-11-01T20:00:00Z')), {
+    date: '2026-11-02', hour: 1, weekday: 1,
+  });
+  assert.deepEqual(istNow(new Date('2026-10-30T03:30:00Z')), {
+    date: '2026-10-30', hour: 9, weekday: 5,
+  });
+});

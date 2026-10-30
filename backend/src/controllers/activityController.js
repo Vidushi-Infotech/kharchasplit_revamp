@@ -6,7 +6,10 @@ import Activity from '../models/Activity.js';
  */
 const getUserActivities = async (req, res, next) => {
   try {
-    const { userId, page = 1, limit = 50 } = req.query;
+    const { userId } = req.query;
+    // Whole numbers, page ≥ 1, at most 100 rows a page.
+    const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, Number.parseInt(req.query.limit, 10) || 50));
 
     if (!userId) {
       return res.status(400).json({

@@ -235,15 +235,45 @@ class User {
   }
 
   /**
-   * Soft delete user
+   * Delete an account, as the privacy policy promises: the row stays so
+   * shared groups keep their history (shown as "Deleted user"), but
+   * everything that identifies the person goes. The phone number is
+   * replaced so the same number can sign up again; sessions, devices and
+   * all Personal mode data (theirs alone) are removed.
    */
   static async delete(id) {
     const result = await query(
-      'UPDATE users SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL RETURNING id',
+      `UPDATE users
+          SET deleted_at = NOW(),
+              phone_number = 'del-' || substr(md5(id::text || clock_timestamp()::text), 1, 16),
+              name = 'Deleted user',
+              email = NULL,
+              email_verified_at = NULL,
+              profile_image_base64 = NULL,
+              password_hash = NULL,
+              fcm_token = NULL,
+              upi_id = NULL,
+              updated_at = NOW()
+        WHERE id = $1 AND deleted_at IS NULL
+        RETURNING id`,
       [id]
     );
-    if (result.rows.length > 0) this.invalidateUser(id);
-    return result.rows.length > 0;
+    if (result.rows.length === 0) return false;
+    this.invalidateUser(id);
+    // Each on its own, so a table a database doesn't have yet (Personal
+    // mode migrations not run) can't stop the rest.
+    for (const table of [
+      'refresh_tokens', 'user_devices', 'user_known_devices', 'notification_prefs',
+      'personal_transfers', 'personal_bills', 'personal_budgets',
+      'personal_expenses', 'personal_accounts',
+    ]) {
+      try {
+        await query(`DELETE FROM ${table} WHERE user_id = $1`, [id]);
+      } catch (e) {
+        if (e.code !== '42P01') throw e; // 42P01: no such table
+      }
+    }
+    return true;
   }
 
   /**

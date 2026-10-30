@@ -6,26 +6,13 @@ import activityController from '../controllers/activityController.js';
 
 const router = express.Router();
 
-// Create activity
-router.post(
-  '/',
-  authenticate,
-  [
-    body('userId').notEmpty().withMessage('userId is required'),
-    body('activityType').notEmpty().withMessage('activityType is required'),
-    body('entityType').notEmpty().withMessage('entityType is required'),
-    body('entityId').notEmpty().withMessage('entityId is required'),
-    body('title').notEmpty().withMessage('title is required'),
-  ],
-  validate,
-  activityController.createActivity
-);
+// Activities are written by the server as things happen (services/
+// activityService.js). There is no client "create", and no per-group feed
+// or group read-all: those let any user post into, or read, any group's
+// feed without being a member, and no app ever called them.
 
 // Get user activities
 router.get('/', authenticate, activityController.getUserActivities);
-
-// Get group activities
-router.get('/group/:groupId', authenticate, activityController.getGroupActivities);
 
 // Get unread count
 router.get('/unread/count', authenticate, activityController.getUnreadCount);
@@ -44,9 +31,6 @@ router.patch(
   validate,
   activityController.markAllAsRead
 );
-
-// Mark group activities as read
-router.patch('/group/:groupId/read-all', authenticate, activityController.markGroupActivitiesAsRead);
 
 // Delete activity
 router.delete('/:id', authenticate, activityController.deleteActivity);

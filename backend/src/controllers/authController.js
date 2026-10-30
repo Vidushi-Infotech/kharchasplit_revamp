@@ -307,6 +307,12 @@ const forgotPasswordRequest = async (req, res, next) => {
     const otp = generateOTP();
     const expiresAt = getOTPExpiry(10);
 
+    // A new code retires the earlier ones, so only one is ever guessable.
+    await query(
+      `UPDATE otps SET verified = TRUE
+        WHERE LOWER(email) = LOWER($1) AND purpose = 'password_reset' AND verified = FALSE`,
+      [email],
+    );
     await query(
       `INSERT INTO otps (email, phone_number, otp, expires_at, purpose, verified)
        VALUES ($1, NULL, $2, $3, 'password_reset', FALSE)`,
@@ -454,12 +460,12 @@ const refreshAccessToken = async (req, res, next) => {
 
     // Existence check only — the userId comes from the verified JWT
     // payload above, not from the DB row. Narrow projection keeps this
-    // off the hot refresh path's wire.
+    // off the hot refresh path's wire. Signed-out tokens are deleted
+    // outright (refresh_tokens has no deleted_at), so a row means valid.
     const tokenResult = await query(
       `SELECT id FROM refresh_tokens
         WHERE token = $1
           AND expires_at > NOW()
-          AND deleted_at IS NULL
         LIMIT 1`,
       [refreshToken],
     );

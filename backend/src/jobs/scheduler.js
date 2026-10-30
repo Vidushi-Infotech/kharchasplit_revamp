@@ -5,7 +5,7 @@ const TICK_MINUTES = 15;
 /**
  * Minimal in-process scheduler for once-a-day / once-a-week jobs, same
  * approach as emailVerifyReminderJob: a timer ticks every TICK_MINUTES and
- * runs the job once per calendar day at `hour` (server local time),
+ * runs the job once per calendar day at `hour` (India time, IST),
  * optionally only on `weekday` (0 = Sunday … 6 = Saturday).
  *
  * Only PM2 instance 0 runs timers, otherwise every cluster worker would
@@ -33,10 +33,12 @@ export function startDailyJob({ name, disableEnv, hour, weekday, run }) {
 
   let lastRunDate = null;
   const tick = async () => {
-    const now = new Date();
-    const today = now.toISOString().slice(0, 10);
-    if (now.getHours() < hour || lastRunDate === today) return;
-    if (weekday !== undefined && now.getDay() !== weekday) return;
+    // India time whatever the server's zone: the hour, the date and the
+    // weekday all have to be read in the same zone (a UTC box used to mix
+    // the UTC date with its local hour).
+    const { date: today, hour: nowHour, weekday: nowDay } = istNow();
+    if (nowHour < hour || lastRunDate === today) return;
+    if (weekday !== undefined && nowDay !== weekday) return;
     lastRunDate = today;
     try {
       await run();
@@ -48,6 +50,23 @@ export function startDailyJob({ name, disableEnv, hour, weekday, run }) {
   handle.unref();
   logger.info({ hour, weekday, tickMinutes: TICK_MINUTES }, `[${name}] scheduler armed`);
   return () => clearInterval(handle);
+}
+
+/** The date ('YYYY-MM-DD'), hour (0-23) and weekday (0 = Sunday) in IST. */
+export function istNow(now = new Date()) {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', hourCycle: 'h23', weekday: 'short',
+    }).formatToParts(now).map((p) => [p.type, p.value]),
+  );
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  return {
+    date: `${parts.year}-${parts.month}-${parts.day}`,
+    hour: Number(parts.hour),
+    weekday: days.indexOf(parts.weekday),
+  };
 }
 
 /** Read an integer env var within [min, max], else the fallback. */

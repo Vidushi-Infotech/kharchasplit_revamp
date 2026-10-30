@@ -34,7 +34,6 @@ import personalExpenseRoutes from './routes/personalExpenseRoutes.js';
 import personalBudgetRoutes from './routes/personalBudgetRoutes.js';
 import personalAccountRoutes from './routes/personalAccountRoutes.js';
 import personalBillRoutes from './routes/personalBillRoutes.js';
-import syncRoutes from './routes/syncRoutes.js';
 import activityRoutes from './routes/activityRoutes.js';
 import inviteRoutes from './routes/inviteRoutes.js';
 import policiesRoutes from './routes/policiesRoutes.js';
@@ -45,10 +44,25 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Trust the first proxy (Cloudflare / nginx / Render / Heroku) so
-// req.secure + x-forwarded-* headers reflect the real client connection.
+// Trust the proxies in front (Cloudflare / nginx / a load balancer) so
+// req.ip, req.secure and x-forwarded-* reflect the real client — the rate
+// limits key on req.ip. TRUST_PROXY is the hop count (default 1); set 2
+// for Cloudflare → load balancer → node.
 if (process.env.NODE_ENV === 'production') {
-  app.set('trust proxy', 1);
+  const hops = Number.parseInt(process.env.TRUST_PROXY ?? '1', 10);
+  app.set('trust proxy', Number.isFinite(hops) ? hops : 1);
+}
+
+// Sign-in can't work without the token secrets; fail at boot, not on the
+// first login.
+for (const key of ['JWT_SECRET', 'JWT_REFRESH_SECRET']) {
+  if (!process.env[key]) {
+    console.error(`FATAL: ${key} is not set.`);
+    process.exit(1);
+  }
+  if (process.env.NODE_ENV === 'production' && process.env[key].length < 32) {
+    console.warn(`WARNING: ${key} is shorter than 32 characters; use a long random value.`);
+  }
 }
 
 // Security middleware
@@ -191,7 +205,6 @@ app.use(`/api/${API_VERSION}/personal-expenses`, personalExpenseRoutes);
 app.use(`/api/${API_VERSION}/personal-budgets`, personalBudgetRoutes);
 app.use(`/api/${API_VERSION}/personal-accounts`, personalAccountRoutes);
 app.use(`/api/${API_VERSION}/personal-bills`, personalBillRoutes);
-app.use(`/api/${API_VERSION}/sync`, syncRoutes);
 app.use(`/api/${API_VERSION}/activities`, activityRoutes);
 app.use(`/api/${API_VERSION}/invites`, inviteRoutes);
 app.use(`/api/${API_VERSION}/policies`, policiesRoutes);

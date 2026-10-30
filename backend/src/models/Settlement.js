@@ -85,9 +85,11 @@ class Settlement {
   static async create(settlementData) {
     const result = await query(
       `INSERT INTO settlements (
-        group_id, from_user_id, to_user_id, amount, currency, status, notes, confirmed_at, method
+        group_id, from_user_id, to_user_id, amount, currency, status, notes, confirmed_at, method,
+        created_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, CASE WHEN $8::boolean THEN NOW() ELSE NULL END, $9)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, CASE WHEN $8::boolean THEN NOW() ELSE NULL END, $9,
+              COALESCE($10::timestamptz, NOW()))
       RETURNING id, group_id, from_user_id, to_user_id, amount, currency,
                 status, notes, method, batch_id, confirmed_at, settled_at, created_at`,
       [
@@ -100,6 +102,8 @@ class Settlement {
         settlementData.notes || null,
         settlementData.status === 'paid',
         settlementData.method || null,
+        // When it was paid, if earlier than now (recorded later).
+        settlementData.paidAt || null,
       ]
     );
     return result.rows[0];

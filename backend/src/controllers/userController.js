@@ -197,6 +197,11 @@ const deleteUser = async (req, res, next) => {
       });
     }
 
+    // Tell them first: once deleted there is no email or device to reach.
+    await NotificationService.notifyAccountDeleted(id).catch((err) =>
+      console.error('[UserController] account-deleted notify failed:', err),
+    );
+
     const deleted = await User.delete(id);
 
     if (!deleted) {
@@ -205,10 +210,6 @@ const deleteUser = async (req, res, next) => {
         error: 'User not found',
       });
     }
-
-    NotificationService.notifyAccountDeleted(id).catch((err) =>
-      console.error('[UserController] account-deleted notify failed:', err),
-    );
 
     res.json({
       success: true,
@@ -1239,6 +1240,12 @@ const requestEmailVerification = async (req, res, next) => {
 
     const otp = generateOTP();
     const expiresAt = getOTPExpiry(EMAIL_VERIFY_TTL_MIN);
+    // A new code retires the earlier ones, so only one is ever guessable.
+    await query(
+      `UPDATE otps SET verified = TRUE
+        WHERE LOWER(email) = LOWER($1) AND purpose = 'email_verify' AND verified = FALSE`,
+      [user.email],
+    );
     await query(
       `INSERT INTO otps (email, phone_number, otp, expires_at, purpose, verified)
        VALUES ($1, NULL, $2, $3, 'email_verify', FALSE)`,

@@ -460,6 +460,8 @@ CREATE TABLE IF NOT EXISTS expense_revisions (
 
 const columnAdditions = [
   // Users table columns
+  // 014: phone + password sign-in.
+  { table: 'users', column: 'password_hash', type: 'VARCHAR(255)' },
   { table: 'users', column: 'fcm_token', type: 'VARCHAR(255)' },
   { table: 'users', column: 'fcm_token_updated_at', type: 'TIMESTAMP' },
   { table: 'users', column: 'is_placeholder', type: 'BOOLEAN DEFAULT FALSE' },
@@ -539,6 +541,10 @@ const columnAdditions = [
   { table: 'personal_expenses', column: 'account_id', type: 'UUID REFERENCES personal_accounts(id) ON DELETE SET NULL' },
   // 028: the bill a payment was for.
   { table: 'personal_expenses', column: 'bill_id', type: 'UUID REFERENCES personal_bills(id) ON DELETE SET NULL' },
+
+  // 013: OTPs for password reset / email verification go by email.
+  { table: 'otps', column: 'email', type: 'VARCHAR(255)' },
+  { table: 'otps', column: 'purpose', type: "VARCHAR(32) NOT NULL DEFAULT 'login'" },
 
   // Activities columns
   { table: 'activities', column: 'deleted_at', type: 'TIMESTAMP' },
@@ -814,6 +820,13 @@ export async function initializeDatabase() {
       console.log('  ✅ All columns present');
     } else {
       console.log(`  ✅ Added ${columnsAdded} missing column(s)`);
+    }
+
+    // 013: email OTPs have no phone number. Idempotent.
+    try {
+      await query('ALTER TABLE otps ALTER COLUMN phone_number DROP NOT NULL');
+    } catch (error) {
+      console.error('  ⚠️ otps.phone_number:', error.message);
     }
 
     // Step 3: Create indexes

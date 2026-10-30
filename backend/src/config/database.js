@@ -11,6 +11,8 @@ const connectionConfig = {
   database: process.env.DB_NAME || 'kharchasplit',
   user: process.env.DB_USER || 'kharchasplit',
   password: process.env.DB_PASSWORD,
+  // Managed Postgres that requires TLS: DB_SSL=true.
+  ...(process.env.DB_SSL === 'true' ? { ssl: { rejectUnauthorized: false } } : {}),
 };
 
 // PostgreSQL connection pool

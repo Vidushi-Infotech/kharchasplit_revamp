@@ -25,6 +25,18 @@ router.post(
       if (isNaN(num) || num < 0) throw new Error('amount must be a non-negative number');
       return true;
     }),
+    // When the payment happened (recorded later): today or up to a year
+    // back, never in the future.
+    body('paidAt')
+      .optional({ values: 'null' })
+      .isISO8601()
+      .custom((v) => {
+        const t = new Date(v).getTime();
+        const now = Date.now();
+        if (t > now + 36 * 3600 * 1000) throw new Error('paidAt is in the future');
+        if (t < now - 366 * 86400 * 1000) throw new Error('paidAt is more than a year ago');
+        return true;
+      }),
     body('method').optional({ values: 'null' }).isIn(SETTLEMENT_METHODS)
       .withMessage(`method must be one of: ${SETTLEMENT_METHODS.join(', ')}`),
   ],

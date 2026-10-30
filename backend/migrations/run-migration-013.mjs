@@ -7,7 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 async function runMigration() {
-  console.log('Running migration 013: switch auth to phone+password (otps.purpose/email, wipe dev data)...\n');
+  console.log('Running migration 013: switch auth to phone+password (otps.purpose/email)...\n');
   try {
     const sql = fs.readFileSync(
       path.join(__dirname, '013_password_auth.sql'),
