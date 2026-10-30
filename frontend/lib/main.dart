@@ -6,6 +6,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
+import 'core/state/app_mode.dart';
 import 'core/state/feature_flags_provider.dart';
 import 'core/storage/local_store.dart';
 import 'modules/outbox/state/outbox_provider.dart';
@@ -75,6 +76,8 @@ void main() async {
 
     // Offline cache + outbox (Hive). Never blocks startup on failure.
     await LocalStore.init();
+    // Which "app" (Groups or Personal) to reopen in; read by the splash.
+    await AppModeStore.load();
 
     runApp(
       const ProviderScope(

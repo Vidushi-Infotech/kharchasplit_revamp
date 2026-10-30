@@ -65,8 +65,8 @@ const _secondaryNav = <_NavDest>[
   _NavDest(
     icon: Icons.account_balance_wallet_rounded,
     label: AppStrings.personalExpenses,
-    location: '/home/personal',
-    matches: ['/home/personal'],
+    location: '/personal',
+    matches: ['/personal', '/home/personal'],
   ),
   _NavDest(
     icon: Icons.bar_chart_rounded,

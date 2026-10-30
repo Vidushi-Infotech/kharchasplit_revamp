@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/constants/app_strings.dart';
+import '../../core/state/app_mode.dart';
 import '../../core/theme/app_colors.dart';
+import 'mode_tab_bar.dart';
 import 'shell_state.dart';
 import 'whats_new_sheet.dart';
 
@@ -27,6 +29,7 @@ class TabletShell extends ConsumerWidget {
 
     // One-time "A new look" intro to the new tab bar.
     WhatsNewSheet.maybeShow(context);
+    AppModeStore.remember(AppMode.shared);
 
     return Scaffold(
       body: Row(
@@ -52,6 +55,18 @@ class TabletShell extends ConsumerWidget {
                   ),
                 ),
                 child: const Icon(Icons.receipt_rounded, color: Colors.white),
+              ),
+            ),
+            trailing: Expanded(
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 20),
+                  child: ModeSwitchRailButton(
+                    to: AppMode.personal,
+                    onPressed: () => switchAppMode(context, AppMode.personal),
+                  ),
+                ),
               ),
             ),
             destinations: [

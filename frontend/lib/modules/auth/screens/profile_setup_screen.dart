@@ -1,3 +1,4 @@
+import '../../../core/state/app_mode.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -113,7 +114,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
       _showSnack(err, success: false);
       return;
     }
-    if (mounted) context.go('/home/groups');
+    if (mounted) context.go(AppModeStore.current.home);
   }
 
   void _showSnack(String message, {required bool success}) {

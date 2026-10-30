@@ -1,3 +1,4 @@
+import '../../../core/state/app_mode.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -41,7 +42,7 @@ class SplashScreen extends ConsumerWidget {
             // On the web the user may have opened a URL directly; the router
             // parked it here so auth could resolve first. Hand them back to
             // it. Always null on mobile.
-            context.go(WebDeepLink.take() ?? '/home/groups');
+            context.go(WebDeepLink.take() ?? AppModeStore.current.home);
           });
           break;
         case SplashState.unauthenticated:

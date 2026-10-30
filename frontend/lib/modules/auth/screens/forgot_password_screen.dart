@@ -1,3 +1,4 @@
+import '../../../core/state/app_mode.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -125,7 +126,7 @@ class _ForgotPasswordScreenState
     // Backend auto-logged us in. Route based on whether profile is complete.
     final auth = ref.read(authProvider);
     context.go(
-        auth.needsProfileSetup ? '/profile-setup' : '/home/groups');
+        auth.needsProfileSetup ? '/profile-setup' : AppModeStore.current.home);
   }
 
   void _back(BuildContext context) {

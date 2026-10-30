@@ -2,31 +2,34 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kharchasplit/components/buttons/glass_icon_button.dart';
 import 'package:kharchasplit/components/headers/glass_large_title.dart';
-import 'package:kharchasplit/layouts/shell/glass_shell_bar.dart';
-import 'package:kharchasplit/layouts/shell/shell_state.dart';
+import 'package:kharchasplit/layouts/shell/mode_tab_bar.dart';
 
 void main() {
-  testWidgets('every glass tab reports its tap', (tester) async {
+  testWidgets('every tab and the mode switch report their tap', (
+    tester,
+  ) async {
     final taps = <int>[];
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(
-        bottomNavigationBar: GlassShellTabBar(
-          selectedTab: ShellTab.groups,
-          onTabSelected: taps.add,
+        bottomNavigationBar: ModeTabBar(
+          items: const [
+            ShellNavItem(icon: Icons.groups, selectedIcon: Icons.groups,
+                label: 'Groups'),
+            ShellNavItem(icon: Icons.person, selectedIcon: Icons.person,
+                label: 'Friends'),
+            ShellNavItem(icon: Icons.wallet, selectedIcon: Icons.wallet,
+                label: 'Personal', modeSwitch: true),
+          ],
+          selectedIndex: 0,
+          onSelect: taps.add,
         ),
       ),
     ));
-    for (final label in ['Friends', 'Activity', 'Account', 'Groups', 'Friends']) {
+    for (final label in ['Friends', 'Personal', 'Groups']) {
       await tester.tap(find.text(label));
       await tester.pump(const Duration(milliseconds: 400));
     }
-    expect(taps, [
-      ShellTab.friends,
-      ShellTab.activity,
-      ShellTab.account,
-      ShellTab.groups,
-      ShellTab.friends,
-    ]);
+    expect(taps, [1, 2, 0]);
   });
 
   testWidgets('buttons inside a glass capsule take taps', (tester) async {

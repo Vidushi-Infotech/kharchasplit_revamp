@@ -199,6 +199,10 @@ abstract final class AppStrings {
 
   // ── Navigation (tab bar, Account, Groups list) ─────────────────────
   static const personalExpenses = 'Personal expenses';
+  // The two "apps": the last tab switches between them.
+  static const personal = 'Personal';
+  static const switchToPersonal = 'Switch to Personal';
+  static const switchToGroups = 'Switch to Groups';
   static const reports = 'Reports';
   static const notifications = 'Notifications';
   static const goToGroups = 'Go to groups';

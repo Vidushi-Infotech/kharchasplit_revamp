@@ -148,11 +148,6 @@ class _AccountList extends ConsumerWidget {
           const AccountThemeRow(showDivider: false),
           const MonthSectionHeader(AppStrings.tools),
           AccountRow(
-            icon: Icons.account_balance_wallet_outlined,
-            label: AppStrings.personalExpenses,
-            onTap: () => context.push('/home/personal'),
-          ),
-          AccountRow(
             icon: Icons.bar_chart_rounded,
             label: AppStrings.reports,
             onTap: () => context.push('/reports'),

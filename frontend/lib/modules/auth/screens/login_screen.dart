@@ -1,3 +1,4 @@
+import '../../../core/state/app_mode.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -94,7 +95,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (auth.needsProfileSetup) {
       context.go('/profile-setup');
     } else {
-      context.go('/home/groups');
+      context.go(AppModeStore.current.home);
     }
   }
 

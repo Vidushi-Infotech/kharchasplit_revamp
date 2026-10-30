@@ -2,20 +2,60 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/constants/app_strings.dart';
 import '../../core/lifecycle/app_lifecycle_refresher.dart';
+import '../../core/state/app_mode.dart';
 import 'glass_shell_bar.dart';
+import 'mode_tab_bar.dart';
 import 'pick_group_for_expense_sheet.dart';
 import 'shell_bottom_bar.dart';
 import 'shell_state.dart';
 import 'whats_new_sheet.dart';
 
-/// Mobile shell: flat bottom tabs (Groups · Friends · Activity · Account)
-/// plus a floating "Add expense" button — see [ShellTab] for the index ↔
-/// route mapping shared with the tablet rail.
+/// Mobile shell: bottom tabs (Groups · Friends · Activity · Account, then
+/// the switch to Personal) plus a floating "Add expense" button — see
+/// [ShellTab] for the index ↔ route mapping shared with the tablet rail.
 class MobileShell extends ConsumerWidget {
   final Widget child;
 
   const MobileShell({Key? key, required this.child}) : super(key: key);
+
+  /// Bar position → [ShellTab]; the slot after the last is the mode switch.
+  static const _tabs = [
+    ShellTab.groups,
+    ShellTab.friends,
+    ShellTab.activity,
+    ShellTab.account,
+  ];
+
+  static const _items = [
+    ShellNavItem(
+      icon: Icons.groups_outlined,
+      selectedIcon: Icons.groups_rounded,
+      label: AppStrings.groups,
+    ),
+    ShellNavItem(
+      icon: Icons.person_outline_rounded,
+      selectedIcon: Icons.person_rounded,
+      label: AppStrings.friends,
+    ),
+    ShellNavItem(
+      icon: Icons.timeline_rounded,
+      selectedIcon: Icons.timeline_rounded,
+      label: AppStrings.activity,
+    ),
+    ShellNavItem(
+      icon: Icons.account_circle_outlined,
+      selectedIcon: Icons.account_circle_rounded,
+      label: AppStrings.account,
+    ),
+    ShellNavItem(
+      icon: Icons.account_balance_wallet_rounded,
+      selectedIcon: Icons.account_balance_wallet_rounded,
+      label: AppStrings.personal,
+      modeSwitch: true,
+    ),
+  ];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -36,6 +76,7 @@ class MobileShell extends ConsumerWidget {
 
     // One-time "A new look" intro to the new tab bar.
     WhatsNewSheet.maybeShow(context);
+    AppModeStore.remember(AppMode.shared);
 
     // Resume-after-long-background refresh lives here (not in main.dart)
     // because only a signed-in user inside the shell has data to refresh.
@@ -72,13 +113,23 @@ class MobileShell extends ConsumerWidget {
     String path,
     int? selectedIndex,
   ) {
-    void onTab(int index) {
-      ref.read(selectedNavIndexProvider.notifier).state = index;
-      _navigateToTab(context, index);
+    void onTab(int i) {
+      if (i >= _tabs.length) {
+        switchAppMode(context, AppMode.personal);
+        return;
+      }
+      ref.read(selectedNavIndexProvider.notifier).state = _tabs[i];
+      _navigateToTab(context, _tabs[i]);
     }
 
     void addExpense() => PickGroupForExpenseSheet.show(context);
     final showAdd = _showsAddExpense(path);
+    final barIndex = _tabs.indexOf(selectedIndex ?? -1);
+    final bar = ModeTabBar(
+      items: _items,
+      selectedIndex: barIndex < 0 ? null : barIndex,
+      onSelect: onTab,
+    );
 
     if (useGlassShell) {
       // iOS 26: Liquid Glass tab bar floating over the content, which
@@ -89,10 +140,7 @@ class MobileShell extends ConsumerWidget {
         floatingActionButton: showAdd
             ? GlassAddExpenseButton(onPressed: addExpense)
             : null,
-        bottomNavigationBar: GlassShellTabBar(
-          selectedTab: selectedIndex,
-          onTabSelected: onTab,
-        ),
+        bottomNavigationBar: bar,
       );
     }
 
@@ -101,10 +149,7 @@ class MobileShell extends ConsumerWidget {
       floatingActionButton: showAdd
           ? ShellAddExpenseButton(onPressed: addExpense)
           : null,
-      bottomNavigationBar: ShellBottomBar(
-        selectedTab: selectedIndex,
-        onTabSelected: onTab,
-      ),
+      bottomNavigationBar: bar,
     );
   }
 
