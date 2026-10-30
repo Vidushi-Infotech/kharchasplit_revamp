@@ -6,6 +6,8 @@ import 'package:intl/intl.dart';
 
 import '../../../components/buttons/glass_icon_button.dart';
 import '../../../components/inputs/app_text_field.dart';
+import '../../../core/constants/app_strings.dart';
+import '../../../core/state/feature_flags_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/currency_formatter.dart';
@@ -14,10 +16,15 @@ import '../../../models/wallet_source_model.dart';
 import '../../dashboard/state/dashboard_provider.dart';
 import '../state/personal_expenses_provider.dart';
 import '../state/wallet_provider.dart';
+import '../widgets/entry_kind_toggle.dart';
 import '../widgets/wallet_setup_sheet.dart';
 
+/// Adds a personal expense or, with the `personalIncome` flag, an income
+/// ([income] opens it on the Income side).
 class AddPersonalExpenseScreen extends ConsumerStatefulWidget {
-  const AddPersonalExpenseScreen({super.key});
+  const AddPersonalExpenseScreen({super.key, this.income = false});
+
+  final bool income;
 
   @override
   ConsumerState<AddPersonalExpenseScreen> createState() =>
@@ -31,19 +38,17 @@ class _AddPersonalExpenseScreenState
   final _amountController = TextEditingController();
   final _notesController = TextEditingController();
 
-  CategoryModel _category = CategoryModel.other;
+  late bool _isIncome = widget.income;
+  late CategoryModel _category = _isIncome
+      ? CategoryModel.otherIncome
+      : CategoryModel.other;
   DateTime _date = DateTime.now();
   TimeOfDay _time = TimeOfDay.now();
   bool _submitting = false;
   String? _selectedSourceId;
 
-  DateTime get _dateTime => DateTime(
-        _date.year,
-        _date.month,
-        _date.day,
-        _time.hour,
-        _time.minute,
-      );
+  DateTime get _dateTime =>
+      DateTime(_date.year, _date.month, _date.day, _time.hour, _time.minute);
 
   @override
   void dispose() {
@@ -64,12 +69,14 @@ class _AddPersonalExpenseScreenState
   }
 
   Future<void> _pickTime() async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: _time,
-    );
+    final picked = await showTimePicker(context: context, initialTime: _time);
     if (picked != null) setState(() => _time = picked);
   }
+
+  void _setKind(bool income) => setState(() {
+    _isIncome = income;
+    _category = income ? CategoryModel.otherIncome : CategoryModel.other;
+  });
 
   Future<void> _handleSave() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
@@ -80,11 +87,16 @@ class _AddPersonalExpenseScreenState
       );
       return;
     }
-    final sourceId = _selectedSourceId ??
+    final sourceId =
+        _selectedSourceId ??
         (wallet.sources.length == 1 ? wallet.sources.first.id : null);
     if (sourceId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Pick a source to pay from.')),
+        SnackBar(
+          content: Text(
+            _isIncome ? AppStrings.pickReceiveSource : AppStrings.pickPaySource,
+          ),
+        ),
       );
       return;
     }
@@ -92,35 +104,44 @@ class _AddPersonalExpenseScreenState
 
     setState(() => _submitting = true);
     try {
-      final created =
-          await ref.read(personalExpensesProvider.notifier).addExpense(
-                description: _titleController.text.trim(),
-                amount: amount,
-                currency: 'INR',
-                category: _category.id,
-                notes: _notesController.text.trim().isEmpty
-                    ? null
-                    : _notesController.text.trim(),
-                expenseDate: _dateTime,
-              );
-      // Deduct from the chosen wallet source AFTER the backend save succeeds.
-      await ref.read(walletProvider.notifier).deductForExpense(
+      final created = await ref
+          .read(personalExpensesProvider.notifier)
+          .addExpense(
+            description: _titleController.text.trim(),
+            amount: amount,
+            currency: 'INR',
+            category: _category.id,
+            notes: _notesController.text.trim().isEmpty
+                ? null
+                : _notesController.text.trim(),
+            expenseDate: _dateTime,
+            isIncome: _isIncome,
+          );
+      // Move the chosen wallet source AFTER the backend save succeeds:
+      // down for an expense, up for an income.
+      await ref
+          .read(walletProvider.notifier)
+          .deductForExpense(
             sourceId: sourceId,
             expenseId: created.id,
-            amount: amount,
+            amount: _isIncome ? -amount : amount,
           );
       ref.invalidate(dashboardProvider);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('✓ Personal expense added')),
+        SnackBar(
+          content: Text(
+            '✓ ${_isIncome ? AppStrings.incomeAdded : AppStrings.personalExpenseAdded}',
+          ),
+        ),
       );
       context.pop();
     } catch (e) {
       if (!mounted) return;
       setState(() => _submitting = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not save: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not save: $e')));
     }
   }
 
@@ -128,24 +149,27 @@ class _AddPersonalExpenseScreenState
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final screenWidth = MediaQuery.sizeOf(context).width;
+    final canAddIncome = watchFeature(ref, 'personalIncome');
     final maxFormWidth = screenWidth < 600
         ? double.infinity
         : screenWidth < 1100
-            ? 560.0
-            : 720.0;
+        ? 560.0
+        : 720.0;
 
     return Scaffold(
       backgroundColor: AppColors.background(isDark),
       appBar: _TopBar(
         isDark: isDark,
-        title: 'Add personal expense',
+        title: _isIncome ? AppStrings.addIncome : AppStrings.addPersonalExpense,
         onBack: () => Navigator.of(context).pop(),
       ),
       body: SafeArea(
         bottom: false,
         child: SingleChildScrollView(
           padding: EdgeInsets.symmetric(
-              horizontal: screenWidth < 600 ? 20 : 32, vertical: 24),
+            horizontal: screenWidth < 600 ? 20 : 32,
+            vertical: 24,
+          ),
           child: Center(
             child: ConstrainedBox(
               constraints: BoxConstraints(maxWidth: maxFormWidth),
@@ -154,13 +178,18 @@ class _AddPersonalExpenseScreenState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    if (canAddIncome) ...[
+                      EntryKindToggle(isIncome: _isIncome, onChanged: _setKind),
+                      const SizedBox(height: 20),
+                    ],
                     AppTextField(
                       label: 'Amount',
                       hint: '0.00',
                       controller: _amountController,
                       autofocus: true,
                       keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true),
+                        decimal: true,
+                      ),
                       prefixIcon: Icons.currency_rupee_rounded,
                       inputFormatters: [
                         FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
@@ -176,7 +205,9 @@ class _AddPersonalExpenseScreenState
                     const SizedBox(height: 16),
                     AppTextField(
                       label: 'Description',
-                      hint: 'e.g. Coffee, Fuel, Subscription',
+                      hint: _isIncome
+                          ? AppStrings.incomeHint
+                          : 'e.g. Coffee, Fuel, Subscription',
                       controller: _titleController,
                       prefixIcon: Icons.edit_note_rounded,
                       validator: (v) {
@@ -187,12 +218,17 @@ class _AddPersonalExpenseScreenState
                     ),
                     const SizedBox(height: 16),
                     _SourcePicker(
+                      label: _isIncome
+                          ? AppStrings.receivedIn
+                          : AppStrings.payFrom,
                       selectedId: _selectedSourceId,
-                      onChanged: (id) =>
-                          setState(() => _selectedSourceId = id),
+                      onChanged: (id) => setState(() => _selectedSourceId = id),
                     ),
                     const SizedBox(height: 16),
                     _CategoryPicker(
+                      options: _isIncome
+                          ? CategoryModel.income
+                          : CategoryModel.all,
                       value: _category,
                       onChanged: (c) => setState(() => _category = c),
                     ),
@@ -208,10 +244,7 @@ class _AddPersonalExpenseScreenState
                         ),
                         const SizedBox(width: 12),
                         Expanded(
-                          child: _TimePickerTile(
-                            time: _time,
-                            onTap: _pickTime,
-                          ),
+                          child: _TimePickerTile(time: _time, onTap: _pickTime),
                         ),
                       ],
                     ),
@@ -226,7 +259,7 @@ class _AddPersonalExpenseScreenState
                     const SizedBox(height: 28),
                     _GradientSaveButton(
                       isDark: isDark,
-                      label: 'Save expense',
+                      label: _isIncome ? AppStrings.saveIncome : 'Save expense',
                       loading: _submitting,
                       onTap: _submitting ? null : _handleSave,
                     ),
@@ -242,7 +275,12 @@ class _AddPersonalExpenseScreenState
 }
 
 class _CategoryPicker extends StatelessWidget {
-  const _CategoryPicker({required this.value, required this.onChanged});
+  const _CategoryPicker({
+    required this.options,
+    required this.value,
+    required this.onChanged,
+  });
+  final List<CategoryModel> options;
   final CategoryModel value;
   final ValueChanged<CategoryModel> onChanged;
 
@@ -267,17 +305,19 @@ class _CategoryPicker extends StatelessWidget {
         Wrap(
           spacing: 8,
           runSpacing: 8,
-          children: CategoryModel.all.map((c) {
+          children: options.map((c) {
             final selected = c.id == value.id;
             return ChoiceChip(
               label: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(c.icon,
-                      size: 16,
-                      color: selected
-                          ? Colors.white
-                          : AppColors.textSecondary(isDark)),
+                  Icon(
+                    c.icon,
+                    size: 16,
+                    color: selected
+                        ? Colors.white
+                        : AppColors.textSecondary(isDark),
+                  ),
                   const SizedBox(width: 4),
                   Text(c.name),
                 ],
@@ -286,9 +326,7 @@ class _CategoryPicker extends StatelessWidget {
               onSelected: (_) => onChanged(c),
               selectedColor: AppColors.brand,
               labelStyle: TextStyle(
-                color: selected
-                    ? Colors.white
-                    : AppColors.textPrimary(isDark),
+                color: selected ? Colors.white : AppColors.textPrimary(isDark),
                 fontWeight: FontWeight.w500,
               ),
             );
@@ -300,8 +338,13 @@ class _CategoryPicker extends StatelessWidget {
 }
 
 class _SourcePicker extends ConsumerWidget {
-  const _SourcePicker({required this.selectedId, required this.onChanged});
+  const _SourcePicker({
+    required this.label,
+    required this.selectedId,
+    required this.onChanged,
+  });
 
+  final String label;
   final String? selectedId;
   final ValueChanged<String?> onChanged;
 
@@ -323,12 +366,15 @@ class _SourcePicker extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('No wallet sources yet',
-                  style: AppTextStyles.body1(isDark)
-                      .copyWith(fontWeight: FontWeight.w600)),
+              Text(
+                'No wallet sources yet',
+                style: AppTextStyles.body1(
+                  isDark,
+                ).copyWith(fontWeight: FontWeight.w600),
+              ),
               const SizedBox(height: 4),
               Text(
-                'Add a cash or bank source to track this expense against your balance.',
+                'Add a cash or bank source to track it against your balance.',
                 style: AppTextStyles.caption(isDark),
               ),
               const SizedBox(height: 12),
@@ -360,9 +406,10 @@ class _SourcePicker extends ConsumerWidget {
         Padding(
           padding: const EdgeInsets.only(bottom: 8),
           child: Text(
-            'Pay from',
-            style: AppTextStyles.body2(isDark)
-                .copyWith(fontWeight: FontWeight.w600),
+            label,
+            style: AppTextStyles.body2(
+              isDark,
+            ).copyWith(fontWeight: FontWeight.w600),
           ),
         ),
         Wrap(
@@ -393,8 +440,8 @@ class _SourcePicker extends ConsumerWidget {
                       color: selected
                           ? Colors.white
                           : (lowBalance
-                              ? AppColors.errorText(isDark)
-                              : AppColors.textSecondary(isDark)),
+                                ? AppColors.errorText(isDark)
+                                : AppColors.textSecondary(isDark)),
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -404,9 +451,7 @@ class _SourcePicker extends ConsumerWidget {
               onSelected: (_) => onChanged(s.id),
               selectedColor: AppColors.brand,
               labelStyle: TextStyle(
-                color: selected
-                    ? Colors.white
-                    : AppColors.textPrimary(isDark),
+                color: selected ? Colors.white : AppColors.textPrimary(isDark),
               ),
             );
           }).toList(),
@@ -435,9 +480,7 @@ class _DatePickerTile extends StatelessWidget {
         decoration: InputDecoration(
           labelText: 'Date',
           prefixIcon: const Icon(Icons.event_rounded),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
         ),
         child: Text(DateFormat('MMM d, yyyy').format(date)),
       ),
@@ -459,9 +502,7 @@ class _TimePickerTile extends StatelessWidget {
         decoration: InputDecoration(
           labelText: 'Time',
           prefixIcon: const Icon(Icons.schedule_rounded),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
         ),
         child: Text(time.format(context)),
       ),

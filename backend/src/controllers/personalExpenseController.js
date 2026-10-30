@@ -7,6 +7,8 @@ import PersonalExpense from '../models/PersonalExpense.js';
 const getPersonalExpenses = async (req, res, next) => {
   try {
     const { userId, page = 1, limit = 50 } = req.query;
+    // Apps that know about income ask for it; older ones only get expenses.
+    const includeIncome = req.query.includeIncome === '1';
 
     if (!userId) {
       return res.status(400).json({
@@ -24,8 +26,8 @@ const getPersonalExpenses = async (req, res, next) => {
     }
 
     const offset = (page - 1) * limit;
-    const expenses = await PersonalExpense.findByUserId(userId, parseInt(limit), offset);
-    const total = await PersonalExpense.countByUserId(userId);
+    const expenses = await PersonalExpense.findByUserId(userId, parseInt(limit), offset, includeIncome);
+    const total = await PersonalExpense.countByUserId(userId, includeIncome);
 
     res.json({
       success: true,
@@ -82,10 +84,11 @@ const getPersonalExpense = async (req, res, next) => {
  */
 const createPersonalExpense = async (req, res, next) => {
   try {
-    const { description, amount, currency, category, receiptBase64, notes, expenseDate } = req.body;
+    const { kind, description, amount, currency, category, receiptBase64, notes, expenseDate } = req.body;
 
     const expense = await PersonalExpense.create({
       userId: req.user.id,
+      kind,
       description,
       amount,
       currency,
@@ -112,7 +115,7 @@ const createPersonalExpense = async (req, res, next) => {
 const updatePersonalExpense = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { description, amount, currency, category, receiptBase64, notes, expenseDate } = req.body;
+    const { kind, description, amount, currency, category, receiptBase64, notes, expenseDate } = req.body;
 
     // Get expense to verify ownership
     const existingExpense = await PersonalExpense.findById(id);
@@ -133,6 +136,7 @@ const updatePersonalExpense = async (req, res, next) => {
     }
 
     const expense = await PersonalExpense.update(id, {
+      kind,
       description,
       amount,
       currency,

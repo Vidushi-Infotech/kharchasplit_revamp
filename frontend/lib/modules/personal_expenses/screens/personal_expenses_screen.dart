@@ -7,6 +7,8 @@ import '../../../core/responsive/content_width.dart';
 import '../../../core/responsive/breakpoints.dart';
 import '../../../components/components.dart';
 import '../../../components/buttons/donate_heart_button.dart';
+import '../../../core/constants/app_strings.dart';
+import '../../../core/state/feature_flags_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/currency_formatter.dart';
@@ -15,6 +17,7 @@ import '../../../models/personal_expense_model.dart';
 import '../../../models/wallet_source_model.dart';
 import '../state/personal_expenses_provider.dart';
 import '../state/wallet_provider.dart';
+import '../widgets/cash_flow_card.dart';
 import '../widgets/personal_expense_tile.dart';
 import '../widgets/wallet_setup_sheet.dart';
 
@@ -165,6 +168,9 @@ class _Body extends ConsumerWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final wallet = ref.watch(walletProvider).value ?? WalletState.empty;
     final spent = ref.watch(personalExpensesTotalProvider);
+    final withIncome = watchFeature(ref, 'personalIncome');
+    final flow = ref.watch(personalCashFlowProvider);
+    final expenseCount = allItems.where((e) => !e.isIncome).length;
     final grouped = _groupByDay(visibleItems);
     final hasAnyExpenses = allItems.isNotEmpty;
     final isFilteringEmpty = hasAnyExpenses && visibleItems.isEmpty;
@@ -190,11 +196,23 @@ class _Body extends ConsumerWidget {
                 : _WalletCard(
                     wallet: wallet,
                     spent: spent,
-                    expenseCount: allItems.length,
+                    expenseCount: expenseCount,
                     onTap: () => WalletSetupSheet.show(context),
                   ),
           ),
         ),
+        if (withIncome && hasAnyExpenses)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+              child: CashFlowCard(
+                flow: flow,
+                onAddIncome: flow.income == 0
+                    ? () => context.push('/home/personal/new?kind=income')
+                    : null,
+              ),
+            ),
+          ),
         if (!hasAnyExpenses)
           SliverFillRemaining(
             hasScrollBody: false,
@@ -232,7 +250,8 @@ class _Body extends ConsumerWidget {
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 6, 20, 8),
               child: Text(
-                'EXPENSES',
+                (withIncome ? AppStrings.transactions : 'Expenses')
+                    .toUpperCase(),
                 style: AppTextStyles.caption(isDark).copyWith(
                   color: AppColors.textSecondary(isDark),
                   fontWeight: FontWeight.w700,

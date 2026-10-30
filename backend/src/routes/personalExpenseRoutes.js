@@ -15,6 +15,7 @@ router.post(
   authenticate,
   idempotent,
   [
+    body('kind').optional().isIn(['expense', 'income']),
     body('description').trim().isLength({ min: 1, max: 500 }),
     body('amount').custom((value) => {
       const num = typeof value === 'number' ? value : parseFloat(value);
@@ -26,7 +27,13 @@ router.post(
   personalExpenseController.createPersonalExpense
 );
 
-router.put('/:id', authenticate, personalExpenseController.updatePersonalExpense);
+router.put(
+  '/:id',
+  authenticate,
+  [body('kind').optional().isIn(['expense', 'income'])],
+  validate,
+  personalExpenseController.updatePersonalExpense
+);
 router.delete('/:id', authenticate, personalExpenseController.deletePersonalExpense);
 
 export default router;

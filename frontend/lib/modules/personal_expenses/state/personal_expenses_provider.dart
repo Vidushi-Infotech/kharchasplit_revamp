@@ -6,10 +6,10 @@ import '../../../models/personal_expense_model.dart';
 import '../../auth/state/auth_provider.dart';
 import 'wallet_provider.dart';
 
-final personalExpensesProvider = AsyncNotifierProvider<
-    PersonalExpensesNotifier, List<PersonalExpenseModel>>(
-  PersonalExpensesNotifier.new,
-);
+final personalExpensesProvider =
+    AsyncNotifierProvider<PersonalExpensesNotifier, List<PersonalExpenseModel>>(
+      PersonalExpensesNotifier.new,
+    );
 
 class PersonalExpensesNotifier
     extends AsyncNotifier<List<PersonalExpenseModel>> {
@@ -17,9 +17,7 @@ class PersonalExpensesNotifier
   Future<List<PersonalExpenseModel>> build() async {
     final user = ref.watch(authProvider).user;
     if (user == null) return const [];
-    return ref
-        .read(personalExpensesRepositoryProvider)
-        .listForUser(user.id);
+    return ref.read(personalExpensesRepositoryProvider).listForUser(user.id);
   }
 
   /// Re-fetches while keeping the current data on screen. `invalidateSelf`
@@ -45,10 +43,12 @@ class PersonalExpensesNotifier
     String? category,
     String? notes,
     DateTime? expenseDate,
+    bool isIncome = false,
   }) async {
     final created = await ref
         .read(personalExpensesRepositoryProvider)
         .create(
+          isIncome: isIncome,
           description: description,
           amount: amount,
           currency: currency,
@@ -61,23 +61,59 @@ class PersonalExpensesNotifier
   }
 
   Future<void> deleteExpense(String id) async {
-    // Look up amount before deleting so we know how much to refund.
+    // Look up the entry before deleting so we know how much to put back.
     final items = state.value ?? const <PersonalExpenseModel>[];
     final target = items.firstWhereOrNull((e) => e.id == id);
     await ref.read(personalExpensesRepositoryProvider).delete(id);
-    state = state.whenData(
-        (items) => items.where((e) => e.id != id).toList());
+    state = state.whenData((items) => items.where((e) => e.id != id).toList());
     if (target != null) {
       await ref
           .read(walletProvider.notifier)
-          .refundExpense(expenseId: id, amount: target.amount);
+          .refundExpense(expenseId: id, amount: -target.signedAmount);
     }
   }
 }
 
 /// Total spent across all visible personal expenses (currency-agnostic sum).
+/// Income isn't spending, so it's left out.
 final personalExpensesTotalProvider = Provider<double>((ref) {
   final items =
-      ref.watch(personalExpensesProvider).value ?? const <PersonalExpenseModel>[];
-  return items.fold<double>(0, (sum, e) => sum + e.amount);
+      ref.watch(personalExpensesProvider).value ??
+      const <PersonalExpenseModel>[];
+  return items
+      .where((e) => !e.isIncome)
+      .fold<double>(0, (sum, e) => sum + e.amount);
+});
+
+/// Money in and out over one calendar month.
+class CashFlow {
+  const CashFlow({required this.income, required this.spent});
+
+  final double income;
+  final double spent;
+
+  double get net => income - spent;
+
+  static CashFlow of(Iterable<PersonalExpenseModel> items, DateTime month) {
+    var income = 0.0;
+    var spent = 0.0;
+    for (final e in items) {
+      final d = e.expenseDate;
+      if (d.year != month.year || d.month != month.month) continue;
+      if (e.isIncome) {
+        income += e.amount;
+      } else {
+        spent += e.amount;
+      }
+    }
+    return CashFlow(income: income, spent: spent);
+  }
+}
+
+/// This month's cash flow (In · Out · Net) for the Personal home.
+final personalCashFlowProvider = Provider<CashFlow>((ref) {
+  final items =
+      ref.watch(personalExpensesProvider).value ??
+      const <PersonalExpenseModel>[];
+  return CashFlow.of(items, DateTime.now());
 });

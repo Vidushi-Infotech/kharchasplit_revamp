@@ -6,10 +6,7 @@ import '../../../models/wallet_source_model.dart';
 import '../../auth/state/auth_provider.dart';
 
 class WalletState {
-  const WalletState({
-    required this.sources,
-    required this.expenseSourceMap,
-  });
+  const WalletState({required this.sources, required this.expenseSourceMap});
 
   final List<WalletSource> sources;
   final Map<String, String> expenseSourceMap;
@@ -22,15 +19,15 @@ class WalletState {
   WalletState copyWith({
     List<WalletSource>? sources,
     Map<String, String>? expenseSourceMap,
-  }) =>
-      WalletState(
-        sources: sources ?? this.sources,
-        expenseSourceMap: expenseSourceMap ?? this.expenseSourceMap,
-      );
+  }) => WalletState(
+    sources: sources ?? this.sources,
+    expenseSourceMap: expenseSourceMap ?? this.expenseSourceMap,
+  );
 }
 
-final walletProvider =
-    AsyncNotifierProvider<WalletNotifier, WalletState>(WalletNotifier.new);
+final walletProvider = AsyncNotifierProvider<WalletNotifier, WalletState>(
+  WalletNotifier.new,
+);
 
 class WalletNotifier extends AsyncNotifier<WalletState> {
   static const _uuid = Uuid();
@@ -84,11 +81,7 @@ class WalletNotifier extends AsyncNotifier<WalletState> {
     state = AsyncData(current.copyWith(sources: updated));
   }
 
-  Future<void> editSource(
-    String id, {
-    String? name,
-    double? balance,
-  }) async {
+  Future<void> editSource(String id, {String? name, double? balance}) async {
     final current = state.value ?? WalletState.empty;
     final updated = current.sources.map((s) {
       if (s.id != id) return s;
@@ -108,6 +101,7 @@ class WalletNotifier extends AsyncNotifier<WalletState> {
   }
 
   // ─── Deduct / refund (called by personalExpensesProvider) ─────────────
+  /// Takes [amount] out of the source; a negative amount (income) adds it.
   Future<void> deductForExpense({
     required String sourceId,
     required String expenseId,
@@ -121,14 +115,14 @@ class WalletNotifier extends AsyncNotifier<WalletState> {
     final updatedMap = {...current.expenseSourceMap, expenseId: sourceId};
     await _persistSources(updatedSources);
     await _persistMap(updatedMap);
-    state = AsyncData(WalletState(
-      sources: updatedSources,
-      expenseSourceMap: updatedMap,
-    ));
+    state = AsyncData(
+      WalletState(sources: updatedSources, expenseSourceMap: updatedMap),
+    );
   }
 
-  /// Refund the amount to whatever source originally paid. Silent no-op
-  /// if the mapping or source is gone.
+  /// Put [amount] back into whatever source the entry used (negative for an
+  /// income, which takes it out again). Silent no-op if the mapping or
+  /// source is gone.
   Future<void> refundExpense({
     required String expenseId,
     required double amount,
@@ -146,9 +140,8 @@ class WalletNotifier extends AsyncNotifier<WalletState> {
         : current.sources;
     await _persistSources(updatedSources);
     await _persistMap(updatedMap);
-    state = AsyncData(WalletState(
-      sources: updatedSources,
-      expenseSourceMap: updatedMap,
-    ));
+    state = AsyncData(
+      WalletState(sources: updatedSources, expenseSourceMap: updatedMap),
+    );
   }
 }

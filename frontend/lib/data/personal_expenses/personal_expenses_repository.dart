@@ -28,6 +28,8 @@ class PersonalExpensesRepository {
         'userId': userId,
         'page': page,
         'limit': limit,
+        // Without it the server leaves income out (for older apps).
+        'includeIncome': '1',
       },
     );
     final data = _ensureList(res);
@@ -51,10 +53,12 @@ class PersonalExpensesRepository {
     String? notes,
     DateTime? expenseDate,
     String? receiptBase64,
+    bool isIncome = false,
   }) async {
     final res = await _client.dio.post(
       '/personal-expenses',
       data: {
+        if (isIncome) 'kind': 'income',
         'description': description,
         'amount': amount,
         'currency': _normalizeCurrency(currency),

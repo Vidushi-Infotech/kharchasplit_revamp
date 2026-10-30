@@ -6,12 +6,7 @@ import 'split_model.dart';
 import 'user_model.dart';
 
 /// Split type enum
-enum SplitType {
-  equal,
-  exact,
-  percentage,
-  shares,
-}
+enum SplitType { equal, exact, percentage, shares }
 
 /// Expense model representing a single expense
 class ExpenseModel extends Equatable {
@@ -132,15 +127,16 @@ class ExpenseModel extends Equatable {
     final splitsRaw = json['splits'] ?? json['participants'];
     final splits = splitsRaw is List
         ? splitsRaw
-            .whereType<Map<String, dynamic>>()
-            .map(SplitModel.fromJson)
-            .toList()
+              .whereType<Map<String, dynamic>>()
+              .map(SplitModel.fromJson)
+              .toList()
         : <SplitModel>[];
 
     final categoryId = (json['category'] as String?)?.toLowerCase() ?? 'other';
     final category = CategoryModel.fromId(categoryId) ?? CategoryModel.other;
 
-    final dateRaw = json['expenseDate'] ??
+    final dateRaw =
+        json['expenseDate'] ??
         json['expense_date'] ??
         json['date'] ??
         json['created_at'];
@@ -150,12 +146,16 @@ class ExpenseModel extends Equatable {
     final payersRaw = json['payers'];
     final payers = payersRaw is List && payersRaw.isNotEmpty
         ? payersRaw
-            .whereType<Map<String, dynamic>>()
-            .map(ExpensePayer.fromJson)
-            .toList()
+              .whereType<Map<String, dynamic>>()
+              .map(ExpensePayer.fromJson)
+              .toList()
         : [
             if (paidBy.id.isNotEmpty)
-              ExpensePayer(userId: paidBy.id, name: paidBy.name, amount: amount),
+              ExpensePayer(
+                userId: paidBy.id,
+                name: paidBy.name,
+                amount: amount,
+              ),
           ];
     final meta = json['split_meta'] ?? json['splitMeta'];
     final receipt =
@@ -174,30 +174,36 @@ class ExpenseModel extends Equatable {
       title: (json['description'] ?? json['title'] ?? '') as String,
       amount: amount,
       currency: CurrencyFormatter.symbolFor(
-          (json['currency'] as String?) ?? 'INR'),
+        (json['currency'] as String?) ?? 'INR',
+      ),
       category: category,
       paidBy: paidBy,
       splits: splits,
       groupId: (json['groupId'] ?? json['group_id']) as String?,
-      date: (dateRaw is String ? parseServerCalendarDate(dateRaw) : null) ??
+      date:
+          (dateRaw is String ? parseServerCalendarDate(dateRaw) : null) ??
           DateTime.now(),
       notes: json['notes'] as String?,
       receiptBase64: receipt,
-      hasReceipt: json['has_receipt'] == true ||
+      hasReceipt:
+          json['has_receipt'] == true ||
           json['hasReceipt'] == true ||
           (receipt != null && receipt.isNotEmpty),
       originalCurrency: (originalCurrency?.isEmpty ?? true)
           ? null
           : originalCurrency,
       originalAmount: _parseOptionalAmount(
-          json['original_amount'] ?? json['originalAmount']),
+        json['original_amount'] ?? json['originalAmount'],
+      ),
       fxRate: _parseOptionalAmount(json['fx_rate'] ?? json['fxRate']),
       fxDate: fxDateRaw is String ? DateTime.tryParse(fxDateRaw) : null,
       splitType: _parseSplitType(
-          (json['splitType'] ?? json['split_type']) as String?),
+        (json['splitType'] ?? json['split_type']) as String?,
+      ),
       isSettled: (json['isSettled'] as bool?) ?? false,
-      createdAt:
-          createdRaw is String ? DateTime.parse(createdRaw) : DateTime.now(),
+      createdAt: createdRaw is String
+          ? DateTime.parse(createdRaw)
+          : DateTime.now(),
     );
   }
 
@@ -282,53 +288,58 @@ class ExpenseModel extends Equatable {
   }
 
   /// Total amount across all splits (should equal amount)
-  double get totalSplitAmount => splits.fold(0, (sum, split) => sum + split.owedShare);
+  double get totalSplitAmount =>
+      splits.fold(0, (sum, split) => sum + split.owedShare);
 
   /// Check if splits are valid (sum equals expense amount)
   bool get isValidSplit => (totalSplitAmount - amount).abs() < 0.01;
 
   @override
   List<Object?> get props => [
-        id,
-        title,
-        amount,
-        currency,
-        category,
-        paidBy,
-        splits,
-        groupId,
-        date,
-        notes,
-        receiptBase64,
-        splitType,
-        isSettled,
-        createdAt,
-        payers,
-        splitMeta,
-        recurringRuleId,
-        updatedAtRaw,
-        syncState,
-        originalAmount,
-        originalCurrency,
-        fxRate,
-        fxDate,
-        hasReceipt,
-      ];
+    id,
+    title,
+    amount,
+    currency,
+    category,
+    paidBy,
+    splits,
+    groupId,
+    date,
+    notes,
+    receiptBase64,
+    splitType,
+    isSettled,
+    createdAt,
+    payers,
+    splitMeta,
+    recurringRuleId,
+    updatedAtRaw,
+    syncState,
+    originalAmount,
+    originalCurrency,
+    fxRate,
+    fxDate,
+    hasReceipt,
+  ];
 }
 
 /// One payer of an expense (`expense_payers`).
 class ExpensePayer extends Equatable {
-  const ExpensePayer({required this.userId, required this.name, required this.amount});
+  const ExpensePayer({
+    required this.userId,
+    required this.name,
+    required this.amount,
+  });
 
   final String userId;
   final String name;
   final double amount;
 
   factory ExpensePayer.fromJson(Map<String, dynamic> json) => ExpensePayer(
-        userId: (json['user_id'] ?? json['userId'] ?? '') as String,
-        name: (json['name'] as String?) ?? 'Unknown',
-        amount: ExpenseModel._parseAmount(json['amount']),
-      );
+    userId: (json['user_id'] ?? json['userId'] ?? '') as String,
+    name: (json['name'] as String?) ?? 'Unknown',
+    amount: ExpenseModel._parseAmount(json['amount']),
+  );
 
   @override
   List<Object?> get props => [userId, name, amount];

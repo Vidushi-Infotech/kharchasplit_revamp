@@ -14,11 +14,11 @@ enum SettlementMethod {
   final String apiValue;
 
   String get label => switch (this) {
-        SettlementMethod.upi => 'UPI',
-        SettlementMethod.cash => 'Cash',
-        SettlementMethod.bankTransfer => 'Bank transfer',
-        SettlementMethod.other => 'Other',
-      };
+    SettlementMethod.upi => 'UPI',
+    SettlementMethod.cash => 'Cash',
+    SettlementMethod.bankTransfer => 'Bank transfer',
+    SettlementMethod.other => 'Other',
+  };
 
   /// Null for unknown / missing values (rows recorded before the column
   /// existed, or by older app builds).
@@ -31,11 +31,7 @@ enum SettlementMethod {
 }
 
 /// Settlement status enum
-enum SettlementStatus {
-  pending,
-  completed,
-  failed,
-}
+enum SettlementStatus { pending, completed, failed }
 
 /// Settlement model representing a payment between two users
 class SettlementModel extends Equatable {
@@ -44,6 +40,7 @@ class SettlementModel extends Equatable {
   final UserModel toUser;
   final double amount;
   final String currency;
+
   /// Null when the payer didn't record a method (older rows / app builds).
   final SettlementMethod? method;
   final DateTime date;
@@ -99,17 +96,17 @@ class SettlementModel extends Equatable {
           ? (json['amount'] as num).toDouble()
           : double.tryParse(json['amount']?.toString() ?? '') ?? 0,
       currency: CurrencyFormatter.symbolFor(
-          (json['currency'] as String?) ?? 'INR'),
+        (json['currency'] as String?) ?? 'INR',
+      ),
       method: SettlementMethod.fromApi(json['method']),
       date: settledAt is String ? DateTime.parse(settledAt) : DateTime.now(),
       note: json['notes'] as String?,
       status: statusRaw == 'pending'
           ? SettlementStatus.pending
           : statusRaw == 'failed'
-              ? SettlementStatus.failed
-              : SettlementStatus.completed,
-      createdAt:
-          created is String ? DateTime.parse(created) : DateTime.now(),
+          ? SettlementStatus.failed
+          : SettlementStatus.completed,
+      createdAt: created is String ? DateTime.parse(created) : DateTime.now(),
       countsTowardBalance: json['status'] == null || statusRaw == 'paid',
     );
   }
@@ -159,16 +156,16 @@ class SettlementModel extends Equatable {
 
   @override
   List<Object?> get props => [
-        id,
-        fromUser,
-        toUser,
-        amount,
-        currency,
-        method,
-        date,
-        note,
-        status,
-        createdAt,
-        countsTowardBalance,
-      ];
+    id,
+    fromUser,
+    toUser,
+    amount,
+    currency,
+    method,
+    date,
+    note,
+    status,
+    createdAt,
+    countsTowardBalance,
+  ];
 }

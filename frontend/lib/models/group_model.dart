@@ -3,33 +3,31 @@ import '../core/utils/currency_formatter.dart';
 import 'user_model.dart';
 
 /// Group category enum
-enum GroupCategory {
-  trip,
-  home,
-  couple,
-  work,
-  other,
-}
+enum GroupCategory { trip, home, couple, work, other }
 
 /// Group model representing a group of people splitting expenses
 class GroupModel extends Equatable {
   final String id;
   final String name;
   final String coverEmoji;
+
   /// Optional base64-encoded cover photo. Populated by the backend's
   /// `coverImageBase64` field on findById/findAll responses; null when
   /// the group still uses the emoji-only fallback.
   final String? coverImageBase64;
   final List<UserModel> members;
   final double totalExpenses;
+
   /// Signed per-group net for the current user. Positive = others owe me net;
   /// negative = I owe net. Used for the group card.
   final double myBalance;
+
   /// Sum of positive pair-nets within this group — i.e. how much I am owed
   /// by people in this group, ignoring debts I have within the same group.
   /// Used by the "You're owed" detail screen so a group appears even when
   /// myBalance is negative.
   final double youAreOwedInGroup;
+
   /// Sum of |negative pair-nets| within this group — i.e. how much I owe
   /// to people in this group. Used by the "You owe" detail screen so a
   /// group appears even when myBalance is positive.
@@ -97,37 +95,40 @@ class GroupModel extends Equatable {
     final rawMembers = json['members'];
     final members = rawMembers is List
         ? rawMembers
-            .whereType<Map<String, dynamic>>()
-            .map(UserModel.fromJson)
-            .toList()
+              .whereType<Map<String, dynamic>>()
+              .map(UserModel.fromJson)
+              .toList()
         : <UserModel>[];
     final created = json['created_at'] ?? json['createdAt'];
-    final rawCover = (json['coverImageBase64'] ?? json['cover_image_base64'])
-        as String?;
+    final rawCover =
+        (json['coverImageBase64'] ?? json['cover_image_base64']) as String?;
     return GroupModel(
       id: json['id'] as String,
       name: (json['name'] as String?) ?? '',
       coverEmoji: (json['coverEmoji'] as String?) ?? '👥',
-      coverImageBase64:
-          (rawCover != null && rawCover.isNotEmpty) ? rawCover : null,
+      coverImageBase64: (rawCover != null && rawCover.isNotEmpty)
+          ? rawCover
+          : null,
       members: members,
       totalExpenses: (json['totalExpenses'] as num?)?.toDouble() ?? 0,
       myBalance: (json['myBalance'] as num?)?.toDouble() ?? 0,
       // Pair-level totals from the backend. Fall back to deriving from
       // myBalance when an older backend hasn't shipped these fields yet:
       // positive myBalance → all owed-to-me; negative → all owe.
-      youAreOwedInGroup: (json['youAreOwedInGroup'] as num?)?.toDouble() ??
+      youAreOwedInGroup:
+          (json['youAreOwedInGroup'] as num?)?.toDouble() ??
           (((json['myBalance'] as num?)?.toDouble() ?? 0) > 0
               ? ((json['myBalance'] as num).toDouble())
               : 0),
-      youOweInGroup: (json['youOweInGroup'] as num?)?.toDouble() ??
+      youOweInGroup:
+          (json['youOweInGroup'] as num?)?.toDouble() ??
           (((json['myBalance'] as num?)?.toDouble() ?? 0) < 0
               ? -((json['myBalance'] as num).toDouble())
               : 0),
       currency: CurrencyFormatter.symbolFor(
-          (json['currency'] as String?) ?? 'INR'),
-      createdAt:
-          created is String ? DateTime.parse(created) : DateTime.now(),
+        (json['currency'] as String?) ?? 'INR',
+      ),
+      createdAt: created is String ? DateTime.parse(created) : DateTime.now(),
       category: GroupCategory.other,
       createdBy: (json['createdBy'] ?? json['created_by']) as String?,
       isArchived: (json['isArchived'] ?? json['is_archived'] ?? false) == true,
@@ -215,27 +216,27 @@ class GroupModel extends Equatable {
 
   @override
   List<Object?> get props => [
-        id,
-        name,
-        coverEmoji,
-        coverImageBase64,
-        members,
-        totalExpenses,
-        myBalance,
-        youAreOwedInGroup,
-        youOweInGroup,
-        currency,
-        createdAt,
-        category,
-        createdBy,
-        isArchived,
-        archivedAt,
-        completedAt,
-        simplifyDebts,
-        simplifiedTransfers,
-        kind,
-        defaultSplit,
-      ];
+    id,
+    name,
+    coverEmoji,
+    coverImageBase64,
+    members,
+    totalExpenses,
+    myBalance,
+    youAreOwedInGroup,
+    youOweInGroup,
+    currency,
+    createdAt,
+    category,
+    createdBy,
+    isArchived,
+    archivedAt,
+    completedAt,
+    simplifyDebts,
+    simplifiedTransfers,
+    kind,
+    defaultSplit,
+  ];
 }
 
 /// One payment in a group's simplified settle-up plan.

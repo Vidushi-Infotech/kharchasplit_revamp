@@ -477,6 +477,8 @@ const columnAdditions = [
   { table: 'personal_expenses', column: 'receipt_path', type: 'TEXT' },
   { table: 'personal_expenses', column: 'notes', type: 'TEXT' },
   { table: 'personal_expenses', column: 'is_deleted', type: 'BOOLEAN DEFAULT FALSE' },
+  // 025: money in vs money out (Personal mode income).
+  { table: 'personal_expenses', column: 'kind', type: "VARCHAR(10) NOT NULL DEFAULT 'expense'" },
 
   // Activities columns
   { table: 'activities', column: 'deleted_at', type: 'TIMESTAMP' },

@@ -203,6 +203,26 @@ abstract final class AppStrings {
   static const personal = 'Personal';
   static const switchToPersonal = 'Switch to Personal';
   static const switchToGroups = 'Switch to Groups';
+
+  // ── Personal mode: money in and out ─────────────────────────────────
+  static const personalHome = 'Home';
+  static const personalExpense = 'Expense';
+  static const personalIncome = 'Income';
+  static const addPersonalExpense = 'Add personal expense';
+  static const addIncome = 'Add income';
+  static const saveIncome = 'Save income';
+  static const incomeAdded = 'Income added';
+  static const personalExpenseAdded = 'Personal expense added';
+  static const payFrom = 'Pay from';
+  static const receivedIn = 'Received in';
+  static const pickPaySource = 'Pick a source to pay from.';
+  static const pickReceiveSource = 'Pick where the money went.';
+  static const incomeHint = 'e.g. Salary, Freelance, Refund';
+  static const thisMonth = 'This month';
+  static const moneyIn = 'In';
+  static const moneyOut = 'Out';
+  static const net = 'Net';
+  static const transactions = 'Transactions';
   static const reports = 'Reports';
   static const notifications = 'Notifications';
   static const goToGroups = 'Go to groups';

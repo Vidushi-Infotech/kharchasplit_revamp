@@ -26,7 +26,8 @@ class SplitModel extends Equatable {
     return SplitModel(
       userId: (json['userId'] ?? json['user_id'] ?? '') as String,
       userName:
-          (json['userName'] ?? json['user_name'] ?? json['name'] ?? '') as String,
+          (json['userName'] ?? json['user_name'] ?? json['name'] ?? '')
+              as String,
       userAvatarUrl: json['userAvatarUrl'] as String?,
       owedShare: _parseAmount(json['owedShare'] ?? json['amount']),
       paidShare: _parseAmount(json['paidShare']),
@@ -70,13 +71,13 @@ class SplitModel extends Equatable {
 
   @override
   List<Object?> get props => [
-        userId,
-        userName,
-        userAvatarUrl,
-        owedShare,
-        paidShare,
-        percentage,
-        shares,
-        isSettled,
-      ];
+    userId,
+    userName,
+    userAvatarUrl,
+    owedShare,
+    paidShare,
+    percentage,
+    shares,
+    isSettled,
+  ];
 }

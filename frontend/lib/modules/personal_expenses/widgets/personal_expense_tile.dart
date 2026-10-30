@@ -8,7 +8,8 @@ import '../../../core/utils/currency_formatter.dart';
 import '../../../models/personal_expense_model.dart';
 import '../state/personal_expenses_provider.dart';
 
-/// Compact, swipe-to-delete row for a single personal expense.
+/// Compact, swipe-to-delete row for a single personal expense or income
+/// (green, with a plus).
 /// Designed to sit inside a parent group card; do NOT wrap with another card.
 class PersonalExpenseTile extends ConsumerWidget {
   const PersonalExpenseTile({
@@ -27,7 +28,8 @@ class PersonalExpenseTile extends ConsumerWidget {
 
     return Semantics(
       label:
-          '${expense.title}, ${CurrencyFormatter.format(expense.amount, currency: expense.currency)}, '
+          '${expense.title}, ${expense.isIncome ? 'income ' : ''}'
+          '${CurrencyFormatter.format(expense.amount, currency: expense.currency)}, '
           '${expense.category.name}',
       child: Dismissible(
         key: ValueKey(expense.id),
@@ -93,9 +95,12 @@ class PersonalExpenseTile extends ConsumerWidget {
                       ),
                       const SizedBox(width: 10),
                       Text(
-                        '-${CurrencyFormatter.format(expense.amount, currency: expense.currency)}',
+                        '${expense.isIncome ? '+' : '-'}'
+                        '${CurrencyFormatter.format(expense.amount, currency: expense.currency)}',
                         style: AppTextStyles.body1(isDark).copyWith(
-                          color: AppColors.warning,
+                          color: expense.isIncome
+                              ? AppColors.success
+                              : AppColors.warning,
                           fontWeight: FontWeight.w700,
                           fontSize: 14,
                           letterSpacing: -0.2,
@@ -125,7 +130,7 @@ class PersonalExpenseTile extends ConsumerWidget {
     final result = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete expense?'),
+        title: Text(expense.isIncome ? 'Delete income?' : 'Delete expense?'),
         content: Text('"${expense.title}" will be removed permanently.'),
         actions: [
           TextButton(

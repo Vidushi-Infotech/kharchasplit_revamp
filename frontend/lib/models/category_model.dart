@@ -120,23 +120,86 @@ class CategoryModel extends Equatable {
 
   /// Get all predefined categories
   static List<CategoryModel> get all => [
-        food,
-        travel,
-        accommodation,
-        entertainment,
-        shopping,
-        utilities,
-        medical,
-        education,
-        gifts,
-        fuel,
-        work,
-        other,
-      ];
+    food,
+    travel,
+    accommodation,
+    entertainment,
+    shopping,
+    utilities,
+    medical,
+    education,
+    gifts,
+    fuel,
+    work,
+    other,
+  ];
 
-  /// Get category by ID. Falls back to `other` for unknown ids so callers
-  /// never see null and can render the fallback icon.
+  // Where money comes from (Personal mode income).
+  static const CategoryModel salary = CategoryModel(
+    id: 'salary',
+    name: 'Salary',
+    icon: Icons.payments_rounded,
+    colorHex: '#1FA971',
+  );
+
+  static const CategoryModel business = CategoryModel(
+    id: 'business',
+    name: 'Business',
+    icon: Icons.storefront_rounded,
+    colorHex: '#4D96FF',
+  );
+
+  static const CategoryModel freelance = CategoryModel(
+    id: 'freelance',
+    name: 'Freelance',
+    icon: Icons.laptop_mac_rounded,
+    colorHex: '#6C63FF',
+  );
+
+  static const CategoryModel interest = CategoryModel(
+    id: 'interest',
+    name: 'Interest',
+    icon: Icons.savings_rounded,
+    colorHex: '#FFB020',
+  );
+
+  static const CategoryModel refund = CategoryModel(
+    id: 'refund',
+    name: 'Refund',
+    icon: Icons.replay_rounded,
+    colorHex: '#45B7D1',
+  );
+
+  static const CategoryModel giftReceived = CategoryModel(
+    id: 'gift_received',
+    name: 'Gift',
+    icon: Icons.redeem_rounded,
+    colorHex: '#FF85A1',
+  );
+
+  static const CategoryModel otherIncome = CategoryModel(
+    id: 'other_income',
+    name: 'Other',
+    icon: Icons.add_card_rounded,
+    colorHex: '#95A5A6',
+  );
+
+  /// Income categories, offered when adding money in.
+  static List<CategoryModel> get income => [
+    salary,
+    business,
+    freelance,
+    interest,
+    refund,
+    giftReceived,
+    otherIncome,
+  ];
+
+  /// Get category by ID (expense or income). Falls back to `other` for
+  /// unknown ids so callers never see null and can render the fallback icon.
   static CategoryModel? fromId(String id) {
-    return all.firstWhereOrNull((cat) => cat.id == id) ?? other;
+    return all.firstWhereOrNull((cat) => cat.id == id) ??
+        income.firstWhereOrNull((cat) => cat.id == id) ??
+        other;
   }
 }

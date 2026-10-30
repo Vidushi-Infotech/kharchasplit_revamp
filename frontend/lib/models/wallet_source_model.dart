@@ -43,11 +43,11 @@ class WalletSource extends Equatable {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'type': type == WalletSourceType.bank ? 'bank' : 'cash',
-        'balance': balance,
-      };
+    'id': id,
+    'name': name,
+    'type': type == WalletSourceType.bank ? 'bank' : 'cash',
+    'balance': balance,
+  };
 
   @override
   List<Object?> get props => [id, name, type, balance];

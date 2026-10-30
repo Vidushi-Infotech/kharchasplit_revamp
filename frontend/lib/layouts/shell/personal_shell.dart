@@ -29,7 +29,7 @@ class PersonalShell extends StatelessWidget {
     ShellNavItem(
       icon: Icons.receipt_long_outlined,
       selectedIcon: Icons.receipt_long_rounded,
-      label: AppStrings.expenses,
+      label: AppStrings.personalHome,
     ),
     ShellNavItem(
       icon: Icons.account_circle_outlined,

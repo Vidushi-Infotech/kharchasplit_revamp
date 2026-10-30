@@ -52,8 +52,7 @@ class _WalletSetupSheetState extends ConsumerState<WalletSetupSheet> {
         return Container(
           decoration: BoxDecoration(
             color: AppColors.background(isDark),
-            borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(24)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
             border: Border.all(color: AppColors.divider(isDark)),
           ),
           child: Padding(
@@ -155,10 +154,7 @@ class _WalletSetupSheetState extends ConsumerState<WalletSetupSheet> {
                             ),
                           ),
                         ),
-                        _SourcesCard(
-                          sources: wallet.sources,
-                          isDark: isDark,
-                        ),
+                        _SourcesCard(sources: wallet.sources, isDark: isDark),
                         const SizedBox(height: 14),
                       ],
                       if (_showAddForm)
@@ -212,10 +208,9 @@ class _Empty extends StatelessWidget {
           const SizedBox(height: 14),
           Text(
             'Set up your wallet',
-            style: AppTextStyles.headline3(isDark).copyWith(
-              fontWeight: FontWeight.w700,
-              fontSize: 18,
-            ),
+            style: AppTextStyles.headline3(
+              isDark,
+            ).copyWith(fontWeight: FontWeight.w700, fontSize: 18),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 6),
@@ -223,10 +218,9 @@ class _Empty extends StatelessWidget {
             "Add cash or a bank account to track what's available "
             'before you log expenses.',
             textAlign: TextAlign.center,
-            style: AppTextStyles.body2(isDark).copyWith(
-              color: AppColors.textSecondary(isDark),
-              height: 1.4,
-            ),
+            style: AppTextStyles.body2(
+              isDark,
+            ).copyWith(color: AppColors.textSecondary(isDark), height: 1.4),
           ),
           const SizedBox(height: 18),
           _GradientButton(
@@ -299,9 +293,7 @@ class _SourceRow extends ConsumerWidget {
               ),
             ),
             child: Icon(
-              isCash
-                  ? Icons.payments_rounded
-                  : Icons.account_balance_rounded,
+              isCash ? Icons.payments_rounded : Icons.account_balance_rounded,
               size: 18,
               color: AppColors.tealDark,
             ),
@@ -314,10 +306,9 @@ class _SourceRow extends ConsumerWidget {
               children: [
                 Text(
                   source.name,
-                  style: AppTextStyles.body1(isDark).copyWith(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
-                  ),
+                  style: AppTextStyles.body1(
+                    isDark,
+                  ).copyWith(fontWeight: FontWeight.w700, fontSize: 14),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -356,10 +347,7 @@ class _SourceRow extends ConsumerWidget {
             visualDensity: VisualDensity.compact,
             tooltip: 'Remove',
             onPressed: () => _confirmRemove(context, ref),
-            icon: Icon(
-              Icons.delete_outline_rounded,
-              color: AppColors.warning,
-            ),
+            icon: Icon(Icons.delete_outline_rounded, color: AppColors.warning),
           ),
         ],
       ),
@@ -367,16 +355,16 @@ class _SourceRow extends ConsumerWidget {
   }
 
   Future<void> _editBalance(BuildContext context, WidgetRef ref) async {
-    final controller =
-        TextEditingController(text: source.balance.toStringAsFixed(2));
+    final controller = TextEditingController(
+      text: source.balance.toStringAsFixed(2),
+    );
     final newBalance = await showModalBottomSheet<double>(
       context: context,
       useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (sheetContext) {
-        final isDark =
-            Theme.of(sheetContext).brightness == Brightness.dark;
+        final isDark = Theme.of(sheetContext).brightness == Brightness.dark;
         return SafeArea(
           top: false,
           child: Padding(
@@ -386,8 +374,9 @@ class _SourceRow extends ConsumerWidget {
             child: Container(
               decoration: BoxDecoration(
                 color: AppColors.background(isDark),
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(24)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(24),
+                ),
                 border: Border.all(color: AppColors.divider(isDark)),
               ),
               padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
@@ -417,9 +406,9 @@ class _SourceRow extends ConsumerWidget {
                   const SizedBox(height: 4),
                   Text(
                     source.name,
-                    style: AppTextStyles.caption(isDark).copyWith(
-                      color: AppColors.textSecondary(isDark),
-                    ),
+                    style: AppTextStyles.caption(
+                      isDark,
+                    ).copyWith(color: AppColors.textSecondary(isDark)),
                   ),
                   const SizedBox(height: 14),
                   TextField(
@@ -431,10 +420,9 @@ class _SourceRow extends ConsumerWidget {
                     inputFormatters: [
                       FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
                     ],
-                    style: AppTextStyles.body1(isDark).copyWith(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 16,
-                    ),
+                    style: AppTextStyles.body1(
+                      isDark,
+                    ).copyWith(fontWeight: FontWeight.w700, fontSize: 16),
                     decoration: InputDecoration(
                       filled: true,
                       fillColor: AppColors.cardBg(isDark),
@@ -445,23 +433,23 @@ class _SourceRow extends ConsumerWidget {
                         color: AppColors.textSecondary(isDark),
                       ),
                       hintText: 'New balance',
-                      contentPadding:
-                          const EdgeInsets.symmetric(vertical: 14),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 14),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide:
-                            BorderSide(color: AppColors.divider(isDark)),
+                        borderSide: BorderSide(
+                          color: AppColors.divider(isDark),
+                        ),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide:
-                            BorderSide(color: AppColors.divider(isDark)),
+                        borderSide: BorderSide(
+                          color: AppColors.divider(isDark),
+                        ),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide(
-                          color:
-                              AppColors.tealDark.withValues(alpha: 0.45),
+                          color: AppColors.tealDark.withValues(alpha: 0.45),
                           width: 1.4,
                         ),
                       ),
@@ -472,16 +460,11 @@ class _SourceRow extends ConsumerWidget {
                     children: [
                       Expanded(
                         child: OutlinedButton(
-                          onPressed: () =>
-                              Navigator.of(sheetContext).pop(),
+                          onPressed: () => Navigator.of(sheetContext).pop(),
                           style: OutlinedButton.styleFrom(
-                            foregroundColor:
-                                AppColors.textPrimary(isDark),
-                            side: BorderSide(
-                              color: AppColors.divider(isDark),
-                            ),
-                            padding:
-                                const EdgeInsets.symmetric(vertical: 14),
+                            foregroundColor: AppColors.textPrimary(isDark),
+                            side: BorderSide(color: AppColors.divider(isDark)),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(14),
                             ),
@@ -496,8 +479,7 @@ class _SourceRow extends ConsumerWidget {
                           label: 'Save',
                           icon: Icons.check_rounded,
                           onTap: () {
-                            final v =
-                                double.tryParse(controller.text.trim());
+                            final v = double.tryParse(controller.text.trim());
                             if (v != null && v >= 0) {
                               Navigator.of(sheetContext).pop(v);
                             }
@@ -522,8 +504,9 @@ class _SourceRow extends ConsumerWidget {
 
   Future<void> _confirmRemove(BuildContext context, WidgetRef ref) async {
     final wallet = ref.read(walletProvider).value ?? WalletState.empty;
-    final taggedCount =
-        wallet.expenseSourceMap.values.where((v) => v == source.id).length;
+    final taggedCount = wallet.expenseSourceMap.values
+        .where((v) => v == source.id)
+        .length;
 
     if (taggedCount > 0) {
       await showDialog<void>(
@@ -562,13 +545,8 @@ class _SourceRow extends ConsumerWidget {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        icon: Icon(
-          Icons.warning_amber_rounded,
-          color: AppColors.warning,
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        icon: Icon(Icons.warning_amber_rounded, color: AppColors.warning),
         title: Text('Remove ${source.name}?'),
         content: const Text(
           'This source will be removed from your wallet. You can add it '
@@ -580,9 +558,7 @@ class _SourceRow extends ConsumerWidget {
             child: const Text('Cancel'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.warning,
-            ),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.warning),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Remove'),
           ),
@@ -611,8 +587,7 @@ class _AddSourceButton extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(14),
           child: Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
               color: AppColors.cardBg(isDark),
               borderRadius: BorderRadius.circular(14),
@@ -623,11 +598,7 @@ class _AddSourceButton extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(
-                  Icons.add_rounded,
-                  size: 18,
-                  color: AppColors.tealDark,
-                ),
+                Icon(Icons.add_rounded, size: 18, color: AppColors.tealDark),
                 const SizedBox(width: 8),
                 Text(
                   'Add another source',
@@ -678,8 +649,11 @@ class _AddSourceFormState extends ConsumerState<_AddSourceForm> {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     setState(() => _saving = true);
     try {
-      await ref.read(walletProvider.notifier).addSource(
-            name: _type == WalletSourceType.cash &&
+      await ref
+          .read(walletProvider.notifier)
+          .addSource(
+            name:
+                _type == WalletSourceType.cash &&
                     _nameController.text.trim().isEmpty
                 ? 'Cash'
                 : _nameController.text.trim(),
@@ -756,7 +730,9 @@ class _AddSourceFormState extends ConsumerState<_AddSourceForm> {
               controller: _nameController,
               decoration: _inputDecoration(
                 isDark,
-                hint: isCash ? 'Label (optional, e.g. Cash)' : 'e.g. HDFC ****1234',
+                hint: isCash
+                    ? 'Label (optional, e.g. Cash)'
+                    : 'e.g. HDFC ****1234',
                 icon: isCash
                     ? Icons.label_outline_rounded
                     : Icons.account_balance_rounded,
@@ -772,8 +748,9 @@ class _AddSourceFormState extends ConsumerState<_AddSourceForm> {
             const SizedBox(height: 10),
             TextFormField(
               controller: _balanceController,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               inputFormatters: [
                 FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
               ],
@@ -833,16 +810,11 @@ class _AddSourceFormState extends ConsumerState<_AddSourceForm> {
       fillColor: AppColors.surface(isDark),
       isDense: true,
       hintText: hint,
-      hintStyle: AppTextStyles.body2(isDark).copyWith(
-        color: AppColors.textSecondary(isDark),
-      ),
-      prefixIcon: Icon(
-        icon,
-        size: 18,
-        color: AppColors.textSecondary(isDark),
-      ),
-      prefixIconConstraints:
-          const BoxConstraints(minWidth: 40, minHeight: 40),
+      hintStyle: AppTextStyles.body2(
+        isDark,
+      ).copyWith(color: AppColors.textSecondary(isDark)),
+      prefixIcon: Icon(icon, size: 18, color: AppColors.textSecondary(isDark)),
+      prefixIconConstraints: const BoxConstraints(minWidth: 40, minHeight: 40),
       contentPadding: const EdgeInsets.symmetric(vertical: 14),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
@@ -985,8 +957,7 @@ class _GradientButton extends StatelessWidget {
                     height: 18,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      valueColor:
-                          AlwaysStoppedAnimation(Colors.white),
+                      valueColor: AlwaysStoppedAnimation(Colors.white),
                     ),
                   ),
                 )

@@ -261,7 +261,9 @@ final appRouter = GoRouter(
         GoRoute(
           path: '/home/personal/new',
           name: 'add-personal-expense',
-          builder: (context, state) => const AddPersonalExpenseScreen(),
+          builder: (context, state) => AddPersonalExpenseScreen(
+            income: state.uri.queryParameters['kind'] == 'income',
+          ),
         ),
         GoRoute(
           path: '/home/profile/edit',

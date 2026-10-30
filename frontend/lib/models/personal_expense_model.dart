@@ -3,8 +3,9 @@ import 'package:equatable/equatable.dart';
 import '../core/utils/currency_formatter.dart';
 import 'category_model.dart';
 
-/// A personal (non-shared) expense — owned by one user, no splits, no group.
-/// Maps to the `personal_expenses` table on the backend.
+/// A personal (non-shared) entry — owned by one user, no splits, no group.
+/// Money out (an expense) or, with [isIncome], money in. Maps to the
+/// `personal_expenses` table on the backend (`kind`).
 class PersonalExpenseModel extends Equatable {
   const PersonalExpenseModel({
     required this.id,
@@ -17,6 +18,7 @@ class PersonalExpenseModel extends Equatable {
     this.notes,
     this.receiptBase64,
     required this.createdAt,
+    this.isIncome = false,
   });
 
   final String id;
@@ -29,13 +31,17 @@ class PersonalExpenseModel extends Equatable {
   final String? notes;
   final String? receiptBase64;
   final DateTime createdAt;
+  final bool isIncome;
+
+  /// The amount as it moves the balance: negative for money out.
+  double get signedAmount => isIncome ? amount : -amount;
 
   factory PersonalExpenseModel.fromJson(Map<String, dynamic> json) {
-    final categoryId =
-        (json['category'] as String?)?.toLowerCase() ?? 'other';
+    final categoryId = (json['category'] as String?)?.toLowerCase() ?? 'other';
     final category = CategoryModel.fromId(categoryId) ?? CategoryModel.other;
 
-    final dateRaw = json['expenseDate'] ??
+    final dateRaw =
+        json['expenseDate'] ??
         json['expense_date'] ??
         json['createdAt'] ??
         json['created_at'];
@@ -47,15 +53,17 @@ class PersonalExpenseModel extends Equatable {
       title: (json['description'] ?? json['title'] ?? '') as String,
       amount: _parseAmount(json['amount']),
       currency: CurrencyFormatter.symbolFor(
-          (json['currency'] as String?) ?? 'INR'),
+        (json['currency'] as String?) ?? 'INR',
+      ),
       category: category,
-      expenseDate:
-          dateRaw is String ? DateTime.parse(dateRaw) : DateTime.now(),
+      expenseDate: dateRaw is String ? DateTime.parse(dateRaw).toLocal() : DateTime.now(),
       notes: json['notes'] as String?,
       receiptBase64:
           (json['receiptBase64'] ?? json['receipt_base64']) as String?,
-      createdAt:
-          createdRaw is String ? DateTime.parse(createdRaw) : DateTime.now(),
+      createdAt: createdRaw is String
+          ? DateTime.parse(createdRaw).toLocal()
+          : DateTime.now(),
+      isIncome: json['kind'] == 'income',
     );
   }
 
@@ -77,6 +85,7 @@ class PersonalExpenseModel extends Equatable {
     String? notes,
     String? receiptBase64,
     DateTime? createdAt,
+    bool? isIncome,
   }) {
     return PersonalExpenseModel(
       id: id ?? this.id,
@@ -89,20 +98,22 @@ class PersonalExpenseModel extends Equatable {
       notes: notes ?? this.notes,
       receiptBase64: receiptBase64 ?? this.receiptBase64,
       createdAt: createdAt ?? this.createdAt,
+      isIncome: isIncome ?? this.isIncome,
     );
   }
 
   @override
   List<Object?> get props => [
-        id,
-        userId,
-        title,
-        amount,
-        currency,
-        category,
-        expenseDate,
-        notes,
-        receiptBase64,
-        createdAt,
-      ];
+    id,
+    userId,
+    title,
+    amount,
+    currency,
+    category,
+    expenseDate,
+    notes,
+    receiptBase64,
+    createdAt,
+    isIncome,
+  ];
 }

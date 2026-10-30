@@ -6,7 +6,7 @@ class PersonalExpense {
    */
   static async findById(id) {
     const result = await query(
-      `SELECT id, user_id, description, amount, currency, category,
+      `SELECT id, user_id, kind, description, amount, currency, category,
               receipt_base64, notes, expense_date, created_at, updated_at
        FROM personal_expenses WHERE id = $1 AND deleted_at IS NULL`,
       [id]
@@ -15,17 +15,19 @@ class PersonalExpense {
   }
 
   /**
-   * Find personal expenses by user ID (list view — no receipt blob)
+   * Find personal expenses by user ID (list view — no receipt blob).
+   * Income rows only when the app asks for them ([includeIncome]).
    */
-  static async findByUserId(userId, limit = 50, offset = 0) {
+  static async findByUserId(userId, limit = 50, offset = 0, includeIncome = false) {
     const result = await query(
-      `SELECT id, user_id, description, amount, currency, category,
+      `SELECT id, user_id, kind, description, amount, currency, category,
               notes, expense_date, created_at, updated_at
        FROM personal_expenses
        WHERE user_id = $1 AND deleted_at IS NULL
+         AND ($4::boolean OR kind = 'expense')
        ORDER BY expense_date DESC, created_at DESC
        LIMIT $2 OFFSET $3`,
-      [userId, limit, offset]
+      [userId, limit, offset, includeIncome]
     );
     return result.rows;
   }
@@ -37,10 +39,10 @@ class PersonalExpense {
     const result = await query(
       `INSERT INTO personal_expenses (
         user_id, description, amount, currency, category,
-        receipt_base64, notes, expense_date
+        receipt_base64, notes, expense_date, kind
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-      RETURNING id, user_id, description, amount, currency, category,
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      RETURNING id, user_id, kind, description, amount, currency, category,
                 notes, expense_date, created_at, updated_at`,
       [
         expenseData.userId,
@@ -50,7 +52,8 @@ class PersonalExpense {
         expenseData.category || null,
         expenseData.receiptBase64 || null,
         expenseData.notes || null,
-        expenseData.expenseDate || new Date()
+        expenseData.expenseDate || new Date(),
+        expenseData.kind === 'income' ? 'income' : 'expense'
       ]
     );
     return result.rows[0];
@@ -68,9 +71,10 @@ class PersonalExpense {
            category = COALESCE($4, category),
            receipt_base64 = COALESCE($5, receipt_base64),
            notes = COALESCE($6, notes),
-           expense_date = COALESCE($7, expense_date)
+           expense_date = COALESCE($7, expense_date),
+           kind = COALESCE($9, kind)
        WHERE id = $8 AND deleted_at IS NULL
-       RETURNING id, user_id, description, amount, currency, category,
+       RETURNING id, user_id, kind, description, amount, currency, category,
                  notes, expense_date, created_at, updated_at`,
       [
         expenseData.description,
@@ -80,7 +84,8 @@ class PersonalExpense {
         expenseData.receiptBase64,
         expenseData.notes,
         expenseData.expenseDate,
-        id
+        id,
+        expenseData.kind ?? null
       ]
     );
     return result.rows[0] || null;
@@ -100,10 +105,12 @@ class PersonalExpense {
   /**
    * Get total count for pagination
    */
-  static async countByUserId(userId) {
+  static async countByUserId(userId, includeIncome = false) {
     const result = await query(
-      'SELECT COUNT(*) as count FROM personal_expenses WHERE user_id = $1 AND deleted_at IS NULL',
-      [userId]
+      `SELECT COUNT(*) as count FROM personal_expenses
+        WHERE user_id = $1 AND deleted_at IS NULL
+          AND ($2::boolean OR kind = 'expense')`,
+      [userId, includeIncome]
     );
     return parseInt(result.rows[0].count);
   }
@@ -113,7 +120,8 @@ class PersonalExpense {
    */
   static async getTotalByUserId(userId) {
     const result = await query(
-      'SELECT COALESCE(SUM(amount), 0) as total FROM personal_expenses WHERE user_id = $1 AND deleted_at IS NULL',
+      `SELECT COALESCE(SUM(amount), 0) as total FROM personal_expenses
+        WHERE user_id = $1 AND deleted_at IS NULL AND kind = 'expense'`,
       [userId]
     );
     return parseFloat(result.rows[0].total);
