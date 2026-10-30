@@ -1,4 +1,11 @@
 import PersonalExpense from '../models/PersonalExpense.js';
+import {
+  buildPersonalSummary,
+  isMonthString,
+  shiftMonth,
+  TREND_MONTHS,
+} from '../utils/personalSummary.js';
+import { todayIST } from '../utils/recurrence.js';
 
 /**
  * Get personal expenses for a user
@@ -39,6 +46,33 @@ const getPersonalExpenses = async (req, res, next) => {
         hasMore: offset + expenses.length < total,
       },
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * The Insights tab: one month's spending by category and by day, compared
+ * with the month before, plus a six-month trend.
+ * GET /api/v1/personal-expenses/summary?month=YYYY-MM&tzOffset=330
+ * (tzOffset: the phone's minutes east of UTC, so days split at its midnight)
+ */
+const getPersonalSummary = async (req, res, next) => {
+  try {
+    const month = isMonthString(req.query.month)
+      ? req.query.month
+      : todayIST().slice(0, 7);
+    const offset = Number.parseInt(req.query.tzOffset, 10);
+    const tzOffset = Number.isFinite(offset)
+      ? Math.max(-840, Math.min(840, offset))
+      : 330;
+    const rows = await PersonalExpense.dailyTotals(
+      req.user.id,
+      shiftMonth(month, -(TREND_MONTHS - 1)),
+      month,
+      tzOffset,
+    );
+    res.json({ success: true, data: buildPersonalSummary(rows, month) });
   } catch (error) {
     next(error);
   }
@@ -202,6 +236,7 @@ const deletePersonalExpense = async (req, res, next) => {
 
 export default {
   getPersonalExpenses,
+  getPersonalSummary,
   getPersonalExpense,
   createPersonalExpense,
   updatePersonalExpense,

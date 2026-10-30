@@ -8,6 +8,8 @@ import personalExpenseController from '../controllers/personalExpenseController.
 const router = express.Router();
 
 router.get('/', authenticate, personalExpenseController.getPersonalExpenses);
+// Before '/:id', which would otherwise take "summary" as an id.
+router.get('/summary', authenticate, personalExpenseController.getPersonalSummary);
 router.get('/:id', authenticate, personalExpenseController.getPersonalExpense);
 
 router.post(

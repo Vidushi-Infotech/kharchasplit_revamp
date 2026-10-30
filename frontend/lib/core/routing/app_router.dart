@@ -30,6 +30,7 @@ import '../../modules/expenses/screens/add_expense_screen.dart';
 import '../../modules/expenses/screens/expense_detail_screen.dart';
 import '../../modules/personal_expenses/screens/personal_expenses_screen.dart';
 import '../../modules/personal_expenses/screens/add_personal_expense_screen.dart';
+import '../../modules/personal_expenses/screens/personal_insights_screen.dart';
 import '../../modules/reports/screens/reports_screen.dart';
 import '../../modules/search/screens/search_screen.dart';
 import '../../modules/settlements/screens/settle_all_screen.dart';
@@ -183,6 +184,11 @@ final appRouter = GoRouter(
           path: PersonalShell.expensesLocation,
           name: 'personal',
           builder: (context, state) => const PersonalExpensesScreen(),
+        ),
+        GoRoute(
+          path: PersonalShell.insightsLocation,
+          name: 'personal-insights',
+          builder: (context, state) => const PersonalInsightsScreen(),
         ),
         GoRoute(
           path: PersonalShell.accountLocation,

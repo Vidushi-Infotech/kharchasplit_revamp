@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/network/api_client.dart';
 import '../../models/personal_expense_model.dart';
+import '../../models/personal_summary_model.dart';
 
 class PersonalExpensesApiException implements Exception {
   PersonalExpensesApiException(this.message, {this.statusCode});
@@ -37,6 +38,20 @@ class PersonalExpensesRepository {
         .whereType<Map<String, dynamic>>()
         .map(PersonalExpenseModel.fromJson)
         .toList();
+  }
+
+  /// Insights for [month] (any day in it), with days split at the phone's
+  /// midnight.
+  Future<PersonalSummary> summary(DateTime month) async {
+    final res = await _client.dio.get(
+      '/personal-expenses/summary',
+      queryParameters: {
+        'month':
+            '${month.year}-${month.month.toString().padLeft(2, '0')}',
+        'tzOffset': DateTime.now().timeZoneOffset.inMinutes,
+      },
+    );
+    return PersonalSummary.fromJson(_ensureMap(res));
   }
 
   Future<PersonalExpenseModel> getById(String id) async {

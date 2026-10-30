@@ -33,6 +33,9 @@ class CategoryModel extends Equatable {
   @override
   List<Object?> get props => [id, name, icon, colorHex];
 
+  Color get color =>
+      Color(int.parse('FF${colorHex.replaceFirst('#', '')}', radix: 16));
+
   /// Predefined expense categories
   static const CategoryModel food = CategoryModel(
     id: 'food',

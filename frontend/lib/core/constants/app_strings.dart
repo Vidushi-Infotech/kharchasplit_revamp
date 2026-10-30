@@ -223,6 +223,31 @@ abstract final class AppStrings {
   static const moneyOut = 'Out';
   static const net = 'Net';
   static const transactions = 'Transactions';
+
+  // ── Personal mode: Insights ─────────────────────────────────────────
+  static const insights = 'Insights';
+  static const insightsSpent = 'Spent';
+  static const insightsSaved = 'Saved';
+  static const insightsOverspent = 'Overspent';
+  static const insightsSavingsRate = 'Kept';
+  static const insightsMoreThan = 'more than';
+  static const insightsLessThan = 'less than';
+  static String insightsSameAs(String month) => 'Same as $month';
+  static String insightsNothingToCompare(String month) =>
+      'Nothing spent in $month to compare';
+  static const insightsByCategory = 'By category';
+  static const insightsTotal = 'Total';
+  static const insightsNew = 'New';
+  static const insightsSame = 'Same';
+  static const insightsDaily = 'Day by day';
+  static const insightsAverage = 'Avg';
+  static const insightsPerDay = '/day';
+  static const insightsSixMonths = 'Last 6 months';
+  static const insightsIncomeFrom = 'Income by source';
+  static const insightsEmptyTitle = 'Nothing this month yet';
+  static const insightsEmptyBody =
+      'Add expenses or income and see where your money goes.';
+  static const insightsLoadError = "Couldn't load insights";
   static const reports = 'Reports';
   static const notifications = 'Notifications';
   static const goToGroups = 'Go to groups';

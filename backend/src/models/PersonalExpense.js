@@ -103,6 +103,31 @@ class PersonalExpense {
   }
 
   /**
+   * Per-day, per-category totals of income and spending from [fromMonth]
+   * through [toMonth] ('YYYY-MM'), with days in the user's local time
+   * ([tzOffsetMinutes] east of UTC). Feeds buildPersonalSummary.
+   */
+  static async dailyTotals(userId, fromMonth, toMonth, tzOffsetMinutes) {
+    const result = await query(
+      `WITH e AS (
+         SELECT kind, category, amount,
+                (expense_date::timestamptz AT TIME ZONE 'UTC')
+                  + make_interval(mins => $2) AS local_at
+           FROM personal_expenses
+          WHERE user_id = $1 AND deleted_at IS NULL
+       )
+       SELECT kind, category, to_char(local_at, 'YYYY-MM-DD') AS day,
+              SUM(amount) AS total
+         FROM e
+        WHERE local_at >= to_date($3, 'YYYY-MM')
+          AND local_at < to_date($4, 'YYYY-MM') + interval '1 month'
+        GROUP BY 1, 2, 3`,
+      [userId, tzOffsetMinutes, fromMonth, toMonth]
+    );
+    return result.rows;
+  }
+
+  /**
    * Get total count for pagination
    */
   static async countByUserId(userId, includeIncome = false) {

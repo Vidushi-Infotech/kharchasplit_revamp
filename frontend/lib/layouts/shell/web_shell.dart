@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/constants/app_strings.dart';
+import '../../core/state/feature_flags_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../modules/notifications/state/notifications_inbox_provider.dart';
@@ -14,6 +15,7 @@ class _NavDest {
     required this.label,
     required this.location,
     required this.matches,
+    this.excludes = const [],
   });
 
   final IconData icon;
@@ -24,8 +26,15 @@ class _NavDest {
   /// keeps its section highlighted.
   final List<String> matches;
 
+  /// Paths under [matches] that belong to another destination.
+  final List<String> excludes;
+
   bool isActive(String path) =>
-      matches.any((m) => path == m || path.startsWith('$m/'));
+      matches.any((m) => _under(path, m)) &&
+      !excludes.any((m) => _under(path, m));
+
+  static bool _under(String path, String m) =>
+      path == m || path.startsWith('$m/');
 }
 
 /// Primary destinations, in the same order as the mobile tab bar
@@ -67,6 +76,7 @@ const _secondaryNav = <_NavDest>[
     label: AppStrings.personalExpenses,
     location: '/personal',
     matches: ['/personal', '/home/personal'],
+    excludes: ['/personal/insights'],
   ),
   _NavDest(
     icon: Icons.bar_chart_rounded,
@@ -75,6 +85,14 @@ const _secondaryNav = <_NavDest>[
     matches: ['/reports'],
   ),
 ];
+
+/// Personal mode's Insights, under Personal (flag `personalInsights`).
+const _insightsDest = _NavDest(
+  icon: Icons.pie_chart_rounded,
+  label: AppStrings.insights,
+  location: '/personal/insights',
+  matches: ['/personal/insights'],
+);
 
 const _profileDest = _NavDest(
   icon: Icons.account_circle_rounded,
@@ -120,6 +138,7 @@ class WebShell extends ConsumerWidget {
             collapsed: collapsed,
             path: path,
             unreadCount: unreadCount,
+            showInsights: watchFeature(ref, 'personalInsights'),
             width: collapsed ? _railWidth : _expandedWidth,
           ),
           Expanded(child: child),
@@ -135,6 +154,7 @@ class _Sidebar extends StatelessWidget {
     required this.collapsed,
     required this.path,
     required this.unreadCount,
+    required this.showInsights,
     required this.width,
   });
 
@@ -142,6 +162,7 @@ class _Sidebar extends StatelessWidget {
   final bool collapsed;
   final String path;
   final int unreadCount;
+  final bool showInsights;
   final double width;
 
   @override
@@ -180,7 +201,11 @@ class _Sidebar extends StatelessWidget {
                     ),
                     child: Divider(color: AppColors.divider(isDark), height: 1),
                   ),
-                  for (final dest in _secondaryNav)
+                  for (final dest in [
+                    _secondaryNav.first,
+                    if (showInsights) _insightsDest,
+                    ..._secondaryNav.skip(1),
+                  ])
                     _NavItem(
                       dest: dest,
                       isDark: isDark,
