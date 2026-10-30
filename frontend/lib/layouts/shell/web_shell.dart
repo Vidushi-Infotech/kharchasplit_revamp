@@ -76,7 +76,12 @@ const _secondaryNav = <_NavDest>[
     label: AppStrings.personalExpenses,
     location: '/personal',
     matches: ['/personal', '/home/personal'],
-    excludes: ['/personal/insights', '/personal/budgets', '/personal/accounts'],
+    excludes: [
+      '/personal/insights',
+      '/personal/budgets',
+      '/personal/accounts',
+      '/personal/bills',
+    ],
   ),
   _NavDest(
     icon: Icons.bar_chart_rounded,
@@ -108,6 +113,14 @@ const _accountsDest = _NavDest(
   label: AppStrings.accounts,
   location: '/personal/accounts',
   matches: ['/personal/accounts'],
+);
+
+/// Personal mode's Bills, under Personal (flag `personalBills`).
+const _billsDest = _NavDest(
+  icon: Icons.event_repeat_rounded,
+  label: AppStrings.bills,
+  location: '/personal/bills',
+  matches: ['/personal/bills'],
 );
 
 const _profileDest = _NavDest(
@@ -157,6 +170,7 @@ class WebShell extends ConsumerWidget {
             showInsights: watchFeature(ref, 'personalInsights'),
             showBudgets: watchFeature(ref, 'personalBudgets'),
             showAccounts: watchFeature(ref, 'personalAccounts'),
+            showBills: watchFeature(ref, 'personalBills'),
             width: collapsed ? _railWidth : _expandedWidth,
           ),
           Expanded(child: child),
@@ -175,6 +189,7 @@ class _Sidebar extends StatelessWidget {
     required this.showInsights,
     required this.showBudgets,
     required this.showAccounts,
+    required this.showBills,
     required this.width,
   });
 
@@ -185,6 +200,7 @@ class _Sidebar extends StatelessWidget {
   final bool showInsights;
   final bool showBudgets;
   final bool showAccounts;
+  final bool showBills;
   final double width;
 
   @override
@@ -228,6 +244,7 @@ class _Sidebar extends StatelessWidget {
                     if (showInsights) _insightsDest,
                     if (showBudgets) _budgetsDest,
                     if (showAccounts) _accountsDest,
+                    if (showBills) _billsDest,
                     ..._secondaryNav.skip(1),
                   ])
                     _NavItem(

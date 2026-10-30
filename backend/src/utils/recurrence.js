@@ -14,7 +14,8 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 export function isDateString(value) {
   if (typeof value !== 'string' || !DATE_RE.test(value)) return false;
   const d = parse(value);
-  return toDateString(d) === value;
+  // '2026-13-01' parses to an invalid date, which toISOString throws on.
+  return !Number.isNaN(d.getTime()) && toDateString(d) === value;
 }
 
 const parse = (s) => new Date(`${s}T00:00:00Z`);

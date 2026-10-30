@@ -171,6 +171,13 @@ const NOTIFICATION_TYPES = {
     channelId: 'expenses',
     prefKey: 'new_expense',
   },
+  // Personal mode bill reminder (jobs/billReminderJob.js).
+  PERSONAL_BILL_DUE: {
+    title: 'Bill due',
+    getBody: (data) => `${data.name} (₹${data.amount}) is due ${data.when}`,
+    channelId: 'payments',
+    prefKey: null,
+  },
   RECURRING_PAUSED: {
     title: 'Recurring expense paused',
     getBody: (data) => `"${data.description}" in "${data.groupName}" stopped repeating: ${data.reason}`,

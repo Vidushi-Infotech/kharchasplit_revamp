@@ -425,6 +425,25 @@ CREATE TABLE IF NOT EXISTS personal_transfers (
 );
 CREATE INDEX IF NOT EXISTS idx_personal_transfers_user ON personal_transfers(user_id, transfer_date DESC);
 
+-- Personal mode bills (migration 028).
+CREATE TABLE IF NOT EXISTS personal_bills (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name VARCHAR(80) NOT NULL,
+  amount DECIMAL(12, 2) NOT NULL CHECK (amount > 0),
+  category VARCHAR(50) NOT NULL DEFAULT 'utilities',
+  account_id UUID REFERENCES personal_accounts(id) ON DELETE SET NULL,
+  frequency VARCHAR(10) NOT NULL CHECK (frequency IN ('weekly', 'biweekly', 'monthly', 'yearly')),
+  anchor_date DATE NOT NULL,
+  paid_count INTEGER NOT NULL DEFAULT 0,
+  remind_days INTEGER NOT NULL DEFAULT 2 CHECK (remind_days BETWEEN 0 AND 30),
+  last_reminded_due DATE,
+  archived_at TIMESTAMP,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_personal_bills_user ON personal_bills(user_id) WHERE archived_at IS NULL;
+
 -- State of an expense before each edit (services/expenseHistory.js).
 CREATE TABLE IF NOT EXISTS expense_revisions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -518,6 +537,8 @@ const columnAdditions = [
   { table: 'personal_expenses', column: 'kind', type: "VARCHAR(10) NOT NULL DEFAULT 'expense'" },
   // 027: the account an entry came from / went to.
   { table: 'personal_expenses', column: 'account_id', type: 'UUID REFERENCES personal_accounts(id) ON DELETE SET NULL' },
+  // 028: the bill a payment was for.
+  { table: 'personal_expenses', column: 'bill_id', type: 'UUID REFERENCES personal_bills(id) ON DELETE SET NULL' },
 
   // Activities columns
   { table: 'activities', column: 'deleted_at', type: 'TIMESTAMP' },

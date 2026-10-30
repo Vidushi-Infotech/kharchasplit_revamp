@@ -17,6 +17,7 @@ import '../../../models/personal_expense_model.dart';
 import '../state/personal_expenses_provider.dart';
 import '../state/wallet_provider.dart';
 import '../widgets/account_style.dart';
+import '../widgets/bills/upcoming_bills_card.dart';
 import '../widgets/cash_flow_card.dart';
 import '../widgets/personal_expense_tile.dart';
 import '../widgets/wallet_setup_sheet.dart';
@@ -214,6 +215,13 @@ class _Body extends ConsumerWidget {
                     ? () => context.push('/home/personal/new?kind=income')
                     : null,
               ),
+            ),
+          ),
+        if (watchFeature(ref, 'personalBills'))
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(20, 12, 20, 0),
+              child: UpcomingBillsCard(),
             ),
           ),
         if (!hasAnyExpenses)

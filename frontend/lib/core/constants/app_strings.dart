@@ -310,6 +310,53 @@ abstract final class AppStrings {
   static const accountDeleteTransfer = 'Delete transfer?';
   static String accountEntryCount(int n) => n == 1 ? '1 entry' : '$n entries';
   static const profile = 'Profile';
+
+  // ── Personal mode: Bills ────────────────────────────────────────────
+  static const bills = 'Bills';
+  static const billsUpcoming = 'Upcoming bills';
+  static const billsSeeAll = 'See all';
+  static const billsOverdue = 'Overdue';
+  static const billsDueSoon = 'Due soon';
+  static const billsLater = 'Later';
+  static const billAdd = 'Add bill';
+  static const billEdit = 'Edit bill';
+  static const billName = 'Name';
+  static const billNameHint = 'e.g. Electricity, Rent, Netflix';
+  static const billAmount = 'Amount';
+  static const billRepeats = 'Repeats';
+  static const billNextDue = 'Next due date';
+  static const billRemind = 'Remind me';
+  static const billPayFrom = 'Pay from';
+  static const billSave = 'Save bill';
+  static const billRemove = 'Remove bill';
+  static const billPay = 'Pay';
+  static const billMarkPaid = 'Mark as paid';
+  static const billSkip = 'Skip this one';
+  static const billPaid = 'Paid. It moves to the next due date.';
+  static const billSkipped = 'Skipped to the next due date';
+  static const billSaved = 'Bill saved';
+  static const billRemoved = 'Bill removed';
+  static const billFailed = "Couldn't save. Try again.";
+  static const billLoadError = "Couldn't load bills";
+  static const billsEmptyTitle = 'No bills yet';
+  static const billsEmptyBody =
+      'Add rent, electricity, subscriptions or EMIs. You get a reminder before '
+      'each one is due, and paying it adds the expense for you.';
+  static const billWeekly = 'Weekly';
+  static const billBiweekly = 'Every 2 weeks';
+  static const billMonthly = 'Monthly';
+  static const billYearly = 'Yearly';
+  static const billDueToday = 'Due today';
+  static const billDueTomorrow = 'Due tomorrow';
+  static String billDueIn(int days) => 'Due in $days days';
+  static String billDueOn(String date) => 'Due $date';
+  static String billOverdueBy(int days) =>
+      'Overdue by ${days == 1 ? '1 day' : '$days days'}';
+  static String billRemindDays(int days) => switch (days) {
+    0 => 'On the day',
+    1 => '1 day before',
+    _ => '$days days before',
+  };
   static const reports = 'Reports';
   static const notifications = 'Notifications';
   static const goToGroups = 'Go to groups';

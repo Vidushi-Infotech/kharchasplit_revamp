@@ -20,6 +20,7 @@ import { startEmailOutboxWorker } from './services/emailOutbox.js';
 import { startSettlementReminderScheduler } from './jobs/settlementReminderJob.js';
 import { startWeeklySummaryScheduler } from './jobs/weeklySummaryJob.js';
 import { startRecurringExpenseScheduler } from './jobs/recurringExpenseJob.js';
+import { startBillReminderScheduler } from './jobs/billReminderJob.js';
 
 // Import routes
 import authRoutes from './routes/authRoutes.js';
@@ -32,6 +33,7 @@ import insightsRoutes from './routes/insightsRoutes.js';
 import personalExpenseRoutes from './routes/personalExpenseRoutes.js';
 import personalBudgetRoutes from './routes/personalBudgetRoutes.js';
 import personalAccountRoutes from './routes/personalAccountRoutes.js';
+import personalBillRoutes from './routes/personalBillRoutes.js';
 import syncRoutes from './routes/syncRoutes.js';
 import activityRoutes from './routes/activityRoutes.js';
 import inviteRoutes from './routes/inviteRoutes.js';
@@ -188,6 +190,7 @@ app.use(`/api/${API_VERSION}`, insightsRoutes);
 app.use(`/api/${API_VERSION}/personal-expenses`, personalExpenseRoutes);
 app.use(`/api/${API_VERSION}/personal-budgets`, personalBudgetRoutes);
 app.use(`/api/${API_VERSION}/personal-accounts`, personalAccountRoutes);
+app.use(`/api/${API_VERSION}/personal-bills`, personalBillRoutes);
 app.use(`/api/${API_VERSION}/sync`, syncRoutes);
 app.use(`/api/${API_VERSION}/activities`, activityRoutes);
 app.use(`/api/${API_VERSION}/invites`, inviteRoutes);
@@ -275,6 +278,8 @@ const startServer = async () => {
     startWeeklySummaryScheduler();
     // Daily: creates due recurring expenses.
     startRecurringExpenseScheduler();
+    // Daily: "bill due" pushes for Personal mode bills.
+    startBillReminderScheduler();
     // Expires Idempotency-Key replay rows after 24h.
     startIdempotencyCleanup();
 

@@ -32,6 +32,7 @@ import '../../modules/personal_expenses/screens/personal_expenses_screen.dart';
 import '../../modules/personal_expenses/screens/account_detail_screen.dart';
 import '../../modules/personal_expenses/screens/add_personal_expense_screen.dart';
 import '../../modules/personal_expenses/screens/personal_accounts_screen.dart';
+import '../../modules/personal_expenses/screens/personal_bills_screen.dart';
 import '../../modules/personal_expenses/screens/personal_budgets_screen.dart';
 import '../../modules/personal_expenses/screens/personal_insights_screen.dart';
 import '../../modules/reports/screens/reports_screen.dart';
@@ -197,6 +198,11 @@ final appRouter = GoRouter(
           path: PersonalShell.budgetsLocation,
           name: 'personal-budgets',
           builder: (context, state) => const PersonalBudgetsScreen(),
+        ),
+        GoRoute(
+          path: '/personal/bills',
+          name: 'personal-bills',
+          builder: (context, state) => const PersonalBillsScreen(),
         ),
         GoRoute(
           path: PersonalShell.accountsLocation,

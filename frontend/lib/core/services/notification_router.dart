@@ -28,6 +28,7 @@ import 'package:go_router/go_router.dart';
 ///                          (→ the group's recurring expenses list)
 ///   PERSONAL_BUDGET      → { type }  (a budget alert made on the phone
 ///                          → Personal mode's Budgets)
+///   PERSONAL_BILL_DUE    → { type, billId, … }  (→ Personal mode's Bills)
 class NotificationRouter {
   NotificationRouter._();
 
@@ -51,6 +52,11 @@ class NotificationRouter {
     switch (type) {
       case 'PERSONAL_BUDGET':
         router.go('/personal/budgets');
+        return;
+
+      case 'PERSONAL_BILL_DUE':
+        router.go('/personal');
+        router.push('/personal/bills');
         return;
 
       case 'EXPENSE_ADDED':

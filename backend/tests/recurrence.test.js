@@ -46,3 +46,8 @@ test('expense dates from apps become calendar days', async () => {
   assert.equal(toDateOnly('2026-10-21T09:00:00+05:30'), '2026-10-21');
   assert.match(toDateOnly(undefined), /^\d{4}-\d{2}-\d{2}$/);
 });
+
+test('impossible dates are not dates (no throw)', () => {
+  assert.equal(isDateString('2026-13-01'), false);
+  assert.equal(isDateString('2026-02-30'), false);
+});
