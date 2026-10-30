@@ -129,7 +129,9 @@ Future<void> submitExpense(
   final payersPaise = addExpensePayersPaise(state, paidBy.id);
   final splitType = backendSplitTypeFor(state);
   final splitMeta = backendSplitMeta(state, participants);
-  final currency = state.entryCurrency != null
+  // Saved in the group's currency: converted from another one, or typed
+  // in it. The form's symbol is only a fallback when the group is unknown.
+  final currency = state.entryCurrency != null || groupCurrency != null
       ? groupCurrencyCode(groupCurrency)
       : state.currency;
   final fxRate = addExpenseFxRateOverride(state);

@@ -99,10 +99,14 @@ class PersonalExpensesRepository {
     String? notes,
     DateTime? expenseDate,
     String? receiptBase64,
+    bool? isIncome,
+    String? accountId,
   }) async {
     final res = await _client.dio.put(
       '/personal-expenses/$id',
       data: {
+        if (isIncome != null) 'kind': isIncome ? 'income' : 'expense',
+        if (accountId != null) 'accountId': accountId,
         if (description != null) 'description': description,
         if (amount != null) 'amount': amount,
         if (currency != null) 'currency': _normalizeCurrency(currency),

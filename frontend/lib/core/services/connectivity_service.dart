@@ -4,6 +4,8 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../constants/api_config.dart';
+
 /// Tri-state connectivity. `unknown` is only used while we wait for the
 /// first reading after app start; it's never re-emitted.
 enum ConnectivityState { unknown, online, offline }
@@ -24,11 +26,12 @@ class ConnectivityService {
     http.Client? httpClient,
     Duration debounce = const Duration(milliseconds: 500),
     Duration probeTimeout = const Duration(seconds: 3),
-    this.probeUrl = 'https://api.kharchasplit.com/health',
-  })  : _plugin = plugin ?? Connectivity(),
-        _http = httpClient ?? http.Client(),
-        _debounce = debounce,
-        _probeTimeout = probeTimeout;
+    String? probeUrl,
+  }) : probeUrl = probeUrl ?? defaultProbeUrl,
+       _plugin = plugin ?? Connectivity(),
+       _http = httpClient ?? http.Client(),
+       _debounce = debounce,
+       _probeTimeout = probeTimeout;
 
   final Connectivity _plugin;
   final http.Client _http;
@@ -37,6 +40,11 @@ class ConnectivityService {
 
   /// Endpoint used by the on-demand probe. Override in tests.
   final String probeUrl;
+
+  /// The API server's /health, on whatever server the build talks to
+  /// (API_BASE_URL), so dev and staging builds don't probe production.
+  static String get defaultProbeUrl =>
+      Uri.parse(ApiConfig.baseUrl).replace(path: '/health').toString();
 
   /// Last emitted state. Useful for callers that want to act *now* without
   /// awaiting the next stream event (e.g. the Dio fast-fail interceptor).
@@ -54,11 +62,14 @@ class ConnectivityService {
   void start() {
     if (_sub != null) return;
     // Seed the first value immediately so listeners don't sit on `unknown`.
-    _plugin.checkConnectivity().then((results) {
-      _emit(_mapResults(results));
-    }).catchError((_) {
-      _emit(ConnectivityState.offline);
-    });
+    _plugin
+        .checkConnectivity()
+        .then((results) {
+          _emit(_mapResults(results));
+        })
+        .catchError((_) {
+          _emit(ConnectivityState.offline);
+        });
     _sub = _plugin.onConnectivityChanged.listen(
       (results) => _scheduleEmit(_mapResults(results)),
       onError: (_) => _scheduleEmit(ConnectivityState.offline),
@@ -84,8 +95,7 @@ class ConnectivityService {
     // mobile / ethernet / vpn / bluetooth all count as online (we let
     // the actual HTTP probe disambiguate captive portals).
     if (results.isEmpty) return ConnectivityState.offline;
-    final allNone =
-        results.every((r) => r == ConnectivityResult.none);
+    final allNone = results.every((r) => r == ConnectivityResult.none);
     return allNone ? ConnectivityState.offline : ConnectivityState.online;
   }
 
@@ -94,9 +104,7 @@ class ConnectivityService {
   /// internet after the OS says we're online but a request just failed.
   Future<bool> hasRealInternet() async {
     try {
-      final resp = await _http
-          .get(Uri.parse(probeUrl))
-          .timeout(_probeTimeout);
+      final resp = await _http.get(Uri.parse(probeUrl)).timeout(_probeTimeout);
       return resp.statusCode >= 200 && resp.statusCode < 400;
     } catch (e) {
       if (kDebugMode) {
@@ -112,7 +120,9 @@ class ConnectivityService {
     try {
       final results = await _plugin.checkConnectivity();
       _emit(_mapResults(results));
-    } catch (_) {/* ignore — next OS event will refresh */}
+    } catch (_) {
+      /* ignore — next OS event will refresh */
+    }
   }
 
   Future<void> dispose() async {

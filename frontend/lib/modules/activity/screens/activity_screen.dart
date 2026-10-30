@@ -178,6 +178,12 @@ class _ActivityList extends ConsumerWidget {
     final notifier = ref.read(activityFeedProvider.notifier);
     final bottom = EdgeInsets.only(bottom: activityBottomReserve(context));
     Widget row(BuildContext context, int i) {
+      // Near the end: fetch the next page (the feed is paged by 50).
+      if (i >= items.length - 5) {
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => notifier.loadMore(),
+        );
+      }
       final a = items[i];
       final sentence = buildActivitySentence(
         a,

@@ -143,7 +143,11 @@ class SettleAllController extends Notifier<SettleAllState> {
     required String friendName,
     String? notes,
   }) async {
-    if (await submit(shown: shown, method: SettlementMethod.upi, notes: notes)) {
+    if (await submit(
+      shown: shown,
+      method: SettlementMethod.upi,
+      notes: notes,
+    )) {
       return AppStrings.settledUpWithName(friendName);
     }
     if (!state.balancesChanged) return null;
@@ -155,7 +159,9 @@ class SettleAllController extends Notifier<SettleAllState> {
     state = SettleAllState(current: state.current, submitting: true);
     final link = ref.keepAlive();
     try {
-      await ref.read(settlementsRepositoryProvider).create(
+      await ref
+          .read(settlementsRepositoryProvider)
+          .create(
             groupId: target.groupId,
             fromUserId: me.id,
             toUserId: key.friendId,

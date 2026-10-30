@@ -13,6 +13,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../models/category_model.dart';
+import '../../../models/personal_expense_model.dart';
 import '../../dashboard/state/dashboard_provider.dart';
 import '../state/budget_alerts.dart';
 import '../state/personal_expenses_provider.dart';
@@ -23,11 +24,17 @@ import '../widgets/voice_entry_sheet.dart';
 import '../widgets/wallet_setup_sheet.dart';
 
 /// Adds a personal expense or, with the `personalIncome` flag, an income
-/// ([income] opens it on the Income side).
+/// ([income] opens it on the Income side). With [editing], changes that
+/// entry instead.
 class AddPersonalExpenseScreen extends ConsumerStatefulWidget {
-  const AddPersonalExpenseScreen({super.key, this.income = false});
+  const AddPersonalExpenseScreen({
+    super.key,
+    this.income = false,
+    this.editing,
+  });
 
   final bool income;
+  final PersonalExpenseModel? editing;
 
   @override
   ConsumerState<AddPersonalExpenseScreen> createState() =>
@@ -41,7 +48,7 @@ class _AddPersonalExpenseScreenState
   final _amountController = TextEditingController();
   final _notesController = TextEditingController();
 
-  late bool _isIncome = widget.income;
+  late bool _isIncome = widget.editing?.isIncome ?? widget.income;
   late CategoryModel _category = _isIncome
       ? CategoryModel.otherIncome
       : CategoryModel.other;
@@ -56,6 +63,23 @@ class _AddPersonalExpenseScreenState
   @override
   void initState() {
     super.initState();
+    final e = widget.editing;
+    if (e != null) {
+      _titleController.text = e.title;
+      _amountController.text = e.amount == e.amount.roundToDouble()
+          ? e.amount.toStringAsFixed(0)
+          : e.amount.toStringAsFixed(2);
+      _notesController.text = e.notes ?? '';
+      _category = e.category;
+      _date = DateTime(
+        e.expenseDate.year,
+        e.expenseDate.month,
+        e.expenseDate.day,
+      );
+      _time = TimeOfDay.fromDateTime(e.expenseDate);
+      final wallet = ref.read(walletProvider).value;
+      _selectedSourceId = e.accountId ?? wallet?.expenseSourceMap[e.id];
+    }
     // Load budgets now, so saving can tell which one this expense pushes
     // past 80% / 100%.
     ref.read(budgetAlertsProvider).before();
@@ -99,10 +123,7 @@ class _AddPersonalExpenseScreenState
 
   Future<void> _voice() async {
     final wallet = ref.read(walletProvider).value ?? WalletState.empty;
-    final draft = await VoiceEntrySheet.show(
-      context,
-      accounts: wallet.sources,
-    );
+    final draft = await VoiceEntrySheet.show(context, accounts: wallet.sources);
     if (draft == null || !mounted) return;
     final income =
         draft.isIncome &&
@@ -158,6 +179,9 @@ class _AddPersonalExpenseScreenState
     final amount = double.parse(_amountController.text.trim());
 
     setState(() => _submitting = true);
+    if (widget.editing != null) {
+      return _saveChanges(widget.editing!, wallet, sourceId, amount);
+    }
     final alerts = ref.read(budgetAlertsProvider);
     final budgetsBefore = _isIncome ? null : alerts.before();
     try {
@@ -209,6 +233,55 @@ class _AddPersonalExpenseScreenState
     }
   }
 
+  /// Edit mode's save. The phone-only wallet puts the old amount back on
+  /// its old source and takes the new one from the chosen source; server
+  /// accounts recompute themselves.
+  Future<void> _saveChanges(
+    PersonalExpenseModel old,
+    WalletState wallet,
+    String sourceId,
+    double amount,
+  ) async {
+    try {
+      await ref
+          .read(personalExpensesProvider.notifier)
+          .updateExpense(
+            old.id,
+            description: _titleController.text.trim(),
+            amount: amount,
+            category: _category.id,
+            notes: _notesController.text.trim(),
+            expenseDate: _dateTime,
+            isIncome: _isIncome,
+            accountId: wallet.onServer ? sourceId : null,
+          );
+      final walletNotifier = ref.read(walletProvider.notifier);
+      if (!wallet.onServer) {
+        await walletNotifier.refundExpense(
+          expenseId: old.id,
+          amount: -old.signedAmount,
+        );
+      }
+      await walletNotifier.deductForExpense(
+        sourceId: sourceId,
+        expenseId: old.id,
+        amount: _isIncome ? -amount : amount,
+      );
+      ref.invalidate(dashboardProvider);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text(AppStrings.entrySaved)));
+      context.pop();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not save: $e')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -224,9 +297,13 @@ class _AddPersonalExpenseScreenState
       backgroundColor: AppColors.background(isDark),
       appBar: _TopBar(
         isDark: isDark,
-        title: _isIncome ? AppStrings.addIncome : AppStrings.addPersonalExpense,
+        title: widget.editing != null
+            ? (_isIncome ? AppStrings.editIncome : AppStrings.editExpense)
+            : _isIncome
+            ? AppStrings.addIncome
+            : AppStrings.addPersonalExpense,
         onBack: () => Navigator.of(context).pop(),
-        onVoice: _canUseVoice ? _voice : null,
+        onVoice: _canUseVoice && widget.editing == null ? _voice : null,
       ),
       body: SafeArea(
         bottom: false,
@@ -754,5 +831,29 @@ class _GradientSaveButton extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// /home/personal/:entryId/edit: opens [AddPersonalExpenseScreen] on the
+/// entry from the loaded list (an entry is only reachable from there).
+class EditPersonalEntryScreen extends ConsumerWidget {
+  const EditPersonalEntryScreen({super.key, required this.entryId});
+
+  final String entryId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final entry = ref
+        .watch(personalExpensesProvider)
+        .value
+        ?.where((e) => e.id == entryId)
+        .firstOrNull;
+    if (entry == null) {
+      return Scaffold(
+        appBar: AppBar(),
+        body: const Center(child: Text(AppStrings.entryNotFound)),
+      );
+    }
+    return AddPersonalExpenseScreen(editing: entry);
   }
 }

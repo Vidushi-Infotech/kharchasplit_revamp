@@ -332,7 +332,12 @@ class _AddExpenseButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    void go() => context.go('/add-expense');
+    // In Personal mode the main button adds a personal entry, not a group
+    // expense.
+    final personal = GoRouterState.of(context).uri.path.startsWith('/personal');
+    void go() => personal
+        ? context.push('/home/personal/new')
+        : context.go('/add-expense');
 
     if (collapsed) {
       return Padding(

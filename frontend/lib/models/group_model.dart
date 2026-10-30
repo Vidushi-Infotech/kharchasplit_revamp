@@ -37,6 +37,9 @@ class GroupModel extends Equatable {
   final GroupCategory category;
   final String? createdBy;
 
+  /// The group's notes ("Add notes" when creating, Edit group later).
+  final String? description;
+
   /// Archived groups are read-only for expenses (backend returns 409
   /// GROUP_ARCHIVED); payments can still be recorded.
   final bool isArchived;
@@ -82,6 +85,7 @@ class GroupModel extends Equatable {
     required this.createdAt,
     this.category = GroupCategory.other,
     this.createdBy,
+    this.description,
     this.isArchived = false,
     this.archivedAt,
     this.completedAt,
@@ -105,6 +109,9 @@ class GroupModel extends Equatable {
     return GroupModel(
       id: json['id'] as String,
       name: (json['name'] as String?) ?? '',
+      description: (json['description'] as String?)?.trim().isEmpty ?? true
+          ? null
+          : json['description'] as String,
       coverEmoji: (json['coverEmoji'] as String?) ?? '👥',
       coverImageBase64: (rawCover != null && rawCover.isNotEmpty)
           ? rawCover
@@ -163,6 +170,7 @@ class GroupModel extends Equatable {
     DateTime? createdAt,
     GroupCategory? category,
     String? createdBy,
+    String? description,
     bool? isArchived,
     DateTime? archivedAt,
     DateTime? completedAt,
@@ -185,6 +193,7 @@ class GroupModel extends Equatable {
       createdAt: createdAt ?? this.createdAt,
       category: category ?? this.category,
       createdBy: createdBy ?? this.createdBy,
+      description: description ?? this.description,
       isArchived: isArchived ?? this.isArchived,
       archivedAt: archivedAt ?? this.archivedAt,
       completedAt: completedAt ?? this.completedAt,
@@ -218,6 +227,7 @@ class GroupModel extends Equatable {
   List<Object?> get props => [
     id,
     name,
+    description,
     coverEmoji,
     coverImageBase64,
     members,

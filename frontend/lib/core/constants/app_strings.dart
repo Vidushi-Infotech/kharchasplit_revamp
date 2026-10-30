@@ -223,6 +223,9 @@ abstract final class AppStrings {
   static const moneyOut = 'Out';
   static const net = 'Net';
   static const transactions = 'Transactions';
+  static const editIncome = 'Edit income';
+  static const entrySaved = 'Changes saved';
+  static const entryNotFound = 'This entry is no longer here.';
 
   // ── Personal mode: Insights ─────────────────────────────────────────
   static const insights = 'Insights';

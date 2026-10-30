@@ -168,10 +168,18 @@ class _Body extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final wallet = ref.watch(walletProvider).value ?? WalletState.empty;
-    final spent = ref.watch(personalExpensesTotalProvider);
     final withIncome = watchFeature(ref, 'personalIncome');
     final flow = ref.watch(personalCashFlowProvider);
-    final expenseCount = allItems.where((e) => !e.isIncome).length;
+    // The wallet card counts this month, like the cash-flow card.
+    final now = DateTime.now();
+    final expenseCount = allItems
+        .where(
+          (e) =>
+              !e.isIncome &&
+              e.expenseDate.year == now.year &&
+              e.expenseDate.month == now.month,
+        )
+        .length;
     final grouped = _groupByDay(visibleItems);
     final hasAnyExpenses = allItems.isNotEmpty;
     final isFilteringEmpty = hasAnyExpenses && visibleItems.isEmpty;
@@ -199,7 +207,7 @@ class _Body extends ConsumerWidget {
                   )
                 : _WalletCard(
                     wallet: wallet,
-                    spent: spent,
+                    spent: flow.spent,
                     expenseCount: expenseCount,
                     onTap: () => WalletSetupSheet.show(context),
                   ),
@@ -745,7 +753,7 @@ class _WalletCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        'Spent ${CurrencyFormatter.format(spent, currency: '₹')} '
+                        'Spent this month ${CurrencyFormatter.format(spent, currency: '₹')} '
                         '· $expenseCount ${expenseCount == 1 ? 'expense' : 'expenses'}',
                         style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.82),

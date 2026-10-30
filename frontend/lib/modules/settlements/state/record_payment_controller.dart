@@ -21,7 +21,16 @@ class RecordPaymentController {
     required double amount,
     String? notes,
     SettlementMethod? method,
+    DateTime? paidOn,
   }) async {
+    final now = DateTime.now();
+    final earlier =
+        paidOn != null &&
+        DateTime(
+          paidOn.year,
+          paidOn.month,
+          paidOn.day,
+        ).isBefore(DateTime(now.year, now.month, now.day));
     await _ref
         .read(settlementsRepositoryProvider)
         .create(
@@ -32,6 +41,10 @@ class RecordPaymentController {
           currency: group.currency,
           notes: notes,
           method: method,
+          // Midday of an earlier day; today's payments get the server's now.
+          paidAt: earlier
+              ? DateTime(paidOn.year, paidOn.month, paidOn.day, 12)
+              : null,
         );
     _ref.invalidate(dashboardProvider);
     _ref.invalidate(groupDetailProvider(group.id));

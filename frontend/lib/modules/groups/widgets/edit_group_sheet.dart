@@ -72,7 +72,9 @@ class _EditGroupSheetState extends ConsumerState<EditGroupSheet> {
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.group.name);
-    _descController = TextEditingController();
+    _descController = TextEditingController(
+      text: widget.group.description ?? '',
+    );
     _nameController.addListener(() {
       if (_nameError != null && mounted) setState(() => _nameError = null);
     });
@@ -89,6 +91,9 @@ class _EditGroupSheetState extends ConsumerState<EditGroupSheet> {
 
   bool get _hasChanges {
     if (_nameController.text.trim() != widget.group.name) return true;
+    if (_descController.text.trim() != (widget.group.description ?? '')) {
+      return true;
+    }
     if (_newCoverBytes != null) return true;
     if (_coverRemoved && widget.group.coverImageBase64 != null) return true;
     return false;
@@ -177,6 +182,10 @@ class _EditGroupSheetState extends ConsumerState<EditGroupSheet> {
           .updateGroup(
             widget.group.id,
             name: newName != widget.group.name ? newName : null,
+            description:
+                _descController.text.trim() != (widget.group.description ?? '')
+                ? _descController.text.trim()
+                : null,
             coverImageBase64: coverPayload,
           );
       if (!mounted) return;
@@ -255,6 +264,18 @@ class _EditGroupSheetState extends ConsumerState<EditGroupSheet> {
                       ),
                       if (_nameError != null)
                         _FieldError(text: _nameError!, isDark: isDark),
+                      const SizedBox(height: 16),
+                      _SectionLabel(isDark: isDark, text: 'NOTES'),
+                      const SizedBox(height: 8),
+                      _StyledField(
+                        controller: _descController,
+                        focusNode: _descFocus,
+                        hint: 'Optional, e.g. trip dates or house rules',
+                        icon: Icons.notes_rounded,
+                        isDark: isDark,
+                        hasError: false,
+                        onChanged: (_) => setState(() {}),
+                      ),
                       if (!widget.group.isDirect) ...[
                         const SizedBox(height: 16),
                         GroupDefaultSplitRow(group: widget.group),
@@ -361,7 +382,7 @@ class _Header extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  'Only the admin can update these details.',
+                  'Any member can change these details.',
                   style: AppTextStyles.caption(isDark).copyWith(
                     color: AppColors.textSecondary(isDark),
                     fontSize: 11.5,
@@ -557,6 +578,7 @@ class _StyledField extends StatefulWidget {
     required this.hasError,
     this.textInputAction,
     this.onSubmitted,
+    this.onChanged,
   });
 
   final TextEditingController controller;
@@ -567,6 +589,7 @@ class _StyledField extends StatefulWidget {
   final bool hasError;
   final TextInputAction? textInputAction;
   final ValueChanged<String>? onSubmitted;
+  final ValueChanged<String>? onChanged;
 
   @override
   State<_StyledField> createState() => _StyledFieldState();
@@ -630,6 +653,7 @@ class _StyledFieldState extends State<_StyledField> {
               focusNode: widget.focusNode,
               textInputAction: widget.textInputAction,
               onSubmitted: widget.onSubmitted,
+              onChanged: widget.onChanged,
               style: AppTextStyles.body1(
                 isDark,
               ).copyWith(fontWeight: FontWeight.w600, fontSize: 15),

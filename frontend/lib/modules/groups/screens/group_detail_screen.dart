@@ -68,7 +68,7 @@ class GroupDetailScreen extends ConsumerWidget {
               // Actions need the loaded group; they appear with it.
               onSettings: null,
               onRecurring: null,
-              onMenuExport: (_) {},
+              onMenuExport: null,
             ),
             // ShimmerList is itself a list: give it the remaining height.
             const SliverFillRemaining(

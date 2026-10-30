@@ -11,14 +11,48 @@ final activityFeedProvider =
     );
 
 class ActivityFeedNotifier extends AsyncNotifier<List<ActivityModel>> {
+  static const _pageSize = 50;
+
+  /// Pages loaded so far, and whether the server has more.
+  int _page = 1;
+  bool _hasMore = false;
+  bool _loadingMore = false;
+
   @override
   Future<List<ActivityModel>> build() async {
+    _page = 1;
     final user = ref.watch(authProvider).user;
     if (user == null) return const [];
     final result = await ref
         .read(activitiesRepositoryProvider)
-        .listForUser(user.id);
+        .listForUser(user.id, limit: _pageSize);
+    _hasMore = result.activities.length == _pageSize;
     return result.activities;
+  }
+
+  /// The next page, appended (the feed calls this near its end). Once at
+  /// a time; a failure just leaves the list as it is.
+  Future<void> loadMore() async {
+    final user = ref.read(authProvider).user;
+    final current = state.value;
+    if (!_hasMore || _loadingMore || user == null || current == null) return;
+    _loadingMore = true;
+    try {
+      final result = await ref
+          .read(activitiesRepositoryProvider)
+          .listForUser(user.id, page: _page + 1, limit: _pageSize);
+      _page += 1;
+      _hasMore = result.activities.length == _pageSize;
+      final seen = {for (final a in current) a.id};
+      state = AsyncData([
+        ...current,
+        ...result.activities.where((a) => !seen.contains(a.id)),
+      ]);
+    } catch (_) {
+      // Stays as it is; scrolling again retries.
+    } finally {
+      _loadingMore = false;
+    }
   }
 
   /// Re-fetches while keeping the current data on screen. `invalidateSelf`

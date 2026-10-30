@@ -6,8 +6,9 @@ import '../../../models/group_model.dart';
 import '../../auth/state/auth_provider.dart';
 
 /// Live list of the current user's groups (server-backed).
-final groupsProvider =
-    AsyncNotifierProvider<GroupsNotifier, List<GroupModel>>(GroupsNotifier.new);
+final groupsProvider = AsyncNotifierProvider<GroupsNotifier, List<GroupModel>>(
+  GroupsNotifier.new,
+);
 
 class GroupsNotifier extends AsyncNotifier<List<GroupModel>> {
   @override
@@ -19,7 +20,9 @@ class GroupsNotifier extends AsyncNotifier<List<GroupModel>> {
       refresh();
     });
     if (user == null) return const <GroupModel>[];
-    return ref.read(groupsRepositoryProvider).listForUser(user.id);
+    // Every group, not just a first page: the "owed to me / I owe" totals
+    // are summed from this list.
+    return ref.read(groupsRepositoryProvider).listForUser(user.id, limit: 200);
   }
 
   /// Re-fetches while keeping the current data on screen. `invalidateSelf`

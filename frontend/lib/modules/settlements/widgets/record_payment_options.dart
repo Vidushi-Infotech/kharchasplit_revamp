@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../../../components/list/list_components.dart';
 import '../../../core/constants/app_strings.dart';
@@ -10,8 +11,8 @@ import '../../../models/settlement_model.dart';
 import 'payment_method_selector.dart';
 
 /// [📅 Today] [👥 Goa trip] [💳 Cash] [📝 Note] under the amount on the
-/// Record a payment screen; each opens a small sheet. Payments are always
-/// recorded with today's date (the server sets it), so Today just says so.
+/// Record a payment screen; each opens a picker. The date can go back up
+/// to a year, for a payment recorded later.
 class RecordPaymentOptions extends StatelessWidget {
   const RecordPaymentOptions({
     super.key,
@@ -19,6 +20,8 @@ class RecordPaymentOptions extends StatelessWidget {
     required this.groups,
     required this.selectedGroup,
     required this.method,
+    required this.paidOn,
+    required this.onPaidOnChanged,
     required this.notesController,
     required this.onGroupChanged,
     required this.onMethodChanged,
@@ -30,6 +33,8 @@ class RecordPaymentOptions extends StatelessWidget {
   final List<GroupModel> groups;
   final GroupModel? selectedGroup;
   final SettlementMethod? method;
+  final DateTime paidOn;
+  final ValueChanged<DateTime> onPaidOnChanged;
 
   /// Owned by the screen.
   final TextEditingController notesController;
@@ -44,12 +49,10 @@ class RecordPaymentOptions extends StatelessWidget {
         items: [
           ActionChipItem(
             icon: Icons.calendar_today_outlined,
-            label: AppStrings.todayLabel,
-            onTap: () => ScaffoldMessenger.of(context)
-              ..hideCurrentSnackBar()
-              ..showSnackBar(
-                const SnackBar(content: Text(AppStrings.paymentDateToday)),
-              ),
+            label: DateUtils.isSameDay(paidOn, DateTime.now())
+                ? AppStrings.todayLabel
+                : DateFormat('d MMM').format(paidOn),
+            onTap: () => _pickDate(context),
           ),
           ActionChipItem(
             icon: Icons.group_outlined,
@@ -111,11 +114,25 @@ class RecordPaymentOptions extends StatelessWidget {
     );
   }
 
+  Future<void> _pickDate(BuildContext context) async {
+    final today = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: paidOn,
+      firstDate: today.subtract(const Duration(days: 365)),
+      lastDate: today,
+    );
+    if (picked != null) {
+      HapticService.instance.selection();
+      onPaidOnChanged(picked);
+    }
+  }
+
   void _pickGroup(BuildContext context) {
     if (groups.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text(AppStrings.noSharedGroups)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text(AppStrings.noSharedGroups)));
       return;
     }
     _sheet<void>(

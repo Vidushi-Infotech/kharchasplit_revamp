@@ -113,7 +113,9 @@ Future<void> confirmArchiveGroup(
     context,
     title: '${AppStrings.archiveGroup}?',
     message: open > 0.01
-        ? AppStrings.archiveWithOpenBalance(CurrencyFormatter.format(open))
+        ? AppStrings.archiveWithOpenBalance(
+            CurrencyFormatter.format(open, currency: detail.group.currency),
+          )
         : 'Archiving hides the group and stops new expenses. You can '
               'unarchive it any time.',
     action: 'Archive',
@@ -145,7 +147,12 @@ Future<void> confirmCompleteGroup(
 ) async {
   final open = groupOpenAmount(detail);
   if (open > 0.01) {
-    return showSettleUpFirstDialog(context, detail.group.id, open);
+    return showSettleUpFirstDialog(
+      context,
+      detail.group.id,
+      open,
+      currency: detail.group.currency,
+    );
   }
   final go = await _confirm(
     context,
@@ -163,7 +170,12 @@ Future<void> confirmCompleteGroup(
     _snack(context, 'Group marked as complete');
   } on GroupNotSettledException catch (e) {
     if (!context.mounted) return;
-    await showSettleUpFirstDialog(context, detail.group.id, e.openAmount);
+    await showSettleUpFirstDialog(
+      context,
+      detail.group.id,
+      e.openAmount,
+      currency: detail.group.currency,
+    );
   } catch (e) {
     if (!context.mounted) return;
     _snack(context, _message(e));
@@ -175,14 +187,17 @@ Future<void> confirmCompleteGroup(
 Future<void> showSettleUpFirstDialog(
   BuildContext context,
   String groupId,
-  double openAmount,
-) async {
+  double openAmount, {
+  String currency = '₹',
+}) async {
   final goToBalances = await showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
       title: const Text(AppStrings.settleUpFirst),
       content: Text(
-        AppStrings.completeNeedsSettle(CurrencyFormatter.format(openAmount)),
+        AppStrings.completeNeedsSettle(
+          CurrencyFormatter.format(openAmount, currency: currency),
+        ),
       ),
       actions: [
         TextButton(

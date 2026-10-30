@@ -58,6 +58,9 @@ class _SettleScreenState extends ConsumerState<SettleScreen> {
   /// Null until the user picks one — sent as null rather than a guess.
   SettlementMethod? _method;
 
+  /// The day it was paid; today unless the user picks an earlier one.
+  DateTime _paidOn = DateTime.now();
+
   @override
   void initState() {
     super.initState();
@@ -118,6 +121,7 @@ class _SettleScreenState extends ConsumerState<SettleScreen> {
                 ? null
                 : _notesController.text.trim(),
             method: method ?? _method,
+            paidOn: _paidOn,
           );
       HapticService.instance.success();
       if (!mounted) return;
@@ -217,6 +221,8 @@ class _SettleScreenState extends ConsumerState<SettleScreen> {
                       groups: shared,
                       selectedGroup: group,
                       method: _method,
+                      paidOn: _paidOn,
+                      onPaidOnChanged: (d) => setState(() => _paidOn = d),
                       notesController: _notesController,
                       onGroupChanged: (g) => setState(() => _selectedGroup = g),
                       onMethodChanged: (m) => setState(() => _method = m),

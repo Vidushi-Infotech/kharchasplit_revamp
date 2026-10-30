@@ -55,9 +55,9 @@ class SettleUpiSection extends ConsumerWidget {
         padding: const EdgeInsets.only(bottom: 12),
         child: Text(
           AppStrings.upiNeedsInternet,
-          style: AppTextStyles.caption(isDark).copyWith(
-            color: AppColors.textSecondary(isDark),
-          ),
+          style: AppTextStyles.caption(
+            isDark,
+          ).copyWith(color: AppColors.textSecondary(isDark)),
         ),
       );
     }
@@ -140,8 +140,7 @@ class _AskForUpiIdButton extends ConsumerStatefulWidget {
   final String name;
 
   @override
-  ConsumerState<_AskForUpiIdButton> createState() =>
-      _AskForUpiIdButtonState();
+  ConsumerState<_AskForUpiIdButton> createState() => _AskForUpiIdButtonState();
 }
 
 class _AskForUpiIdButtonState extends ConsumerState<_AskForUpiIdButton> {

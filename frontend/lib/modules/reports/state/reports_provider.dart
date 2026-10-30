@@ -88,23 +88,37 @@ _CategoryMeta _metaFor(String id) =>
     _categoryMeta[id.toLowerCase()] ?? const _CategoryMeta('Other', '📦');
 
 /// Convert a 'YYYY-MM' bucket from the backend into a 3-letter month label
-/// for the bar chart's X axis.
-String _monthLabel(String yyyyMm) {
+/// for the bar chart's X axis; with [withYear] (a range across years) as
+/// "Jan '26", so two Januaries don't merge into one bar.
+String _monthLabel(String yyyyMm, {bool withYear = false}) {
   const labels = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
   final parts = yyyyMm.split('-');
   if (parts.length < 2) return yyyyMm;
   final m = int.tryParse(parts[1]);
   if (m == null || m < 1 || m > 12) return yyyyMm;
-  return labels[m - 1];
+  return withYear
+      ? "${labels[m - 1]} '${parts[0].substring(parts[0].length - 2)}"
+      : labels[m - 1];
 }
 
 /// Selected period (Month / Quarter / Year chip). The screen reads + writes
 /// this; the reportsProvider re-runs whenever this changes.
-final reportsPeriodProvider =
-    StateProvider<ReportsPeriod>((ref) => ReportsPeriod.month);
+final reportsPeriodProvider = StateProvider<ReportsPeriod>(
+  (ref) => ReportsPeriod.month,
+);
 
 /// Live, period-aware aggregation for the Reports screen. Re-fetches when
 /// the user picks a different period chip and when auth state changes.
@@ -126,8 +140,10 @@ final reportsProvider = FutureProvider<ReportsData>((ref) async {
   });
 
   final monthlyDisplay = <String, double>{};
+  final years = summary.monthlySpending.keys.map((b) => b.split('-').first);
+  final acrossYears = years.toSet().length > 1;
   summary.monthlySpending.forEach((bucket, amount) {
-    monthlyDisplay[_monthLabel(bucket)] = amount;
+    monthlyDisplay[_monthLabel(bucket, withYear: acrossYears)] = amount;
   });
 
   final topCategories = summary.topCategories.map((row) {

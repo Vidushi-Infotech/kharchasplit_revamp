@@ -300,6 +300,13 @@ final appRouter = GoRouter(
           ),
         ),
         GoRoute(
+          path: '/home/personal/:entryId/edit',
+          name: 'edit-personal-entry',
+          builder: (context, state) => EditPersonalEntryScreen(
+            entryId: state.pathParameters['entryId']!,
+          ),
+        ),
+        GoRoute(
           path: '/home/profile/edit',
           name: 'edit-profile',
           builder: (context, state) => const EditProfileScreen(),

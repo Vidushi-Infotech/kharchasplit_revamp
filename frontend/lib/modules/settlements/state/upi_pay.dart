@@ -23,8 +23,7 @@ bool isUpiCurrency(String currency) {
 }
 
 /// Whether [amount] can be paid in one UPI transaction.
-bool isUpiPayableAmount(double amount) =>
-    amount > 0 && amount <= kUpiMaxAmount;
+bool isUpiPayableAmount(double amount) => amount > 0 && amount <= kUpiMaxAmount;
 
 /// Builds the `upi://pay` deep link. Values are percent-encoded by hand
 /// (`%20`, not `+`, for spaces) because several UPI apps show a literal `+`.

@@ -141,7 +141,7 @@ class _OutgoingSettlementTileState
           Expanded(
             child: Text(
               withPaymentMethod(
-                'You sent $toName ${CurrencyFormatter.format(s.amount as double)}',
+                'You sent $toName ${CurrencyFormatter.format(s.amount as double, currency: s.currency as String)}',
                 s.method as SettlementMethod?,
               ),
               style: AppTextStyles.body2(widget.isDark),

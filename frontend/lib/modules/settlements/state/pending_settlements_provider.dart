@@ -13,29 +13,34 @@ import '../../auth/state/auth_provider.dart';
 /// confirm/decline action to refresh.
 final pendingIncomingSettlementsProvider = FutureProvider.autoDispose
     .family<List<SettlementModel>, String>((ref, groupId) async {
-  keepAliveFor(ref, const Duration(minutes: 5));
-  final me = ref.watch(authProvider).user;
-  if (me == null) return const [];
-  final all =
-      await ref.read(settlementsRepositoryProvider).listAllForGroup(groupId);
-  return all
-      .where((s) =>
-          s.status == SettlementStatus.pending && s.toUser.id == me.id)
-      .toList();
-});
+      keepAliveFor(ref, const Duration(minutes: 5));
+      final me = ref.watch(authProvider).user;
+      if (me == null) return const [];
+      final all = await ref
+          .read(settlementsRepositoryProvider)
+          .listAllForGroup(groupId);
+      return all
+          .where(
+            (s) => s.status == SettlementStatus.pending && s.toUser.id == me.id,
+          )
+          .toList();
+    });
 
 /// Same idea, flipped — pending settlements the current user *sent* that
 /// are still waiting for the recipient to confirm. Used to show a Cancel
 /// affordance so the sender can withdraw the promise.
 final pendingOutgoingSettlementsProvider = FutureProvider.autoDispose
     .family<List<SettlementModel>, String>((ref, groupId) async {
-  keepAliveFor(ref, const Duration(minutes: 5));
-  final me = ref.watch(authProvider).user;
-  if (me == null) return const [];
-  final all =
-      await ref.read(settlementsRepositoryProvider).listAllForGroup(groupId);
-  return all
-      .where((s) =>
-          s.status == SettlementStatus.pending && s.fromUser.id == me.id)
-      .toList();
-});
+      keepAliveFor(ref, const Duration(minutes: 5));
+      final me = ref.watch(authProvider).user;
+      if (me == null) return const [];
+      final all = await ref
+          .read(settlementsRepositoryProvider)
+          .listAllForGroup(groupId);
+      return all
+          .where(
+            (s) =>
+                s.status == SettlementStatus.pending && s.fromUser.id == me.id,
+          )
+          .toList();
+    });

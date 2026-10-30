@@ -28,10 +28,10 @@ class SettleAllLine {
   final double amount;
 
   factory SettleAllLine.fromJson(Map<String, dynamic> json) => SettleAllLine(
-        groupId: json['groupId'] as String,
-        groupName: (json['groupName'] as String?) ?? '',
-        amount: double.tryParse(json['amount'].toString()) ?? 0,
-      );
+    groupId: json['groupId'] as String,
+    groupName: (json['groupName'] as String?) ?? '',
+    amount: double.tryParse(json['amount'].toString()) ?? 0,
+  );
 }
 
 /// 409 `BALANCES_CHANGED` from settle-all: the balances moved since they
@@ -86,17 +86,14 @@ class SettlementsRepository {
   }) async {
     final res = await _client.dio.get(
       '/settlements',
-      queryParameters: {
-        'groupId': groupId,
-        'page': page,
-        'limit': limit,
-      },
+      queryParameters: {'groupId': groupId, 'page': page, 'limit': limit},
     );
     final body = _ensureSuccess(res);
     final data = body['data'];
     if (data is! List) {
       throw SettlementsApiException(
-          'Malformed response: expected list in data');
+        'Malformed response: expected list in data',
+      );
     }
     final items = data
         .whereType<Map<String, dynamic>>()
@@ -123,10 +120,13 @@ class SettlementsRepository {
     required String currency,
     String? notes,
     SettlementMethod? method,
+    DateTime? paidAt,
   }) async {
     final res = await _client.dio.post(
       '/settlements',
       data: {
+        // Only for a payment made before today (recorded later).
+        if (paidAt != null) 'paidAt': paidAt.toUtc().toIso8601String(),
         'groupId': groupId,
         'fromUserId': fromUserId,
         'toUserId': toUserId,
@@ -158,8 +158,7 @@ class SettlementsRepository {
         'friendId': friendId,
         'currency': currency,
         'expected': [
-          for (final l in expected)
-            {'groupId': l.groupId, 'amount': l.amount},
+          for (final l in expected) {'groupId': l.groupId, 'amount': l.amount},
         ],
         if (method != null) 'method': method.apiValue,
         if (notes != null && notes.isNotEmpty) 'notes': notes,
@@ -192,7 +191,8 @@ class SettlementsRepository {
   Map<String, dynamic> _ensureSuccess(Response res) {
     final body = res.data;
     if (body is! Map || body['success'] != true) {
-      final msg = (body is Map ? body['error'] : null)?.toString() ??
+      final msg =
+          (body is Map ? body['error'] : null)?.toString() ??
           'Request failed (status ${res.statusCode})';
       throw SettlementsApiException(msg, statusCode: res.statusCode);
     }

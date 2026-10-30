@@ -62,6 +62,34 @@ class PersonalExpensesNotifier
     return created;
   }
 
+  /// Saves changes to an entry. The wallet follows on its own for server
+  /// accounts; the phone-only wallet is moved by the caller.
+  Future<PersonalExpenseModel> updateExpense(
+    String id, {
+    required String description,
+    required double amount,
+    required String category,
+    String? notes,
+    required DateTime expenseDate,
+    required bool isIncome,
+    String? accountId,
+  }) async {
+    final updated = await ref
+        .read(personalExpensesRepositoryProvider)
+        .update(
+          id,
+          description: description,
+          amount: amount,
+          category: category,
+          notes: notes ?? '',
+          expenseDate: expenseDate,
+          isIncome: isIncome,
+          accountId: accountId,
+        );
+    await refresh();
+    return updated;
+  }
+
   Future<void> deleteExpense(String id) async {
     // Look up the entry before deleting so we know how much to put back.
     final items = state.value ?? const <PersonalExpenseModel>[];

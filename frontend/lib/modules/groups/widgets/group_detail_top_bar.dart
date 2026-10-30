@@ -42,7 +42,8 @@ class GroupDetailSliverBar extends StatelessWidget {
   final VoidCallback? onRecurring;
 
   /// A value picked from the export entries of ⋮ (Excel / CSV / PDF).
-  final ValueChanged<String> onMenuExport;
+  /// Null while the group loads: exports need it, so the menu waits.
+  final ValueChanged<String>? onMenuExport;
 
   @override
   Widget build(BuildContext context) {
@@ -75,28 +76,30 @@ class GroupDetailSliverBar extends StatelessWidget {
             onTap: onSettings!,
           ),
         if (onSettings != null) const GlassGap(),
-        GlassMenuButton<String>(
-          menu: _menu(isDark),
-          color: Colors.white,
-          glassItems: [
-            if (onSettings != null)
-              const GlassMenuItem(
-                value: 'settings',
-                label: AppStrings.groupSettings,
-                icon: Icons.settings_outlined,
-              ),
-            if (onRecurring != null)
-              const GlassMenuItem(
-                value: 'recurring',
-                label: AppStrings.recurringExpenses,
-                icon: Icons.repeat_rounded,
-              ),
-            ...groupExportGlassItems(
-              includeExcel: true,
-              dividerBefore: onSettings != null || onRecurring != null,
-            ),
-          ],
-        ),
+        if (onSettings != null || onRecurring != null || onMenuExport != null)
+          GlassMenuButton<String>(
+            menu: _menu(isDark),
+            color: Colors.white,
+            glassItems: [
+              if (onSettings != null)
+                const GlassMenuItem(
+                  value: 'settings',
+                  label: AppStrings.groupSettings,
+                  icon: Icons.settings_outlined,
+                ),
+              if (onRecurring != null)
+                const GlassMenuItem(
+                  value: 'recurring',
+                  label: AppStrings.recurringExpenses,
+                  icon: Icons.repeat_rounded,
+                ),
+              if (onMenuExport != null)
+                ...groupExportGlassItems(
+                  includeExcel: true,
+                  dividerBefore: onSettings != null || onRecurring != null,
+                ),
+            ],
+          ),
         const SizedBox(width: 4),
         const GlassGap(width: 4),
       ],
@@ -189,7 +192,7 @@ class GroupDetailSliverBar extends StatelessWidget {
           ? onRecurring?.call()
           : value == 'settings'
           ? onSettings?.call()
-          : onMenuExport(value),
+          : onMenuExport?.call(value),
       itemBuilder: (_) => [
         if (onSettings != null)
           _item(
@@ -205,7 +208,8 @@ class GroupDetailSliverBar extends StatelessWidget {
             AppStrings.recurringExpenses,
             isDark,
           ),
-        ...buildGroupExportMenuItems(isDark, includeExcel: true),
+        if (onMenuExport != null)
+          ...buildGroupExportMenuItems(isDark, includeExcel: true),
       ],
     );
   }

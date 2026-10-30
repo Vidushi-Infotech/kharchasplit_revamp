@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/utils/currency_formatter.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../data/expenses/expenses_repository.dart';
 import '../../../models/models.dart';
@@ -162,6 +163,26 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen>
     final archived = groupAsync?.value?.group.isArchived ?? false;
     // New expense in a group with a default split → start from it.
     applyGroupDefaultSplitOnce(groupAsync?.value);
+
+    // Amounts are in the group's currency (unless another one was picked):
+    // a USD group's expense must not show, or be saved in, ₹.
+    final groupSymbol = groupAsync?.value == null
+        ? null
+        : CurrencyFormatter.symbolFor(groupAsync!.value!.group.currency);
+    if (groupSymbol != null &&
+        !widget.isEditing &&
+        expenseState.entryCurrency == null &&
+        expenseState.currency != groupSymbol) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final s = ref.read(addExpenseProvider);
+        if (s.entryCurrency == null && s.currency != groupSymbol) {
+          ref.read(addExpenseProvider.notifier).state = s.copyWith(
+            currency: groupSymbol,
+          );
+        }
+      });
+    }
 
     // Equal-split write-back — see [listenEqualSplitWriteBack].
     listenEqualSplitWriteBack(

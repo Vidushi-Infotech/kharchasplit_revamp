@@ -32,7 +32,6 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
   late TextEditingController _descriptionController;
   late FocusNode _groupNameFocus;
   late FocusNode _descriptionFocus;
-  GroupCategory _selectedCategory = GroupCategory.other;
   XFile? _selectedImageFile;
   /// Compressed bytes of the picked cover image. Sent as base64 on submit.
   Uint8List? _coverBytes;
@@ -206,8 +205,10 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
     // 1. Create the group (creator is added as the only member by the backend).
     GroupModel newGroup;
     try {
+      final notes = _descriptionController.text.trim();
       newGroup = await ref.read(groupsProvider.notifier).addGroup(
             name: name,
+            description: notes.isEmpty ? null : notes,
             coverImageBase64: coverBase64,
           );
     } catch (e) {
@@ -364,10 +365,6 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
       children: [
         _buildCoverAndNameRow(isDark),
         const SizedBox(height: 28),
-        _SectionTitle(label: 'Category', isDark: isDark),
-        const SizedBox(height: 10),
-        _buildCategorySelector(isDark),
-        const SizedBox(height: 28),
         _SectionTitle(
           label: 'Members',
           isDark: isDark,
@@ -471,87 +468,6 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
         ),
       ),
     );
-  }
-
-  Widget _buildCategorySelector(bool isDark) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 10,
-      children: GroupCategory.values.map((category) {
-        final isSelected = category == _selectedCategory;
-        final name = _categoryLabel(category);
-        final emoji = _categoryEmoji(category);
-
-        return Semantics(
-          button: true,
-          label: 'Category $name',
-          selected: isSelected,
-          child: GestureDetector(
-            onTap: () {
-              if (_selectedCategory != category) {
-                HapticService.instance.selection();
-              }
-              setState(() => _selectedCategory = category);
-            },
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 140),
-              padding: const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 9,
-              ),
-              decoration: BoxDecoration(
-                color: isSelected
-                    ? AppColors.tealDark
-                    : AppColors.cardBg(isDark),
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(
-                  color: isSelected
-                      ? AppColors.tealDark
-                      : AppColors.divider(isDark),
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(emoji, style: const TextStyle(fontSize: 14)),
-                  const SizedBox(width: 6),
-                  Text(
-                    name,
-                    style: AppTextStyles.body2(isDark).copyWith(
-                      color: isSelected
-                          ? Colors.white
-                          : AppColors.textPrimary(isDark),
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  String _categoryEmoji(GroupCategory c) {
-    switch (c) {
-      case GroupCategory.trip:
-        return '✈️';
-      case GroupCategory.home:
-        return '🏠';
-      case GroupCategory.couple:
-        return '💑';
-      case GroupCategory.work:
-        return '💼';
-      case GroupCategory.other:
-        return '🏷️';
-    }
-  }
-
-  String _categoryLabel(GroupCategory c) {
-    final s = c.toString().split('.').last;
-    return s[0].toUpperCase() + s.substring(1);
   }
 
   Widget _buildMembersSection(bool isDark) {

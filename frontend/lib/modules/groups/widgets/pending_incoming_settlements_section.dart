@@ -130,7 +130,7 @@ class _PendingSettlementTileState
           Expanded(
             child: Text(
               withPaymentMethod(
-                '$fromName paid you ${CurrencyFormatter.format(s.amount as double)}',
+                '$fromName paid you ${CurrencyFormatter.format(s.amount as double, currency: s.currency as String)}',
                 s.method as SettlementMethod?,
               ),
               style: AppTextStyles.body2(widget.isDark),

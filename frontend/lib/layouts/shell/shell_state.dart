@@ -3,9 +3,6 @@ import 'package:flutter_riverpod/legacy.dart';
 /// Provider for selected navigation index
 final selectedNavIndexProvider = StateProvider<int>((ref) => 0);
 
-/// Provider for unread activity count (badge)
-final unreadActivityCountProvider = StateProvider<int>((ref) => 3);
-
 /// Tab order shared by the mobile bottom bar and the tablet rail
 /// (Splitwise-style): Groups · Friends · ➕ · Activity · Account.
 abstract final class ShellTab {

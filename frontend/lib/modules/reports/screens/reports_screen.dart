@@ -342,35 +342,78 @@ class ReportsScreen extends ConsumerWidget {
             style: AppTextStyles.headline3(isDark).copyWith(fontSize: 18),
           ),
           const SizedBox(height: 16),
-          SizedBox(
-            height: 200,
-            child: PieChart(
-              PieChartData(
-                sections: _buildPieChartSections(
-                  report.categorySpending,
-                  isDark,
+          if (report.categorySpending.isEmpty)
+            _emptyNote(isDark)
+          else ...[
+            SizedBox(
+              height: 200,
+              child: PieChart(
+                PieChartData(
+                  sections: _buildPieChartSections(
+                    report.categorySpending,
+                    isDark,
+                  ),
+                  centerSpaceRadius: 40,
+                  sectionsSpace: 2,
                 ),
-                centerSpaceRadius: 40,
-                sectionsSpace: 2,
               ),
             ),
-          ),
+            const SizedBox(height: 12),
+            // Which slice is which.
+            Wrap(
+              spacing: 14,
+              runSpacing: 6,
+              children: [
+                for (final (i, name) in report.categorySpending.keys.indexed)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 10,
+                        height: 10,
+                        decoration: BoxDecoration(
+                          color: _pieColors[i % _pieColors.length],
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(name, style: AppTextStyles.caption(isDark)),
+                    ],
+                  ),
+              ],
+            ),
+          ],
         ],
       ),
     );
   }
 
+  static const _pieColors = [
+    AppColors.brand,
+    AppColors.success,
+    AppColors.warning,
+    Colors.purple,
+    Colors.orange,
+  ];
+
+  /// What an empty period shows instead of a blank chart.
+  Widget _emptyNote(bool isDark) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 24),
+    child: Center(
+      child: Text(
+        'No expenses in this period yet.',
+        style: AppTextStyles.body2(
+          isDark,
+        ).copyWith(color: AppColors.textSecondary(isDark)),
+      ),
+    ),
+  );
+
   List<PieChartSectionData> _buildPieChartSections(
     Map<String, double> categorySpending,
     bool isDark,
   ) {
-    final colors = [
-      AppColors.brand,
-      AppColors.success,
-      AppColors.warning,
-      Colors.purple,
-      Colors.orange,
-    ];
+    const colors = _pieColors;
 
     return categorySpending.entries.toList().asMap().entries.map((e) {
       final index = e.key;
@@ -412,38 +455,44 @@ class ReportsScreen extends ConsumerWidget {
             style: AppTextStyles.headline3(isDark).copyWith(fontSize: 18),
           ),
           const SizedBox(height: 16),
-          SizedBox(
-            height: 200,
-            child: BarChart(
-              BarChartData(
-                barGroups: _buildBarGroups(report.monthlySpending),
-                borderData: FlBorderData(show: false),
-                gridData: FlGridData(show: false),
-                titlesData: FlTitlesData(
-                  bottomTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      getTitlesWidget: (value, meta) {
-                        final months = report.monthlySpending.keys.toList();
-                        if (value.toInt() < months.length) {
-                          return Text(months[value.toInt()]);
-                        }
-                        return const SizedBox();
-                      },
+          if (report.monthlySpending.values.every((v) => v == 0))
+            _emptyNote(isDark)
+          else
+            SizedBox(
+              height: 200,
+              child: BarChart(
+                BarChartData(
+                  barGroups: _buildBarGroups(report.monthlySpending),
+                  borderData: FlBorderData(show: false),
+                  gridData: FlGridData(show: false),
+                  titlesData: FlTitlesData(
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        getTitlesWidget: (value, meta) {
+                          final months = report.monthlySpending.keys.toList();
+                          if (value.toInt() < months.length) {
+                            return Text(months[value.toInt()]);
+                          }
+                          return const SizedBox();
+                        },
+                      ),
                     ),
-                  ),
-                  leftTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      getTitlesWidget: (value, meta) {
-                        return Text('₹${(value / 1000).toStringAsFixed(0)}K');
-                      },
+                    leftTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        getTitlesWidget: (value, meta) {
+                          return Text(
+                            CurrencyFormatter.compact(value),
+                            style: const TextStyle(fontSize: 10),
+                          );
+                        },
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
         ],
       ),
     );
@@ -492,6 +541,7 @@ class ReportsScreen extends ConsumerWidget {
             style: AppTextStyles.headline3(isDark).copyWith(fontSize: 18),
           ),
           const SizedBox(height: 12),
+          if (report.topCategories.isEmpty) _emptyNote(isDark),
           ...report.topCategories.map((category) {
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
