@@ -12,6 +12,8 @@ import '../../dashboard/state/dashboard_provider.dart';
 import '../state/groups_list_view.dart';
 import '../../../components/buttons/glass_icon_button.dart';
 import '../../../components/headers/glass_large_title.dart' show HideOnCollapse;
+import '../../../components/buttons/glass_menu_button.dart';
+import '../../../components/menus/glass_menu.dart';
 import 'groups_notifications_button.dart';
 
 /// "Groups" title with the bell, donate heart, search and create-group
@@ -209,6 +211,23 @@ class _GroupsFilterButton extends ConsumerWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final current = ref.watch(groupsListFilterProvider);
     final active = current != GroupsListFilter.all;
+    return GlassMenuButton<GroupsListFilter>(
+      plainTrigger: true,
+      glassItems: [
+        for (final (value, label) in _options)
+          GlassMenuItem(value: value, label: label, checked: value == current),
+      ],
+      menu: _materialMenu(context, ref, current, active, isDark),
+    );
+  }
+
+  PopupMenuButton<GroupsListFilter> _materialMenu(
+    BuildContext context,
+    WidgetRef ref,
+    GroupsListFilter current,
+    bool active,
+    bool isDark,
+  ) {
     return PopupMenuButton<GroupsListFilter>(
       tooltip: AppStrings.filterGroups,
       initialValue: current,

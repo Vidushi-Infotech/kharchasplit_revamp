@@ -9,6 +9,7 @@ import '../state/group_display.dart';
 import '../state/group_detail_provider.dart';
 import 'export_group_menu.dart';
 import 'group_detail_banner.dart';
+import '../../../components/menus/glass_menu.dart';
 import 'group_detail_cover.dart';
 
 /// Height of the cover banner, and how far the group avatar hangs below it.
@@ -71,7 +72,28 @@ class GroupDetailSliverBar extends StatelessWidget {
             onTap: onSettings!,
           ),
         if (onSettings != null) const GlassGap(),
-        GlassMenuButton<String>(menu: _menu(isDark), color: Colors.white),
+        GlassMenuButton<String>(
+          menu: _menu(isDark),
+          color: Colors.white,
+          glassItems: [
+            if (onSettings != null)
+              const GlassMenuItem(
+                value: 'settings',
+                label: AppStrings.groupSettings,
+                icon: Icons.settings_outlined,
+              ),
+            if (onRecurring != null)
+              const GlassMenuItem(
+                value: 'recurring',
+                label: AppStrings.recurringExpenses,
+                icon: Icons.repeat_rounded,
+              ),
+            ...groupExportGlassItems(
+              includeExcel: true,
+              dividerBefore: onSettings != null || onRecurring != null,
+            ),
+          ],
+        ),
         const SizedBox(width: 4),
         const GlassGap(width: 4),
       ],

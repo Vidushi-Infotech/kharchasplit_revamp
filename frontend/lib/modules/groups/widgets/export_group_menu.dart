@@ -15,6 +15,7 @@ import '../state/group_detail_provider.dart';
 import '../state/group_totals_calculator.dart';
 import '../state/group_totals_provider.dart';
 import 'export_statement_period_sheet.dart';
+import '../../../components/menus/glass_menu.dart';
 import 'group_totals_cards.dart';
 
 /// The group's export options — Excel (server ledger), CSV (server) and
@@ -51,6 +52,23 @@ List<PopupMenuEntry<String>> buildGroupExportMenuItems(
   for (final (value, icon, label) in _exportOptions)
     if (includeExcel || value != exportExcelMenuValue)
       _item(value, icon, label, isDark),
+];
+
+/// The same exports as rows of the iOS 26 glass menu.
+List<GlassMenuItem<String>> groupExportGlassItems({
+  bool includeExcel = false,
+  bool dividerBefore = false,
+}) => [
+  for (final (i, (value, icon, label))
+      in _exportOptions
+          .where((o) => includeExcel || o.$1 != exportExcelMenuValue)
+          .indexed)
+    GlassMenuItem(
+      value: value,
+      label: label,
+      icon: icon,
+      dividerBefore: dividerBefore && i == 0,
+    ),
 ];
 
 PopupMenuItem<String> _item(

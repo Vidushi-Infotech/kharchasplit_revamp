@@ -5,6 +5,7 @@ import '../../../components/buttons/donate_heart_button.dart';
 import '../../../components/buttons/glass_icon_button.dart';
 import '../../../components/buttons/glass_menu_button.dart';
 import '../../../core/constants/app_strings.dart';
+import '../../../components/menus/glass_menu.dart';
 import '../../../core/theme/app_colors.dart';
 
 /// "←  … 🗑 ✏️ ⋮" app bar of the expense detail screen. Delete and Edit
@@ -80,6 +81,13 @@ class ExpenseDetailTopBar extends StatelessWidget
                 if (onHistory != null) const GlassGap(),
                 if (onHistory != null)
                   GlassMenuButton<String>(
+                    glassItems: const [
+                      GlassMenuItem(
+                        value: 'history',
+                        label: AppStrings.editHistory,
+                        icon: Icons.history_rounded,
+                      ),
+                    ],
                     menu: PopupMenuButton<String>(
                       tooltip: AppStrings.moreOptions,
                       icon: Icon(Icons.more_vert_rounded, color: iconColor),
