@@ -43,6 +43,16 @@ class WalletLocalStore {
     await _prefs.setString(_expenseMapKey(userId), jsonEncode(map));
   }
 
+  String _importedKey(String userId) => 'wallet:imported:$userId';
+
+  /// Whether this phone's wallet was moved to server accounts (it's kept
+  /// here untouched, as a backup, but no longer used).
+  bool isImported(String userId) =>
+      _prefs.getBool(_importedKey(userId)) ?? false;
+
+  Future<void> markImported(String userId) =>
+      _prefs.setBool(_importedKey(userId), true);
+
   /// Wipe everything (use on logout).
   Future<void> clear(String userId) async {
     await _prefs.remove(_sourcesKey(userId));

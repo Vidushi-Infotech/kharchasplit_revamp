@@ -281,6 +281,35 @@ abstract final class AppStrings {
   static const budgetOverTitle = 'Over budget';
   static String budgetSpentThisMonth(String amount) =>
       '$amount spent this month';
+
+  // ── Personal mode: Accounts ─────────────────────────────────────────
+  static const accounts = 'Accounts';
+  static const accountCash = 'Cash';
+  static const accountBank = 'Bank';
+  static const accountCard = 'Card';
+  static const accountWallet = 'Wallet';
+  static const accountDue = 'due';
+  static const accountsNetWorth = 'Net balance';
+  static const accountsEmptyTitle = 'No accounts yet';
+  static const accountsEmptyBody =
+      'Add cash, a bank account, a card or a wallet to see where your money is.';
+  static const accountAdd = 'Add account';
+  static const accountManage = 'Manage accounts';
+  static const accountTransfer = 'Transfer';
+  static const accountTransferTitle = 'Move money';
+  static const accountTransferFrom = 'From';
+  static const accountTransferTo = 'To';
+  static const accountTransferNote = 'Note (optional, e.g. ATM)';
+  static const accountTransferDone = 'Transfer saved';
+  static const accountTransferFailed = "Couldn't save the transfer. Try again.";
+  static const accountTransferNeedTwo = 'Add a second account to move money.';
+  static const accountTransfers = 'Transfers';
+  static const accountEntries = 'Recent entries';
+  static const accountNoActivity = 'Nothing on this account yet.';
+  static const accountLoadError = "Couldn't load accounts";
+  static const accountDeleteTransfer = 'Delete transfer?';
+  static String accountEntryCount(int n) => n == 1 ? '1 entry' : '$n entries';
+  static const profile = 'Profile';
   static const reports = 'Reports';
   static const notifications = 'Notifications';
   static const goToGroups = 'Go to groups';

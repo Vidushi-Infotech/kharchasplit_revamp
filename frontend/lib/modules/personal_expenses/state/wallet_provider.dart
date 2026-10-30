@@ -1,15 +1,28 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../core/state/feature_flags_provider.dart';
+import '../../../data/personal_accounts/personal_accounts_repository.dart';
 import '../../../data/wallet/wallet_local_store.dart';
+import '../../../models/personal_expense_model.dart';
+import '../../../models/personal_transfer_model.dart';
 import '../../../models/wallet_source_model.dart';
 import '../../auth/state/auth_provider.dart';
+import 'personal_expenses_provider.dart';
 
 class WalletState {
-  const WalletState({required this.sources, required this.expenseSourceMap});
+  const WalletState({
+    required this.sources,
+    required this.expenseSourceMap,
+    this.onServer = false,
+  });
 
   final List<WalletSource> sources;
   final Map<String, String> expenseSourceMap;
+
+  /// Server accounts (`personalAccounts` flag): balances are computed
+  /// there, removing archives, and transfers are possible.
+  final bool onServer;
 
   static const empty = WalletState(sources: [], expenseSourceMap: {});
 
@@ -22,6 +35,7 @@ class WalletState {
   }) => WalletState(
     sources: sources ?? this.sources,
     expenseSourceMap: expenseSourceMap ?? this.expenseSourceMap,
+    onServer: onServer,
   );
 }
 
@@ -37,14 +51,59 @@ class WalletNotifier extends AsyncNotifier<WalletState> {
   Future<WalletLocalStore> _store() =>
       ref.read(walletLocalStoreProvider.future);
 
+  PersonalAccountsRepository get _server =>
+      ref.read(personalAccountsRepositoryProvider);
+
+  bool get _onServer => state.value?.onServer ?? false;
+
   @override
   Future<WalletState> build() async {
     final userId = ref.watch(myIdProvider);
     if (userId == null) return WalletState.empty;
     final store = await _store();
-    final sources = await store.readSources(userId);
-    final map = await store.readExpenseSourceMap(userId);
-    return WalletState(sources: sources, expenseSourceMap: map);
+    final flags = await ref.watch(featureFlagsProvider.future);
+    if (!flags.contains('personalAccounts')) {
+      final sources = await store.readSources(userId);
+      final map = await store.readExpenseSourceMap(userId);
+      return WalletState(sources: sources, expenseSourceMap: map);
+    }
+
+    // Server accounts. Balances follow the entries, so re-fetch with them.
+    final entries = ref.watch(personalExpensesProvider.select((s) => s.value));
+    final sources = await _serverSources(userId, store);
+    return WalletState(
+      sources: sources,
+      expenseSourceMap: {
+        for (final PersonalExpenseModel e in entries ?? const [])
+          if (e.accountId != null) e.id: e.accountId!,
+      },
+      onServer: true,
+    );
+  }
+
+  /// The server's accounts, moving this phone's wallet there the first
+  /// time (the server does it at most once per user).
+  Future<List<WalletSource>> _serverSources(
+    String userId,
+    WalletLocalStore store,
+  ) async {
+    if (!store.isImported(userId)) {
+      final local = await store.readSources(userId);
+      if (local.isNotEmpty) {
+        final links = await store.readExpenseSourceMap(userId);
+        final sources = await _server.importLocal(local, links);
+        await store.markImported(userId);
+        return sources;
+      }
+      await store.markImported(userId);
+    }
+    return _server.list();
+  }
+
+  /// After a server change: fetch the accounts again.
+  Future<void> _reload() async {
+    ref.invalidateSelf();
+    await future;
   }
 
   Future<void> _persistSources(List<WalletSource> sources) async {
@@ -67,6 +126,10 @@ class WalletNotifier extends AsyncNotifier<WalletState> {
     required WalletSourceType type,
     required double balance,
   }) async {
+    if (_onServer) {
+      await _server.create(name: name.trim(), type: type, balance: balance);
+      return _reload();
+    }
     final current = state.value ?? WalletState.empty;
     final updated = [
       ...current.sources,
@@ -82,6 +145,10 @@ class WalletNotifier extends AsyncNotifier<WalletState> {
   }
 
   Future<void> editSource(String id, {String? name, double? balance}) async {
+    if (_onServer) {
+      await _server.update(id, name: name?.trim(), balance: balance);
+      return _reload();
+    }
     final current = state.value ?? WalletState.empty;
     final updated = current.sources.map((s) {
       if (s.id != id) return s;
@@ -94,6 +161,11 @@ class WalletNotifier extends AsyncNotifier<WalletState> {
   /// Removes a source. Existing expense → source mappings to it are left as-is
   /// (they'll be ignored on refund attempts).
   Future<void> removeSource(String id) async {
+    // On the server this archives the account: its entries keep it.
+    if (_onServer) {
+      await _server.archive(id);
+      return _reload();
+    }
     final current = state.value ?? WalletState.empty;
     final updated = current.sources.where((s) => s.id != id).toList();
     await _persistSources(updated);
@@ -107,6 +179,8 @@ class WalletNotifier extends AsyncNotifier<WalletState> {
     required String expenseId,
     required double amount,
   }) async {
+    // The server already counted it (the entry was saved with its account).
+    if (_onServer) return _reload();
     final current = state.value ?? WalletState.empty;
     final updatedSources = current.sources.map((s) {
       if (s.id != sourceId) return s;
@@ -127,6 +201,7 @@ class WalletNotifier extends AsyncNotifier<WalletState> {
     required String expenseId,
     required double amount,
   }) async {
+    if (_onServer) return _reload();
     final current = state.value ?? WalletState.empty;
     final sourceId = current.expenseSourceMap[expenseId];
     if (sourceId == null) return;
@@ -144,4 +219,35 @@ class WalletNotifier extends AsyncNotifier<WalletState> {
       WalletState(sources: updatedSources, expenseSourceMap: updatedMap),
     );
   }
+
+  // ─── Transfers (server accounts only) ─────────────────────────────────
+  Future<void> transfer({
+    required String fromId,
+    required String toId,
+    required double amount,
+    String? note,
+  }) async {
+    await _server.transfer(
+      fromAccountId: fromId,
+      toAccountId: toId,
+      amount: amount,
+      note: note,
+    );
+    ref.invalidate(accountTransfersProvider);
+    return _reload();
+  }
+
+  Future<void> deleteTransfer(String id) async {
+    await _server.deleteTransfer(id);
+    ref.invalidate(accountTransfersProvider);
+    return _reload();
+  }
 }
+
+/// Transfers in and out of one account (null: all), newest first.
+final accountTransfersProvider = FutureProvider.autoDispose
+    .family<List<PersonalTransfer>, String?>(
+      (ref, accountId) => ref
+          .read(personalAccountsRepositoryProvider)
+          .transfers(accountId: accountId),
+    );

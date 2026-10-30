@@ -19,6 +19,7 @@ class PersonalExpenseModel extends Equatable {
     this.receiptBase64,
     required this.createdAt,
     this.isIncome = false,
+    this.accountId,
   });
 
   final String id;
@@ -32,6 +33,9 @@ class PersonalExpenseModel extends Equatable {
   final String? receiptBase64;
   final DateTime createdAt;
   final bool isIncome;
+
+  /// The Personal account it came from / went to (server accounts only).
+  final String? accountId;
 
   /// The amount as it moves the balance: negative for money out.
   double get signedAmount => isIncome ? amount : -amount;
@@ -64,6 +68,7 @@ class PersonalExpenseModel extends Equatable {
           ? DateTime.parse(createdRaw).toLocal()
           : DateTime.now(),
       isIncome: json['kind'] == 'income',
+      accountId: (json['accountId'] ?? json['account_id']) as String?,
     );
   }
 
@@ -86,6 +91,7 @@ class PersonalExpenseModel extends Equatable {
     String? receiptBase64,
     DateTime? createdAt,
     bool? isIncome,
+    String? accountId,
   }) {
     return PersonalExpenseModel(
       id: id ?? this.id,
@@ -99,6 +105,7 @@ class PersonalExpenseModel extends Equatable {
       receiptBase64: receiptBase64 ?? this.receiptBase64,
       createdAt: createdAt ?? this.createdAt,
       isIncome: isIncome ?? this.isIncome,
+      accountId: accountId ?? this.accountId,
     );
   }
 
@@ -115,5 +122,6 @@ class PersonalExpenseModel extends Equatable {
     receiptBase64,
     createdAt,
     isIncome,
+    accountId,
   ];
 }

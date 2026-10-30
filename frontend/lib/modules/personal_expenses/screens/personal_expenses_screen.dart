@@ -14,9 +14,9 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/date_formatter.dart';
 import '../../../models/personal_expense_model.dart';
-import '../../../models/wallet_source_model.dart';
 import '../state/personal_expenses_provider.dart';
 import '../state/wallet_provider.dart';
+import '../widgets/account_style.dart';
 import '../widgets/cash_flow_card.dart';
 import '../widgets/personal_expense_tile.dart';
 import '../widgets/wallet_setup_sheet.dart';
@@ -183,6 +183,9 @@ class _Body extends ConsumerWidget {
             isDark: isDark,
             onAdd: () => context.push('/home/personal/new'),
             onSearch: hasAnyExpenses ? onOpenSearch : null,
+            onProfile: watchFeature(ref, 'personalAccounts')
+                ? () => context.push('/personal/account')
+                : null,
           ),
         ),
         SliverToBoxAdapter(
@@ -473,11 +476,20 @@ class _NoResultsCard extends StatelessWidget {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.isDark, required this.onAdd, this.onSearch});
+  const _Header({
+    required this.isDark,
+    required this.onAdd,
+    this.onSearch,
+    this.onProfile,
+  });
 
   final bool isDark;
   final VoidCallback onAdd;
   final VoidCallback? onSearch;
+
+  /// With money accounts the Personal bar has no Account tab; the profile
+  /// opens from here instead.
+  final VoidCallback? onProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -526,6 +538,16 @@ class _Header extends StatelessWidget {
           const SizedBox(width: 12),
           const DonateHeartButton(size: 40, iconSize: 18),
           const SizedBox(width: 8),
+          if (onProfile != null) ...[
+            _IconButton(
+              isDark: isDark,
+              icon: Icons.person_rounded,
+              sfSymbol: 'person.crop.circle',
+              onTap: onProfile!,
+              label: AppStrings.profile,
+            ),
+            const SizedBox(width: 8),
+          ],
           if (onSearch != null) ...[
             _IconButton(
               isDark: isDark,
@@ -696,9 +718,7 @@ class _WalletCard extends StatelessWidget {
                             _SourceChip(
                               label: s.name,
                               amount: s.balance,
-                              icon: s.type == WalletSourceType.bank
-                                  ? Icons.account_balance_rounded
-                                  : Icons.payments_rounded,
+                              icon: s.type.icon,
                             ),
                         ],
                       ),

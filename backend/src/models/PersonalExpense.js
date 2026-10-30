@@ -6,7 +6,7 @@ class PersonalExpense {
    */
   static async findById(id) {
     const result = await query(
-      `SELECT id, user_id, kind, description, amount, currency, category,
+      `SELECT id, user_id, kind, account_id, description, amount, currency, category,
               receipt_base64, notes, expense_date, created_at, updated_at
        FROM personal_expenses WHERE id = $1 AND deleted_at IS NULL`,
       [id]
@@ -20,7 +20,7 @@ class PersonalExpense {
    */
   static async findByUserId(userId, limit = 50, offset = 0, includeIncome = false) {
     const result = await query(
-      `SELECT id, user_id, kind, description, amount, currency, category,
+      `SELECT id, user_id, kind, account_id, description, amount, currency, category,
               notes, expense_date, created_at, updated_at
        FROM personal_expenses
        WHERE user_id = $1 AND deleted_at IS NULL
@@ -39,10 +39,10 @@ class PersonalExpense {
     const result = await query(
       `INSERT INTO personal_expenses (
         user_id, description, amount, currency, category,
-        receipt_base64, notes, expense_date, kind
+        receipt_base64, notes, expense_date, kind, account_id
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      RETURNING id, user_id, kind, description, amount, currency, category,
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      RETURNING id, user_id, kind, account_id, description, amount, currency, category,
                 notes, expense_date, created_at, updated_at`,
       [
         expenseData.userId,
@@ -53,7 +53,8 @@ class PersonalExpense {
         expenseData.receiptBase64 || null,
         expenseData.notes || null,
         expenseData.expenseDate || new Date(),
-        expenseData.kind === 'income' ? 'income' : 'expense'
+        expenseData.kind === 'income' ? 'income' : 'expense',
+        expenseData.accountId || null
       ]
     );
     return result.rows[0];
@@ -72,9 +73,10 @@ class PersonalExpense {
            receipt_base64 = COALESCE($5, receipt_base64),
            notes = COALESCE($6, notes),
            expense_date = COALESCE($7, expense_date),
-           kind = COALESCE($9, kind)
+           kind = COALESCE($9, kind),
+           account_id = COALESCE($10, account_id)
        WHERE id = $8 AND deleted_at IS NULL
-       RETURNING id, user_id, kind, description, amount, currency, category,
+       RETURNING id, user_id, kind, account_id, description, amount, currency, category,
                  notes, expense_date, created_at, updated_at`,
       [
         expenseData.description,
@@ -85,7 +87,8 @@ class PersonalExpense {
         expenseData.notes,
         expenseData.expenseDate,
         id,
-        expenseData.kind ?? null
+        expenseData.kind ?? null,
+        expenseData.accountId || null
       ]
     );
     return result.rows[0] || null;

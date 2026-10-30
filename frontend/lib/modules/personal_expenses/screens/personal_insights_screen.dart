@@ -35,8 +35,12 @@ class PersonalInsightsScreen extends ConsumerWidget {
     final List<Widget> body = summary.when(
       // Keep the shown month's cards while the next one loads.
       skipLoadingOnReload: true,
+      // ShimmerList scrolls itself, so it needs a height inside this list.
       loading: () => const [
-        ShimmerList(type: ShimmerListType.expense, itemCount: 4),
+        SizedBox(
+          height: 360,
+          child: ShimmerList(type: ShimmerListType.expense, itemCount: 4),
+        ),
       ],
       error: (e, _) => [
         ErrorStateWidget(

@@ -1,4 +1,5 @@
 import PersonalExpense from '../models/PersonalExpense.js';
+import PersonalAccount from '../models/PersonalAccount.js';
 import {
   buildPersonalSummary,
   parseMonthQuery,
@@ -106,17 +107,27 @@ const getPersonalExpense = async (req, res, next) => {
   }
 };
 
+/** 404s unless [accountId] is empty or one of the caller's accounts. */
+const accountMissing = async (req, res, accountId) => {
+  if (!accountId) return false;
+  if (await PersonalAccount.find(req.user.id, accountId)) return false;
+  res.status(404).json({ success: false, error: 'Account not found' });
+  return true;
+};
+
 /**
  * Create new personal expense
  * POST /api/v1/personal-expenses
  */
 const createPersonalExpense = async (req, res, next) => {
   try {
-    const { kind, description, amount, currency, category, receiptBase64, notes, expenseDate } = req.body;
+    const { kind, accountId, description, amount, currency, category, receiptBase64, notes, expenseDate } = req.body;
+    if (await accountMissing(req, res, accountId)) return;
 
     const expense = await PersonalExpense.create({
       userId: req.user.id,
       kind,
+      accountId,
       description,
       amount,
       currency,
@@ -143,7 +154,7 @@ const createPersonalExpense = async (req, res, next) => {
 const updatePersonalExpense = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { kind, description, amount, currency, category, receiptBase64, notes, expenseDate } = req.body;
+    const { kind, accountId, description, amount, currency, category, receiptBase64, notes, expenseDate } = req.body;
 
     // Get expense to verify ownership
     const existingExpense = await PersonalExpense.findById(id);
@@ -163,8 +174,11 @@ const updatePersonalExpense = async (req, res, next) => {
       });
     }
 
+    if (await accountMissing(req, res, accountId)) return;
+
     const expense = await PersonalExpense.update(id, {
       kind,
+      accountId,
       description,
       amount,
       currency,

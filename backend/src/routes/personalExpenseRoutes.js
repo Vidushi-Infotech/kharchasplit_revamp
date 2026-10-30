@@ -18,6 +18,7 @@ router.post(
   idempotent,
   [
     body('kind').optional().isIn(['expense', 'income']),
+    body('accountId').optional({ values: 'null' }).isUUID(),
     body('description').trim().isLength({ min: 1, max: 500 }),
     body('amount').custom((value) => {
       const num = typeof value === 'number' ? value : parseFloat(value);
@@ -32,7 +33,10 @@ router.post(
 router.put(
   '/:id',
   authenticate,
-  [body('kind').optional().isIn(['expense', 'income'])],
+  [
+    body('kind').optional().isIn(['expense', 'income']),
+    body('accountId').optional({ values: 'null' }).isUUID(),
+  ],
   validate,
   personalExpenseController.updatePersonalExpense
 );

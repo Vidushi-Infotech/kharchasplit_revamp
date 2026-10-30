@@ -24,6 +24,7 @@ class PersonalShell extends ConsumerWidget {
   static const expensesLocation = '/personal';
   static const insightsLocation = '/personal/insights';
   static const budgetsLocation = '/personal/budgets';
+  static const accountsLocation = '/personal/accounts';
   static const accountLocation = '/personal/account';
 
   static const _home = (
@@ -48,6 +49,14 @@ class PersonalShell extends ConsumerWidget {
       icon: Icons.savings_outlined,
       selectedIcon: Icons.savings_rounded,
       label: AppStrings.budgets,
+    ),
+  );
+  static const _accounts = (
+    accountsLocation,
+    ShellNavItem(
+      icon: Icons.account_balance_outlined,
+      selectedIcon: Icons.account_balance_rounded,
+      label: AppStrings.accounts,
     ),
   );
   static const _account = (
@@ -90,7 +99,9 @@ class PersonalShell extends ConsumerWidget {
       _home,
       if (watchFeature(ref, 'personalInsights')) _insights,
       if (watchFeature(ref, 'personalBudgets')) _budgets,
-      _account,
+      // With money accounts the profile moves to Home's header (one more
+      // tab would crowd the bar).
+      if (watchFeature(ref, 'personalAccounts')) _accounts else _account,
     ];
     final locations = [for (final t in tabs) t.$1];
     final items = [for (final t in tabs) t.$2, _switch];

@@ -44,11 +44,13 @@ class PersonalExpensesNotifier
     String? notes,
     DateTime? expenseDate,
     bool isIncome = false,
+    String? accountId,
   }) async {
     final created = await ref
         .read(personalExpensesRepositoryProvider)
         .create(
           isIncome: isIncome,
+          accountId: accountId,
           description: description,
           amount: amount,
           currency: currency,

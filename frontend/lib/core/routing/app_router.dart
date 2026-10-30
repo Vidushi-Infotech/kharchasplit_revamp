@@ -29,7 +29,9 @@ import '../../modules/profile/screens/policy_screen.dart';
 import '../../modules/expenses/screens/add_expense_screen.dart';
 import '../../modules/expenses/screens/expense_detail_screen.dart';
 import '../../modules/personal_expenses/screens/personal_expenses_screen.dart';
+import '../../modules/personal_expenses/screens/account_detail_screen.dart';
 import '../../modules/personal_expenses/screens/add_personal_expense_screen.dart';
+import '../../modules/personal_expenses/screens/personal_accounts_screen.dart';
 import '../../modules/personal_expenses/screens/personal_budgets_screen.dart';
 import '../../modules/personal_expenses/screens/personal_insights_screen.dart';
 import '../../modules/reports/screens/reports_screen.dart';
@@ -195,6 +197,20 @@ final appRouter = GoRouter(
           path: PersonalShell.budgetsLocation,
           name: 'personal-budgets',
           builder: (context, state) => const PersonalBudgetsScreen(),
+        ),
+        GoRoute(
+          path: PersonalShell.accountsLocation,
+          name: 'personal-accounts',
+          builder: (context, state) => const PersonalAccountsScreen(),
+          routes: [
+            GoRoute(
+              path: ':accountId',
+              name: 'personal-account-detail',
+              builder: (context, state) => AccountDetailScreen(
+                accountId: state.pathParameters['accountId']!,
+              ),
+            ),
+          ],
         ),
         GoRoute(
           path: PersonalShell.accountLocation,

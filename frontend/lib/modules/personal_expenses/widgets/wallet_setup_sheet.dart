@@ -9,6 +9,7 @@ import '../../../core/utils/currency_formatter.dart';
 import '../../../models/wallet_source_model.dart';
 import '../state/personal_expenses_provider.dart';
 import '../state/wallet_provider.dart';
+import 'account_style.dart';
 
 /// Bottom sheet for managing wallet sources.
 /// - Lists existing sources with edit / delete
@@ -277,7 +278,6 @@ class _SourceRow extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isCash = source.type == WalletSourceType.cash;
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
       child: Row(
@@ -294,7 +294,7 @@ class _SourceRow extends ConsumerWidget {
               ),
             ),
             child: Icon(
-              isCash ? Icons.payments_rounded : Icons.account_balance_rounded,
+              source.type.icon,
               size: 18,
               color: AppColors.tealDark,
             ),
@@ -315,7 +315,7 @@ class _SourceRow extends ConsumerWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  isCash ? 'Cash' : 'Bank account',
+                  source.type.label,
                   style: AppTextStyles.caption(isDark).copyWith(
                     color: AppColors.textSecondary(isDark),
                     fontSize: 12,
@@ -326,7 +326,7 @@ class _SourceRow extends ConsumerWidget {
           ),
           const SizedBox(width: 8),
           Text(
-            CurrencyFormatter.format(source.balance, currency: '₹'),
+            accountBalanceText(source),
             style: AppTextStyles.body1(isDark).copyWith(
               fontWeight: FontWeight.w700,
               fontSize: 14,
@@ -356,8 +356,10 @@ class _SourceRow extends ConsumerWidget {
   }
 
   Future<void> _editBalance(BuildContext context, WidgetRef ref) async {
+    // A card is edited as what's owed on it (its balance is minus that).
+    final isCard = source.type == WalletSourceType.card;
     final controller = TextEditingController(
-      text: source.balance.toStringAsFixed(2),
+      text: (isCard ? -source.balance : source.balance).toStringAsFixed(2),
     );
     final newBalance = await showModalBottomSheet<double>(
       context: context,
@@ -397,7 +399,7 @@ class _SourceRow extends ConsumerWidget {
                     ),
                   ),
                   Text(
-                    'Edit balance',
+                    isCard ? 'Amount owed' : 'Edit balance',
                     style: AppTextStyles.body1(isDark).copyWith(
                       fontWeight: FontWeight.w700,
                       fontSize: 17,
@@ -499,7 +501,7 @@ class _SourceRow extends ConsumerWidget {
     if (newBalance != null) {
       await ref
           .read(walletProvider.notifier)
-          .editSource(source.id, balance: newBalance);
+          .editSource(source.id, balance: isCard ? -newBalance : newBalance);
     }
   }
 
@@ -517,7 +519,8 @@ class _SourceRow extends ConsumerWidget {
         .where((e) => ids == null || ids.contains(e.key))
         .length;
 
-    if (taggedCount > 0) {
+    // Server accounts are archived, so their entries keep them.
+    if (!wallet.onServer && taggedCount > 0) {
       await showDialog<void>(
         context: context,
         builder: (ctx) {
@@ -667,7 +670,10 @@ class _AddSourceFormState extends ConsumerState<_AddSourceForm> {
                 ? 'Cash'
                 : _nameController.text.trim(),
             type: _type,
-            balance: double.parse(_balanceController.text.trim()),
+            // A card's balance is minus what's owed on it.
+            balance:
+                double.parse(_balanceController.text.trim()) *
+                (_type == WalletSourceType.card ? -1 : 1),
           );
       widget.onAdded();
     } catch (e) {
@@ -687,6 +693,12 @@ class _AddSourceFormState extends ConsumerState<_AddSourceForm> {
   Widget build(BuildContext context) {
     final isDark = widget.isDark;
     final isCash = _type == WalletSourceType.cash;
+    final isCard = _type == WalletSourceType.card;
+    // Cards and e-wallets came with server accounts.
+    final onServer = ref.watch(walletProvider).value?.onServer ?? false;
+    final types = onServer
+        ? WalletSourceType.values
+        : const [WalletSourceType.cash, WalletSourceType.bank];
     return Container(
       decoration: BoxDecoration(
         color: AppColors.cardBg(isDark),
@@ -711,27 +723,22 @@ class _AddSourceFormState extends ConsumerState<_AddSourceForm> {
                 ),
               ),
             ),
-            Row(
+            GridView.count(
+              crossAxisCount: 2,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 10,
+              childAspectRatio: 3.2,
               children: [
-                Expanded(
-                  child: _TypeButton(
+                for (final t in types)
+                  _TypeButton(
                     isDark: isDark,
-                    label: 'Cash',
-                    icon: Icons.payments_rounded,
-                    selected: _type == WalletSourceType.cash,
-                    onTap: () => setState(() => _type = WalletSourceType.cash),
+                    label: t.label,
+                    icon: t.icon,
+                    selected: _type == t,
+                    onTap: () => setState(() => _type = t),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _TypeButton(
-                    isDark: isDark,
-                    label: 'Bank',
-                    icon: Icons.account_balance_rounded,
-                    selected: _type == WalletSourceType.bank,
-                    onTap: () => setState(() => _type = WalletSourceType.bank),
-                  ),
-                ),
               ],
             ),
             const SizedBox(height: 14),
@@ -739,12 +746,13 @@ class _AddSourceFormState extends ConsumerState<_AddSourceForm> {
               controller: _nameController,
               decoration: _inputDecoration(
                 isDark,
-                hint: isCash
-                    ? 'Label (optional, e.g. Cash)'
-                    : 'e.g. HDFC ****1234',
-                icon: isCash
-                    ? Icons.label_outline_rounded
-                    : Icons.account_balance_rounded,
+                hint: switch (_type) {
+                  WalletSourceType.cash => 'Label (optional, e.g. Cash)',
+                  WalletSourceType.bank => 'e.g. HDFC ****1234',
+                  WalletSourceType.card => 'e.g. HDFC Credit Card',
+                  WalletSourceType.wallet => 'e.g. Paytm, Amazon Pay',
+                },
+                icon: isCash ? Icons.label_outline_rounded : _type.icon,
               ),
               validator: (v) {
                 if (isCash) return null;
@@ -765,7 +773,9 @@ class _AddSourceFormState extends ConsumerState<_AddSourceForm> {
               ],
               decoration: _inputDecoration(
                 isDark,
-                hint: 'Available balance · 0.00',
+                hint: isCard
+                    ? 'Amount owed now · 0.00'
+                    : 'Available balance · 0.00',
                 icon: Icons.currency_rupee_rounded,
               ),
               validator: (v) {

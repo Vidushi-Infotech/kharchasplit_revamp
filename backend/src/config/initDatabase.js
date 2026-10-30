@@ -398,6 +398,33 @@ CREATE TABLE IF NOT EXISTS personal_budgets (
   PRIMARY KEY (user_id, category)
 );
 
+-- Personal mode accounts and transfers (migration 027).
+CREATE TABLE IF NOT EXISTS personal_accounts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name VARCHAR(60) NOT NULL,
+  type VARCHAR(10) NOT NULL CHECK (type IN ('cash', 'bank', 'card', 'wallet')),
+  opening_balance DECIMAL(14, 2) NOT NULL DEFAULT 0,
+  archived_at TIMESTAMP,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_personal_accounts_user ON personal_accounts(user_id);
+
+CREATE TABLE IF NOT EXISTS personal_transfers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  from_account_id UUID NOT NULL REFERENCES personal_accounts(id) ON DELETE CASCADE,
+  to_account_id UUID NOT NULL REFERENCES personal_accounts(id) ON DELETE CASCADE,
+  amount DECIMAL(14, 2) NOT NULL CHECK (amount > 0),
+  note VARCHAR(200),
+  transfer_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  deleted_at TIMESTAMP,
+  CHECK (from_account_id <> to_account_id)
+);
+CREATE INDEX IF NOT EXISTS idx_personal_transfers_user ON personal_transfers(user_id, transfer_date DESC);
+
 -- State of an expense before each edit (services/expenseHistory.js).
 CREATE TABLE IF NOT EXISTS expense_revisions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -489,6 +516,8 @@ const columnAdditions = [
   { table: 'personal_expenses', column: 'is_deleted', type: 'BOOLEAN DEFAULT FALSE' },
   // 025: money in vs money out (Personal mode income).
   { table: 'personal_expenses', column: 'kind', type: "VARCHAR(10) NOT NULL DEFAULT 'expense'" },
+  // 027: the account an entry came from / went to.
+  { table: 'personal_expenses', column: 'account_id', type: 'UUID REFERENCES personal_accounts(id) ON DELETE SET NULL' },
 
   // Activities columns
   { table: 'activities', column: 'deleted_at', type: 'TIMESTAMP' },

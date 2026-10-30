@@ -69,11 +69,13 @@ class PersonalExpensesRepository {
     DateTime? expenseDate,
     String? receiptBase64,
     bool isIncome = false,
+    String? accountId,
   }) async {
     final res = await _client.dio.post(
       '/personal-expenses',
       data: {
         if (isIncome) 'kind': 'income',
+        if (accountId != null) 'accountId': accountId,
         'description': description,
         'amount': amount,
         'currency': _normalizeCurrency(currency),
