@@ -24,6 +24,8 @@ class TransferSheet extends ConsumerStatefulWidget {
       // Above the floating tab bar.
       useRootNavigator: true,
       isScrollControlled: true,
+      // Tall ones stop below the status bar.
+      useSafeArea: true,
       showDragHandle: true,
       constraints: const BoxConstraints(maxWidth: 560),
       backgroundColor: AppColors.surface(

@@ -185,15 +185,24 @@ class _Header extends StatelessWidget {
             ],
           ),
         ),
-        IconButton.filledTonal(
-          tooltip: AppStrings.budgetAdd,
-          onPressed: onAdd,
-          style: IconButton.styleFrom(
-            backgroundColor: AppColors.cardBg(isDark),
-            side: BorderSide(color: AppColors.divider(isDark)),
+        // iOS 26 headers use Liquid Glass buttons, like Home's.
+        if (GlassIconButton.isGlass)
+          GlassIconButton(
+            icon: Icons.add_rounded,
+            sfSymbol: 'plus',
+            tooltip: AppStrings.budgetAdd,
+            onPressed: onAdd,
+          )
+        else
+          IconButton.filledTonal(
+            tooltip: AppStrings.budgetAdd,
+            onPressed: onAdd,
+            style: IconButton.styleFrom(
+              backgroundColor: AppColors.cardBg(isDark),
+              side: BorderSide(color: AppColors.divider(isDark)),
+            ),
+            icon: Icon(Icons.add_rounded, color: AppColors.textPrimary(isDark)),
           ),
-          icon: Icon(Icons.add_rounded, color: AppColors.textPrimary(isDark)),
-        ),
       ],
     );
   }

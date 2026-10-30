@@ -46,12 +46,15 @@ class AccountDetailScreen extends ConsumerWidget {
         backgroundColor: AppColors.background(isDark),
         surfaceTintColor: Colors.transparent,
         title: Text(source?.name ?? AppStrings.accounts),
+        leading: GlassBackButton.appBarLeading(context),
         actions: [
-          IconButton(
+          GlassIconButton(
+            icon: Icons.tune_rounded,
+            sfSymbol: 'slider.horizontal.3',
             tooltip: AppStrings.accountManage,
-            icon: const Icon(Icons.tune_rounded),
             onPressed: () => WalletSetupSheet.show(context),
           ),
+          const SizedBox(width: 12),
         ],
       ),
       body: source == null

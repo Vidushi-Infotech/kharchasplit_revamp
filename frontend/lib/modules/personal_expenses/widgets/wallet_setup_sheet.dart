@@ -726,6 +726,8 @@ class _AddSourceFormState extends ConsumerState<_AddSourceForm> {
             GridView.count(
               crossAxisCount: 2,
               shrinkWrap: true,
+              // Without it the grid pads itself with the safe area.
+              padding: EdgeInsets.zero,
               physics: const NeverScrollableScrollPhysics(),
               mainAxisSpacing: 10,
               crossAxisSpacing: 10,

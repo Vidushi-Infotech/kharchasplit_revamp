@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:speech_to_text/speech_recognition_error.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
@@ -57,10 +59,23 @@ class VoiceEntryController extends Notifier<VoiceState> {
   /// callbacks are set once, at initialize, so they go through this.
   static VoiceEntryController? _active;
 
+  static const _listenFor = Duration(seconds: 20);
+
+  /// Ends the session if the recognizer never reports it done (seen on
+  /// iOS: "Listening…" stayed up after the time limit).
+  Timer? _deadline;
+
+  /// When this session started, and whether it had to set the recognizer
+  /// up (the permission prompts) first: that first session can end at
+  /// once with nothing heard, so it's retried once.
+  DateTime? _startedAt;
+  bool _retryOnQuickEnd = false;
+
   @override
   VoiceState build() {
     _active = this;
     ref.onDispose(() {
+      _deadline?.cancel();
       if (identical(_active, this)) _active = null;
       if (_speech.isListening) _speech.cancel();
     });
@@ -69,6 +84,7 @@ class VoiceEntryController extends Notifier<VoiceState> {
 
   Future<void> start() async {
     state = const VoiceState();
+    _retryOnQuickEnd = !_ready;
     if (!_ready) {
       try {
         _ready = await _speech.initialize(
@@ -84,6 +100,11 @@ class VoiceEntryController extends Notifier<VoiceState> {
       return;
     }
     final locale = await _locale();
+    _startedAt = DateTime.now();
+    _deadline?.cancel();
+    _deadline = Timer(_listenFor + const Duration(seconds: 3), () {
+      if (state.phase == VoicePhase.listening) stop();
+    });
     await _speech.listen(
       onResult: _onResult,
       onSoundLevelChange: (l) => state = state.copyWith(
@@ -94,7 +115,7 @@ class VoiceEntryController extends Notifier<VoiceState> {
         partialResults: true,
         cancelOnError: true,
         listenMode: ListenMode.dictation,
-        listenFor: const Duration(seconds: 20),
+        listenFor: _listenFor,
         pauseFor: const Duration(seconds: 3),
         localeId: locale,
       ),
@@ -137,6 +158,15 @@ class VoiceEntryController extends Notifier<VoiceState> {
 
   void _finish() {
     if (state.phase != VoicePhase.listening) return;
+    _deadline?.cancel();
+    final quick =
+        _startedAt != null &&
+        DateTime.now().difference(_startedAt!) < const Duration(seconds: 3);
+    if (_retryOnQuickEnd && quick && state.transcript.trim().isEmpty) {
+      _retryOnQuickEnd = false;
+      start();
+      return;
+    }
     state = state.copyWith(
       phase: state.transcript.trim().isEmpty
           ? VoicePhase.nothingHeard

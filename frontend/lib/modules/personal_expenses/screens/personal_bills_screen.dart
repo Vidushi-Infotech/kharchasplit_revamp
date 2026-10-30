@@ -85,12 +85,15 @@ class PersonalBillsScreen extends ConsumerWidget {
         backgroundColor: AppColors.background(isDark),
         surfaceTintColor: Colors.transparent,
         title: const Text(AppStrings.bills),
+        leading: GlassBackButton.appBarLeading(context),
         actions: [
-          IconButton(
+          GlassIconButton(
+            icon: Icons.add_rounded,
+            sfSymbol: 'plus',
             tooltip: AppStrings.billAdd,
-            icon: const Icon(Icons.add_rounded),
             onPressed: () => BillEditorSheet.show(context),
           ),
+          const SizedBox(width: 12),
         ],
       ),
       body: RefreshIndicator(

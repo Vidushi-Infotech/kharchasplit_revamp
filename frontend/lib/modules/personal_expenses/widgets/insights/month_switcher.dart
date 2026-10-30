@@ -73,8 +73,13 @@ class _Arrow extends StatelessWidget {
         backgroundColor: AppColors.cardBg(isDark),
         side: BorderSide(color: AppColors.divider(isDark)),
       ),
-      icon: Icon(icon, color: AppColors.textPrimary(isDark)),
-      disabledColor: AppColors.textSecondary(isDark).withValues(alpha: 0.3),
+      // An explicit icon colour overrides disabledColor, so pick it here.
+      icon: Icon(
+        icon,
+        color: onTap == null
+            ? AppColors.textSecondary(isDark).withValues(alpha: 0.3)
+            : AppColors.textPrimary(isDark),
+      ),
     );
   }
 }
