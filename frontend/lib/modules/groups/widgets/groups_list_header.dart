@@ -14,6 +14,7 @@ import '../../../components/buttons/glass_icon_button.dart';
 import '../../../components/headers/glass_large_title.dart' show HideOnCollapse;
 import '../../../components/buttons/glass_menu_button.dart';
 import '../../../components/menus/glass_menu.dart';
+import '../../../core/constants/donate_config.dart';
 import 'groups_notifications_button.dart';
 
 /// "Groups" title with the bell, donate heart, search and create-group
@@ -23,7 +24,8 @@ import 'groups_notifications_button.dart';
 List<Widget> groupsHeaderActions(BuildContext context) => [
   const GroupsNotificationsButton(size: 36),
   // Hidden once the header collapses, so the small "Groups" title fits.
-  const HideOnCollapse(child: DonateHeartButton(size: 36, iconSize: 17)),
+  if (DonateConfig.isAvailable)
+    const HideOnCollapse(child: DonateHeartButton(size: 36, iconSize: 17)),
   GlassIconButton(
     icon: Icons.search_rounded,
     sfSymbol: 'magnifyingglass',
@@ -64,8 +66,10 @@ class GroupsTopBar extends StatelessWidget {
           ),
           const GroupsNotificationsButton(size: 36),
           const SizedBox(width: 6),
-          const DonateHeartButton(size: 36, iconSize: 17),
-          const SizedBox(width: 6),
+          if (DonateConfig.isAvailable) ...[
+            const DonateHeartButton(size: 36, iconSize: 17),
+            const SizedBox(width: 6),
+          ],
           GlassIconButton(
             icon: Icons.search_rounded,
             sfSymbol: 'magnifyingglass',

@@ -7,6 +7,7 @@ import '../../../components/buttons/glass_icon_button.dart';
 import '../../../components/dialogs/donate_sheet.dart';
 import '../../../components/headers/glass_large_title.dart';
 import '../../../components/list/list_components.dart';
+import '../../../core/constants/donate_config.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/responsive/breakpoints.dart';
 import '../../../core/responsive/content_width.dart';
@@ -63,7 +64,10 @@ class ProfileScreen extends ConsumerWidget {
             context,
             implyLeading: context.canPop(),
           ),
-          actions: const [DonateHeartButton(size: 38, iconSize: 18)],
+          actions: [
+            if (DonateConfig.isAvailable)
+              const DonateHeartButton(size: 38, iconSize: 18),
+          ],
           child: body,
         ),
       );
@@ -159,11 +163,12 @@ class _AccountList extends ConsumerWidget {
             onTap: () => exportMyExpensesCsv(context, ref),
           ),
           const MonthSectionHeader(AppStrings.feedback),
-          AccountRow(
-            icon: Icons.favorite_border_rounded,
-            label: AppStrings.supportUsDonate,
-            onTap: () => showDonateSheet(context),
-          ),
+          if (DonateConfig.isAvailable)
+            AccountRow(
+              icon: Icons.favorite_border_rounded,
+              label: AppStrings.supportUsDonate,
+              onTap: () => showDonateSheet(context),
+            ),
           AccountRow(
             icon: Icons.mail_outline_rounded,
             label: AppStrings.contactUs,

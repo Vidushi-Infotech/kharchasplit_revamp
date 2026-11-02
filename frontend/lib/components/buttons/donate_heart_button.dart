@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../core/constants/donate_config.dart';
+
 import '../../core/theme/app_colors.dart';
 import 'glass_icon_button.dart';
 import '../dialogs/donate_sheet.dart';
@@ -23,6 +25,7 @@ class DonateHeartButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (!DonateConfig.isAvailable) return const SizedBox.shrink();
     if (GlassIconButton.isGlass) {
       return GlassIconButton(
         icon: Icons.favorite_rounded,

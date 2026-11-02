@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 /// Donation / "Support the app" configuration.
 ///
 /// ⚠️ Replace [upiId] (and optionally [payeeName]) with the real values before
@@ -18,6 +20,12 @@ class DonateConfig {
   /// until it's set, rather than show a broken QR).
   static bool get isConfigured =>
       upiId.isNotEmpty && upiId != 'kharchasplit@upi';
+
+  /// Whether the heart button and the Account row show at all. Never on
+  /// iOS: Apple allows tips to a developer only through In-App Purchase,
+  /// so a UPI link there risks App Review rejection.
+  static bool get isAvailable =>
+      isConfigured && defaultTargetPlatform != TargetPlatform.iOS;
 
   /// Builds the `upi://pay` deep link. Amount is left blank by default so the
   /// donor picks any amount in their UPI app.

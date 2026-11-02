@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../components/buttons/donate_heart_button.dart';
 import '../../../components/buttons/glass_icon_button.dart';
 import '../../../components/headers/glass_large_title.dart';
+import '../../../core/constants/donate_config.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../models/activity_model.dart';
@@ -61,7 +62,9 @@ class ActivityScreen extends ConsumerWidget {
                 tooltip: AppStrings.markAllRead,
                 onPressed: notifier.markAllAsRead,
               ),
-            const DonateHeartButton(size: 38, iconSize: 18),
+            if (DonateConfig.isAvailable)
+              if (DonateConfig.isAvailable)
+                const DonateHeartButton(size: 38, iconSize: 18),
           ],
           child: Center(
             child: ConstrainedBox(
@@ -130,7 +133,8 @@ class ActivityScreen extends ConsumerWidget {
                     child: const Text(AppStrings.markAllRead),
                   ),
           if (unreadCount > 0) const GlassGap(),
-          const DonateHeartButton(size: 38, iconSize: 18),
+          if (DonateConfig.isAvailable)
+            const DonateHeartButton(size: 38, iconSize: 18),
           const SizedBox(width: 12),
         ],
       ),
