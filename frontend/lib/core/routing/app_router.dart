@@ -41,10 +41,12 @@ import '../../modules/settlements/screens/settle_all_screen.dart';
 import '../../modules/settlements/screens/settle_screen.dart';
 import '../../modules/settlements/screens/settlement_history_screen.dart';
 import '../../layouts/shell/mobile_shell.dart';
+import '../../layouts/shell/mode_switch_transition.dart';
 import '../../layouts/shell/personal_shell.dart';
 import '../../layouts/shell/tablet_shell.dart';
 import '../../layouts/shell/web_shell.dart';
 import '../responsive/breakpoints.dart';
+import '../state/app_mode.dart';
 import 'route_error_screen.dart';
 import 'web_deep_link.dart';
 
@@ -73,30 +75,6 @@ Widget _contentShell(BuildContext context, Widget child) {
   if (screenWidth < Breakpoints.shellWeb) return child;
   return WebShell(child: child);
 }
-
-/// The page holding a mode's shell. Switching modes (Groups ↔ Personal)
-/// replaces the whole shell, so it fades and settles in from slightly
-/// smaller: it reads as changing apps, not as pushing a page. Tabs inside
-/// a shell keep its key, so moving between them doesn't animate this.
-Page<void> _modePage(String key, Widget child) => CustomTransitionPage<void>(
-  key: ValueKey(key),
-  child: child,
-  transitionDuration: const Duration(milliseconds: 360),
-  reverseTransitionDuration: const Duration(milliseconds: 260),
-  transitionsBuilder: (context, animation, secondaryAnimation, child) {
-    final curved = CurvedAnimation(
-      parent: animation,
-      curve: Curves.easeOutCubic,
-    );
-    return FadeTransition(
-      opacity: curved,
-      child: ScaleTransition(
-        scale: Tween(begin: 0.94, end: 1.0).animate(curved),
-        child: child,
-      ),
-    );
-  },
-);
 
 final appRouter = GoRouter(
   initialLocation: '/',
@@ -153,8 +131,11 @@ final appRouter = GoRouter(
       redirect: (context, state) => PersonalShell.expensesLocation,
     ),
     ShellRoute(
-      pageBuilder: (context, state, child) =>
-          _modePage('shared-shell', _tabShell(context, child)),
+      pageBuilder: (context, state, child) => modeShellPage(
+        key: 'shared-shell',
+        mode: AppMode.shared,
+        child: _tabShell(context, child),
+      ),
       routes: [
         GoRoute(
           path: '/home/groups',
@@ -181,8 +162,11 @@ final appRouter = GoRouter(
     // The Personal "app" (see AppMode): its own tabs, reached from the
     // last tab of the Groups bar.
     ShellRoute(
-      pageBuilder: (context, state, child) =>
-          _modePage('personal-shell', PersonalShell(child: child)),
+      pageBuilder: (context, state, child) => modeShellPage(
+        key: 'personal-shell',
+        mode: AppMode.personal,
+        child: PersonalShell(child: child),
+      ),
       routes: [
         GoRoute(
           path: PersonalShell.expensesLocation,

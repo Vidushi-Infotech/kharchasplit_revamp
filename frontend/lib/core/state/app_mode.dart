@@ -52,10 +52,29 @@ abstract final class AppModeStore {
   }
 }
 
+/// What the next mode switch looks like: where it was tapped (the circle
+/// opens from there) and which mode it's going to. Read by the shell
+/// pages' transition (layouts/shell/mode_switch_transition.dart).
+abstract final class ModeSwitchSignal {
+  /// Last tap on a tab bar / rail switch, in global coordinates.
+  static Offset? origin;
+
+  static AppMode? _pending;
+
+  /// True once, for the shell of [mode] right after a switch to it.
+  static bool take(AppMode mode) {
+    if (_pending != mode) return false;
+    _pending = null;
+    return true;
+  }
+}
+
 /// Switch to the other "app": go to its home with the mode-switch
-/// transition (see the shell routes in app_router.dart).
+/// transition (a circle opening from the switch, see
+/// layouts/shell/mode_switch_transition.dart).
 void switchAppMode(BuildContext context, AppMode to) {
   HapticService.instance.success();
   AppModeStore.remember(to);
+  ModeSwitchSignal._pending = to;
   context.go(to.home);
 }

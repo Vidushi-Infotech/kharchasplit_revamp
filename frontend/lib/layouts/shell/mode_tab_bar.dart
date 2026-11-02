@@ -47,9 +47,13 @@ class ModeTabBar extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) => useGlassShell
-      ? _GlassBar(items: items, selected: selectedIndex, onTap: _tap)
-      : _MaterialBar(items: items, selected: selectedIndex, onTap: _tap);
+  Widget build(BuildContext context) => Listener(
+    // Where the switch is tapped: the next mode opens from there.
+    onPointerDown: (e) => ModeSwitchSignal.origin = e.position,
+    child: useGlassShell
+        ? _GlassBar(items: items, selected: selectedIndex, onTap: _tap)
+        : _MaterialBar(items: items, selected: selectedIndex, onTap: _tap),
+  );
 }
 
 /// The mode switch for a NavigationRail (tablets), at the rail's bottom.
@@ -72,6 +76,7 @@ class ModeSwitchRailButton extends StatelessWidget {
       label: personal ? AppStrings.switchToPersonal : AppStrings.switchToGroups,
       excludeSemantics: true,
       child: InkWell(
+        onTapDown: (d) => ModeSwitchSignal.origin = d.globalPosition,
         onTap: onPressed,
         borderRadius: BorderRadius.circular(16),
         child: Padding(
