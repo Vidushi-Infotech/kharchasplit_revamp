@@ -86,9 +86,17 @@ android {
     }
 }
 
+// Receipt scan: the bundled ML Kit text recognizer puts an ~11 MB native
+// library and its model in every download. The Play services one has the
+// same API and keeps the model out of the app.
+configurations.all {
+    exclude(group = "com.google.mlkit", module = "text-recognition")
+}
+
 dependencies {
     // Backports modern java.time APIs etc. for flutter_local_notifications.
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+    implementation("com.google.android.gms:play-services-mlkit-text-recognition:19.0.1")
 }
 
 flutter {

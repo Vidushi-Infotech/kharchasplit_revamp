@@ -19,6 +19,9 @@
     <!-- Voice entry in Personal mode (speech_to_text). -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
+    <!-- RECORD_AUDIO would otherwise make Play require a microphone and drop
+         devices without one; voice entry just says it is unavailable there. -->
+    <uses-feature android:name="android.hardware.microphone" android:required="false"/>
     <application
         android:label="KharchaSplit"
         android:name="${applicationName}"
@@ -49,6 +52,11 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- Receipt scan: Play services fetches the text-recognition model
+             when the app is installed (it isn't bundled in the app). -->
+        <meta-data
+            android:name="com.google.mlkit.vision.DEPENDENCIES"
+            android:value="ocr" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
