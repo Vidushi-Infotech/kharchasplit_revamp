@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/services/review_prompt.dart';
 import '../../../data/settlements/settlements_repository.dart';
 import '../../../models/group_model.dart';
 import '../../../models/settlement_model.dart';
@@ -54,6 +55,7 @@ class RecordPaymentController {
     // so any legacy pending entries stay in sync.
     _ref.invalidate(pendingOutgoingSettlementsProvider(group.id));
     _ref.invalidate(pendingIncomingSettlementsProvider(group.id));
+    ReviewPrompt.instance.recordWin();
   }
 }
 

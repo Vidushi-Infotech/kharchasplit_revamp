@@ -833,6 +833,7 @@ abstract final class AppStrings {
   static const themeDark = 'Dark';
   static const supportUsDonate = 'Support us / Donate';
   static const contactUs = 'Contact us';
+  static const rateApp = 'Rate KharchaSplit';
   static const privacyPolicy = 'Privacy policy';
   static const termsOfService = 'Terms of service';
   static const logOut = 'Log out';

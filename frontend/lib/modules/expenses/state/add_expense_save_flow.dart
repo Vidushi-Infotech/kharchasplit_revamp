@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_strings.dart';
 import '../../../core/services/haptic_service.dart';
+import '../../../core/services/review_prompt.dart';
 import '../../../core/state/feature_flags_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../data/expenses/expenses_repository.dart';
@@ -151,6 +152,9 @@ mixin AddExpenseSaveFlow on ConsumerState<AddExpenseScreen> {
       groupId: groupId,
       expenseId: widget.isEditing ? widget.expenseId! : null,
     );
+
+    // A new expense counts toward asking for a rating; edits don't.
+    if (!widget.isEditing) ReviewPrompt.instance.recordWin();
 
     if (!mounted) return;
     HapticService.instance.success();

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -9,6 +10,7 @@ import '../../../components/headers/glass_large_title.dart';
 import '../../../components/list/list_components.dart';
 import '../../../core/constants/donate_config.dart';
 import '../../../core/constants/app_strings.dart';
+import '../../../core/services/review_prompt.dart';
 import '../../../core/responsive/breakpoints.dart';
 import '../../../core/responsive/content_width.dart';
 import '../../../core/theme/app_colors.dart';
@@ -168,6 +170,12 @@ class _AccountList extends ConsumerWidget {
               icon: Icons.favorite_border_rounded,
               label: AppStrings.supportUsDonate,
               onTap: () => showDonateSheet(context),
+            ),
+          if (!kIsWeb)
+            AccountRow(
+              icon: Icons.star_outline_rounded,
+              label: AppStrings.rateApp,
+              onTap: ReviewPrompt.instance.openStorePage,
             ),
           AccountRow(
             icon: Icons.mail_outline_rounded,

@@ -103,6 +103,9 @@ dependencies:
   google_mlkit_text_recognition: ^0.16.0
   adaptive_platform_ui: ^1.0.2
   speech_to_text: ^7.4.0
+  # Store rating card (Play in-app review / SKStoreReviewController); the
+  # OS decides whether it actually shows. See core/services/review_prompt.dart.
+  in_app_review: ^2.0.12
 
 
 dev_dependencies:

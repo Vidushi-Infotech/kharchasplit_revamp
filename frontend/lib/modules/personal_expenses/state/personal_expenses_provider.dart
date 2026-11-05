@@ -1,6 +1,7 @@
 import 'package:collection/collection.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/services/review_prompt.dart';
 import '../../../data/personal_expenses/personal_expenses_repository.dart';
 import '../../../models/personal_expense_model.dart';
 import '../../auth/state/auth_provider.dart';
@@ -59,6 +60,7 @@ class PersonalExpensesNotifier
           expenseDate: expenseDate,
         );
     await refresh();
+    ReviewPrompt.instance.recordWin();
     return created;
   }
 
