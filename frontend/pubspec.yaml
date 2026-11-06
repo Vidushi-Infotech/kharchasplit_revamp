@@ -2,7 +2,7 @@ name: kharchasplit
 description: "A Flutter expense-splitting app for groups and settlements."
 publish_to: 'none'
 
-version: 3.5.0+27
+version: 3.5.1+28
 
 environment:
   sdk: ^3.11.0

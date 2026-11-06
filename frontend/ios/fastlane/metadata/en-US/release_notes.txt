@@ -1,6 +1,3 @@
-New: Personal mode
-• Track your own spending and income, separate from groups
-• Insights, monthly budgets, accounts and bill reminders
-• Add an expense just by saying it
-• Payments now settle instantly
-• Faster and smoother everywhere
+• Adding a receipt or photo is faster and no longer fails on big photos
+• Photos take much less data to upload
+• Small fixes and improvements
