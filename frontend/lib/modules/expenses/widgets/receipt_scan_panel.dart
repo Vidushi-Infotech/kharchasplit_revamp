@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../core/services/invoice_scanner_service.dart';
+import '../../../core/services/upload_image.dart';
 import '../../../core/state/feature_flags_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -41,9 +42,10 @@ class ReceiptScanPanel extends ConsumerWidget {
     if (scan) ref.read(receiptScanProvider.notifier).scan(imagePath);
     final notifier = ref.read(addExpenseProvider.notifier);
     try {
-      final bytes = await File(imagePath).readAsBytes();
-      // Off the main isolate — a full-size receipt is a multi-MB encode
-      // that would freeze the sheet.
+      // Small enough to always upload; the scan reads the full photo.
+      final bytes = await UploadImage.shrink(
+        await File(imagePath).readAsBytes(),
+      );
       final encoded = await base64EncodeAsync(bytes);
       notifier.state = notifier.state.copyWith(
         invoiceImagePath: imagePath,

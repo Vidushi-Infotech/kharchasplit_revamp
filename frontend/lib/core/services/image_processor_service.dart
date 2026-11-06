@@ -1,12 +1,11 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:image/image.dart' as img;
 
 import 'app_logger.dart';
 
-/// Compression + format-validation utilities for receipt / cover images.
+/// Format validation for picked images (shrinking for upload lives in
+/// upload_image.dart).
 ///
 /// Note: an earlier version of this service called the VirusTotal API to
 /// scan uploaded images, but the implementation only ever shipped with a
@@ -23,53 +22,6 @@ import 'app_logger.dart';
 }
 
 class ImageProcessorService {
-
-  /// Compress image to WebP format with quality optimization
-  /// On web: Returns empty bytes (browser already optimizes)
-  /// On mobile: Returns WebP compressed bytes
-  static Future<Uint8List?> compressImageToWebP(
-    String imagePath, {
-    int quality = 80,
-  }) async {
-    try {
-      // On web, images are already optimized by the browser
-      // Modern browsers (Chrome, Firefox, Edge) automatically compress images
-      // We simply accept them as-is for efficiency
-      if (kIsWeb) {
-        AppLogger.info(
-            'Web mode: Using browser-optimized image (native JPEG/PNG compression)',
-            tag: 'image');
-        return Uint8List(0); // Return empty to indicate web mode success
-      }
-
-      // On mobile: Compress to WebP format
-      final File imageFile = File(imagePath);
-      final imageBytes = await imageFile.readAsBytes();
-
-      AppLogger.info(
-          'Mobile mode: Compressing image to WebP format (quality: $quality%)',
-          tag: 'image');
-
-      // Compress and convert to WebP
-      final compressedBytes = await FlutterImageCompress.compressWithList(
-        imageBytes,
-        minHeight: 1920,
-        minWidth: 1080,
-        quality: quality,
-        format: CompressFormat.webp,
-      );
-
-      return compressedBytes;
-    } catch (e, st) {
-      AppLogger.error('Error compressing image',
-          tag: 'image', error: e, stackTrace: st);
-      // Return empty bytes to allow upload to continue
-      return Uint8List(0);
-    }
-  }
-
-  /// Scan image for malware using VirusTotal API
-  /// On web: Browser handles file validation through file picker
   /// Validate image file
   /// Checks file size, format, and basic properties
   static Future<ValidationResult> validateImage(String imagePath) async {
@@ -104,18 +56,18 @@ class ImageProcessorService {
       // Check file format by magic numbers
       final isValidFormat = _isValidImageFormat(bytes);
       if (!isValidFormat) {
-        return ValidationResult(
-          isValid: false,
-          error: 'Invalid image format',
-        );
+        return ValidationResult(isValid: false, error: 'Invalid image format');
       }
 
       // Try to decode image to get dimensions. Pure-Dart decode of a
       // camera capture (up to the 50 MB cap) takes hundreds of ms — run it
       // in an isolate and bring back only the dimensions.
       try {
-        final dims = await compute(_readDimensions, bytes,
-            debugLabel: 'imageDimensions');
+        final dims = await compute(
+          _readDimensions,
+          bytes,
+          debugLabel: 'imageDimensions',
+        );
         if (dims != null) {
           return ValidationResult(
             isValid: true,
@@ -126,8 +78,12 @@ class ImageProcessorService {
         }
       } catch (e, st) {
         // If decode fails, still allow upload with format validation
-        AppLogger.warn('Could not decode image dimensions',
-            tag: 'image', error: e, stackTrace: st);
+        AppLogger.warn(
+          'Could not decode image dimensions',
+          tag: 'image',
+          error: e,
+          stackTrace: st,
+        );
       }
 
       // Fallback: image format validated, assume valid
@@ -138,8 +94,12 @@ class ImageProcessorService {
         height: null,
       );
     } catch (e, st) {
-      AppLogger.error('Validation error',
-          tag: 'image', error: e, stackTrace: st);
+      AppLogger.error(
+        'Validation error',
+        tag: 'image',
+        error: e,
+        stackTrace: st,
+      );
       // Fail-safe: allow upload to continue
       return ValidationResult(
         isValid: true,
@@ -166,8 +126,12 @@ class ImageProcessorService {
         return await imageFile.readAsBytes();
       }
     } catch (e, st) {
-      AppLogger.error('Error reading image bytes',
-          tag: 'image', error: e, stackTrace: st);
+      AppLogger.error(
+        'Error reading image bytes',
+        tag: 'image',
+        error: e,
+        stackTrace: st,
+      );
       return null;
     }
   }
@@ -223,8 +187,12 @@ class ImageProcessorService {
         return true;
       }
     } catch (e, st) {
-      AppLogger.error('Error checking image format',
-          tag: 'image', error: e, stackTrace: st);
+      AppLogger.error(
+        'Error checking image format',
+        tag: 'image',
+        error: e,
+        stackTrace: st,
+      );
       return kIsWeb; // Trust web picker if check fails
     }
 
@@ -238,12 +206,15 @@ class ImageProcessorService {
       if (originalSize == 0 || compressedSize == 0) {
         return '0';
       }
-      final percentage =
-          ((originalSize - compressedSize) / originalSize * 100);
+      final percentage = ((originalSize - compressedSize) / originalSize * 100);
       return percentage.toStringAsFixed(1);
     } catch (e, st) {
-      AppLogger.error('Error calculating compression',
-          tag: 'image', error: e, stackTrace: st);
+      AppLogger.error(
+        'Error calculating compression',
+        tag: 'image',
+        error: e,
+        stackTrace: st,
+      );
       return '0';
     }
   }

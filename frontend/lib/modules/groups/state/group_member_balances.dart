@@ -59,11 +59,13 @@ List<MemberBalance> buildMemberBalances(GroupDetail detail, String? myId) {
     for (final l in lines) {
       if (!ids.contains(l.other.id)) ids.add(l.other.id);
     }
-    out.add(MemberBalance(
-      member: person(ids[i]),
-      net: -pair.values.sum,
-      lines: lines,
-    ));
+    out.add(
+      MemberBalance(
+        member: person(ids[i]),
+        net: -pair.values.sum,
+        lines: lines,
+      ),
+    );
   }
   out.sort((a, b) {
     if (a.member.id == myId) return -1;

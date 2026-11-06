@@ -79,7 +79,9 @@ Future<String?> saveDefaultSplit(
   Map<String, double>? values,
 }) async {
   try {
-    await ref.read(groupsRepositoryProvider).setDefaultSplit(
+    await ref
+        .read(groupsRepositoryProvider)
+        .setDefaultSplit(
           groupId,
           values == null || type == null
               ? null

@@ -12,6 +12,7 @@ import '../../../components/components.dart';
 import '../../../models/models.dart';
 import '../../../core/services/app_logger.dart';
 import '../../../core/services/image_processor_service.dart';
+import '../../../core/services/upload_image.dart';
 import '../../../core/utils/base64_async.dart';
 import '../../../data/contacts/device_contacts_provider.dart';
 import '../../../data/groups/groups_repository.dart';
@@ -33,6 +34,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
   late FocusNode _groupNameFocus;
   late FocusNode _descriptionFocus;
   XFile? _selectedImageFile;
+
   /// Compressed bytes of the picked cover image. Sent as base64 on submit.
   Uint8List? _coverBytes;
   bool _isProcessing = false;
@@ -78,7 +80,8 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
   /// thing the user still has to do, in form order.
   String? _missingFieldHint() {
     if (_isNameValid && _hasMembers) return null;
-    if (!_isNameValid && !_hasMembers) return 'Enter group name and add members';
+    if (!_isNameValid && !_hasMembers)
+      return 'Enter group name and add members';
     if (!_isNameValid) return 'Enter group name';
     return 'Add at least one member';
   }
@@ -127,8 +130,9 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
       setState(() => _isProcessing = true);
 
       try {
-        final validation =
-            await ImageProcessorService.validateImage(pickedFile.path);
+        final validation = await ImageProcessorService.validateImage(
+          pickedFile.path,
+        );
         if (!validation.isValid) {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
@@ -140,16 +144,10 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
 
         if (!mounted) return;
 
-        final compressedBytes =
-            await ImageProcessorService.compressImageToWebP(pickedFile.path);
-
-        // On web/desktop the compressor may return null/empty — fall back to
-        // reading the picked file directly so the cover still gets uploaded.
-        Uint8List? bytesForUpload =
-            (compressedBytes != null && compressedBytes.isNotEmpty)
-                ? compressedBytes
-                : null;
-        bytesForUpload ??= await pickedFile.readAsBytes();
+        final bytesForUpload = await UploadImage.shrink(
+          await pickedFile.readAsBytes(),
+          maxSide: UploadImage.coverSide,
+        );
 
         if (!mounted) return;
         setState(() {
@@ -158,12 +156,18 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
           _isProcessing = false;
         });
       } catch (processingError, st) {
-        AppLogger.error('Image processing error',
-            tag: 'create_group', error: processingError, stackTrace: st);
+        AppLogger.error(
+          'Image processing error',
+          tag: 'create_group',
+          error: processingError,
+          stackTrace: st,
+        );
         Uint8List? fallbackBytes;
         try {
           fallbackBytes = await pickedFile.readAsBytes();
-        } catch (_) {/* leave null */}
+        } catch (_) {
+          /* leave null */
+        }
         if (!mounted) return;
         setState(() {
           _selectedImageFile = pickedFile;
@@ -174,9 +178,9 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
     } catch (e) {
       setState(() => _isProcessing = false);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error processing image: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error processing image: $e')));
     }
   }
 
@@ -189,7 +193,9 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
       // Button is disabled in this state, but guard the other entry paths.
       HapticService.instance.error();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Add at least one member to create a group.')),
+        const SnackBar(
+          content: Text('Add at least one member to create a group.'),
+        ),
       );
       return;
     }
@@ -199,14 +205,17 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
     // Encode the cover off the main isolate — a large cover would otherwise
     // freeze the screen for the duration of the encode.
     final coverBytes = _coverBytes;
-    final coverBase64 =
-        coverBytes != null ? await base64EncodeAsync(coverBytes) : null;
+    final coverBase64 = coverBytes != null
+        ? await base64EncodeAsync(coverBytes)
+        : null;
     if (!mounted) return;
     // 1. Create the group (creator is added as the only member by the backend).
     GroupModel newGroup;
     try {
       final notes = _descriptionController.text.trim();
-      newGroup = await ref.read(groupsProvider.notifier).addGroup(
+      newGroup = await ref
+          .read(groupsProvider.notifier)
+          .addGroup(
             name: name,
             description: notes.isEmpty ? null : notes,
             coverImageBase64: coverBase64,
@@ -215,9 +224,9 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
       if (!mounted) return;
       HapticService.instance.error();
       setState(() => _isCreating = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not create group: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not create group: $e')));
       return;
     }
 
@@ -225,8 +234,9 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
     //    Backend transparently adds registered users directly and creates a
     //    placeholder + WhatsApp invite for the rest.
     final invitable = _selectedContacts
-        .where((c) =>
-            c.phones.isNotEmpty && c.phones.first.number.trim().isNotEmpty)
+        .where(
+          (c) => c.phones.isNotEmpty && c.phones.first.number.trim().isNotEmpty,
+        )
         .toList();
     int succeeded = 0;
     int failed = 0;
@@ -253,8 +263,10 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
 
     // 3. SMTP fallback for emails collected via the contacts picker.
     final emailRecipients = _selectedContacts
-        .where((c) =>
-            c.emails.isNotEmpty && c.emails.first.address.trim().isNotEmpty)
+        .where(
+          (c) =>
+              c.emails.isNotEmpty && c.emails.first.address.trim().isNotEmpty,
+        )
         .toList();
     int emailSent = 0;
     final emailFailures = <String>[];
@@ -282,18 +294,22 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
     context.go('/home/groups');
     final parts = <String>['Group "$name" created'];
     if (invitable.isNotEmpty) {
-      parts.add(failed == 0
-          ? '$succeeded member${succeeded == 1 ? '' : 's'} invited'
-          : '$succeeded invited, $failed failed');
+      parts.add(
+        failed == 0
+            ? '$succeeded member${succeeded == 1 ? '' : 's'} invited'
+            : '$succeeded invited, $failed failed',
+      );
     }
     if (emailRecipients.isNotEmpty) {
-      parts.add(emailFailed == 0
-          ? '$emailSent email${emailSent == 1 ? '' : 's'} sent'
-          : '$emailSent email${emailSent == 1 ? '' : 's'} sent, $emailFailed failed');
+      parts.add(
+        emailFailed == 0
+            ? '$emailSent email${emailSent == 1 ? '' : 's'} sent'
+            : '$emailSent email${emailSent == 1 ? '' : 's'} sent, $emailFailed failed',
+      );
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(parts.join(' · '))),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(parts.join(' · '))));
   }
 
   @override
@@ -304,13 +320,13 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
     final double maxFormWidth = screenWidth < 600
         ? double.infinity
         : screenWidth < 1100
-            ? 600
-            : 700;
+        ? 600
+        : 700;
     final double horizontalPad = screenWidth < 600
         ? 16
         : screenWidth < 1100
-            ? 24
-            : 32;
+        ? 24
+        : 32;
 
     return Scaffold(
       backgroundColor: AppColors.background(isDark),
@@ -481,10 +497,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
             onTap: _pickContacts,
             borderRadius: BorderRadius.circular(14),
             child: Ink(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 14,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
               decoration: BoxDecoration(
                 color: AppColors.cardBg(isDark),
                 borderRadius: BorderRadius.circular(14),
@@ -555,18 +568,14 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
       ),
       child: Row(
         children: [
-          _AvatarStack(
-            contacts: _selectedContacts,
-            isDark: isDark,
-          ),
+          _AvatarStack(contacts: _selectedContacts, isDark: isDark),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
               _membersPreviewText(),
-              style: AppTextStyles.body2(isDark).copyWith(
-                fontSize: 13,
-                color: AppColors.textPrimary(isDark),
-              ),
+              style: AppTextStyles.body2(
+                isDark,
+              ).copyWith(fontSize: 13, color: AppColors.textPrimary(isDark)),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -607,17 +616,10 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
             },
             borderRadius: BorderRadius.circular(12),
             child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 4,
-                vertical: 10,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
               child: Row(
                 children: [
-                  Icon(
-                    Icons.add_rounded,
-                    size: 18,
-                    color: AppColors.tealDark,
-                  ),
+                  Icon(Icons.add_rounded, size: 18, color: AppColors.tealDark),
                   const SizedBox(width: 6),
                   Text(
                     'Add notes (optional)',
@@ -752,10 +754,7 @@ class _SectionTitle extends StatelessWidget {
               letterSpacing: -0.1,
             ),
           ),
-          if (trailing != null) ...[
-            const SizedBox(width: 8),
-            trailing!,
-          ],
+          if (trailing != null) ...[const SizedBox(width: 8), trailing!],
         ],
       ),
     );
@@ -805,12 +804,7 @@ class _StickyCreateBar extends StatelessWidget {
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: EdgeInsets.fromLTRB(
-            horizontalPad,
-            10,
-            horizontalPad,
-            10,
-          ),
+          padding: EdgeInsets.fromLTRB(horizontalPad, 10, horizontalPad, 10),
           child: Center(
             child: ConstrainedBox(
               constraints: BoxConstraints(maxWidth: maxFormWidth),
@@ -831,17 +825,15 @@ class _StickyCreateBar extends StatelessWidget {
                           gradient: const LinearGradient(
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
-                            colors: [
-                              AppColors.tealLight,
-                              AppColors.tealDark,
-                            ],
+                            colors: [AppColors.tealLight, AppColors.tealDark],
                           ),
                           borderRadius: BorderRadius.circular(14),
                           boxShadow: (enabled || loading)
                               ? [
                                   BoxShadow(
-                                    color: AppColors.tealDark
-                                        .withValues(alpha: 0.30),
+                                    color: AppColors.tealDark.withValues(
+                                      alpha: 0.30,
+                                    ),
                                     blurRadius: 12,
                                     offset: const Offset(0, 6),
                                   ),
@@ -857,8 +849,9 @@ class _StickyCreateBar extends StatelessWidget {
                                 height: 18,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
-                                  valueColor:
-                                      AlwaysStoppedAnimation<Color>(Colors.white),
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    Colors.white,
+                                  ),
                                 ),
                               )
                             else
@@ -875,8 +868,8 @@ class _StickyCreateBar extends StatelessWidget {
                                 loading
                                     ? 'Creating…'
                                     : (enabled
-                                        ? 'Create group'
-                                        : (disabledHint ?? 'Create group')),
+                                          ? 'Create group'
+                                          : (disabledHint ?? 'Create group')),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: AppTextStyles.body1(isDark).copyWith(
@@ -959,10 +952,7 @@ class _AvatarStack extends StatelessWidget {
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: color,
-        border: Border.all(
-          color: AppColors.background(isDark),
-          width: 2,
-        ),
+        border: Border.all(color: AppColors.background(isDark), width: 2),
       ),
       child: Text(
         initial,
@@ -983,10 +973,7 @@ class _AvatarStack extends StatelessWidget {
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: AppColors.surface(isDark),
-        border: Border.all(
-          color: AppColors.background(isDark),
-          width: 2,
-        ),
+        border: Border.all(color: AppColors.background(isDark), width: 2),
       ),
       child: Text(
         '+$extra',

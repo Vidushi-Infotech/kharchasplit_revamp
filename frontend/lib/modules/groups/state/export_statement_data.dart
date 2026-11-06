@@ -148,7 +148,9 @@ Map<String, String> _names(GroupDetail detail, List<ExpenseModel> expenses) {
     names.putIfAbsent(s.toUser.id, () => s.toUser.name);
   }
   // Invited members who haven't signed up have no name yet.
-  return names.map((k, v) => MapEntry(k, v.trim().isEmpty ? AppStrings.invitedMember : v));
+  return names.map(
+    (k, v) => MapEntry(k, v.trim().isEmpty ? AppStrings.invitedMember : v),
+  );
 }
 
 List<StatementBalanceRow> _balances(

@@ -196,7 +196,9 @@ GroupTotals computeGroupTotals({
           MemberTotal(
             userId: id,
             // Invited members who haven't signed up have no name yet.
-            name: names[id]!.trim().isEmpty ? AppStrings.invitedMember : names[id]!,
+            name: names[id]!.trim().isEmpty
+                ? AppStrings.invitedMember
+                : names[id]!,
             paid: paid[id] ?? 0,
             share: share[id] ?? 0,
           ),

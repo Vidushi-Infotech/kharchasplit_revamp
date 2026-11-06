@@ -13,7 +13,10 @@ import 'group_default_split_controller.dart';
 
 /// Opens the admin-only "Default split" editor for [group] (never for a
 /// direct group — the caller hides the entry).
-Future<void> showGroupDefaultSplitSheet(BuildContext context, GroupModel group) {
+Future<void> showGroupDefaultSplitSheet(
+  BuildContext context,
+  GroupModel group,
+) {
   return showAdaptiveSheet<void>(
     context: context,
     size: AdaptiveSheetSize.medium,
@@ -69,9 +72,9 @@ class _GroupDefaultSplitSheetState
   }
 
   Map<String, double> get _values => {
-        for (final id in _ids)
-          id: double.tryParse(_controllers[id]!.text.trim()) ?? 0,
-      };
+    for (final id in _ids)
+      id: double.tryParse(_controllers[id]!.text.trim()) ?? 0,
+  };
 
   void _switchType(DefaultSplitType type) {
     if (type == _type) return;
@@ -115,9 +118,7 @@ class _GroupDefaultSplitSheetState
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final values = _values;
     final error = defaultSplitError(_type, values);
-    final total = _fmt(
-      (defaultSplitTotal(values) * 100).roundToDouble() / 100,
-    );
+    final total = _fmt((defaultSplitTotal(values) * 100).roundToDouble() / 100);
     final isPct = _type == DefaultSplitType.percentage;
     final secondary = AppColors.textSecondary(isDark);
 

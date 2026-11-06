@@ -35,9 +35,8 @@ class RecurringExpensesScreen extends ConsumerWidget {
         ? (24, 720)
         : (32, 860);
     final rulesAsync = ref.watch(groupRecurringRulesProvider(groupId));
-    void back() => context.canPop()
-        ? context.pop()
-        : context.go('/home/groups/$groupId');
+    void back() =>
+        context.canPop() ? context.pop() : context.go('/home/groups/$groupId');
 
     return Scaffold(
       backgroundColor: AppColors.background(isDark),

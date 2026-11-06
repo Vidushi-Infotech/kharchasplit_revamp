@@ -154,15 +154,9 @@ class GroupSettingsMemberRow extends ConsumerWidget {
     return KsListRow(
       leading: Opacity(
         opacity: member.isPlaceholder ? 0.5 : 1,
-        child: AvatarWidget(
-          imageUrl: member.avatarUrl,
-          name: name,
-          radius: 20,
-        ),
+        child: AvatarWidget(imageUrl: member.avatarUrl, name: name, radius: 20),
       ),
-      title: isSelf
-          ? '$name (${AppStrings.balanceYouObject})'
-          : name,
+      title: isSelf ? '$name (${AppStrings.balanceYouObject})' : name,
       subtitles: [if (contact.isNotEmpty) contact],
       trailing: BalanceAmountLabel(
         tone: tone,

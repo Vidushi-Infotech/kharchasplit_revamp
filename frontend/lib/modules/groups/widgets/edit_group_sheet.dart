@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
-import '../../../core/services/image_processor_service.dart';
+import '../../../core/services/upload_image.dart';
 import '../../../core/utils/base64_async.dart';
 import '../../../data/groups/groups_repository.dart';
 import '../../../components/web/adaptive_sheet.dart';
@@ -117,13 +117,10 @@ class _EditGroupSheetState extends ConsumerState<EditGroupSheet> {
         imageQuality: 85,
       );
       if (picked == null) return;
-      // Same compression pipeline as create flow.
-      Uint8List? bytes = await ImageProcessorService.compressImageToWebP(
-        picked.path,
+      final bytes = await UploadImage.shrink(
+        await picked.readAsBytes(),
+        maxSide: UploadImage.coverSide,
       );
-      if (bytes == null || bytes.isEmpty) {
-        bytes = await picked.readAsBytes();
-      }
       if (!mounted) return;
       setState(() {
         _newCoverBytes = bytes;

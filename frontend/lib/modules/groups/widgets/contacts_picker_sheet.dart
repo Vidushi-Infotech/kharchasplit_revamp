@@ -108,9 +108,11 @@ class _ContactsPickerSheetState extends ConsumerState<ContactsPickerSheet>
   PhoneLookupResult? _phoneResult;
   String? _phoneError;
   bool _phoneLooking = false;
+
   /// In-session cache so re-typing the same 10-digit number doesn't hit
   /// the rate-limited endpoint a second time.
   final Map<String, PhoneLookupResult?> _phoneCache = {};
+
   /// Synthetic Contacts representing phone-search adds (registered users
   /// the device contacts list doesn't know about). Added to the returned
   /// selection alongside device-contact picks.
@@ -138,8 +140,9 @@ class _ContactsPickerSheetState extends ConsumerState<ContactsPickerSheet>
     }
     if (phones.isEmpty) return;
     try {
-      final result =
-          await ref.read(usersRepositoryProvider).checkRegistration(phones);
+      final result = await ref
+          .read(usersRepositoryProvider)
+          .checkRegistration(phones);
       if (!mounted) return;
       setState(() => _registeredPhones = result);
     } catch (_) {
@@ -183,15 +186,21 @@ class _ContactsPickerSheetState extends ConsumerState<ContactsPickerSheet>
       );
       return;
     }
-    final id = picked.id.isEmpty ? 'picked:${picked.phones.first.number}' : picked.id;
+    final id = picked.id.isEmpty
+        ? 'picked:${picked.phones.first.number}'
+        : picked.id;
     if (_selectedIds.contains(id)) return;
     HapticService.instance.success();
     setState(() {
-      _extraContacts.add(picked.id == id ? picked : Contact(
-        id: id,
-        displayName: picked.displayName,
-        phones: picked.phones,
-      ));
+      _extraContacts.add(
+        picked.id == id
+            ? picked
+            : Contact(
+                id: id,
+                displayName: picked.displayName,
+                phones: picked.phones,
+              ),
+      );
       _selectedIds.add(id);
     });
     ScaffoldMessenger.of(context).showSnackBar(
@@ -240,8 +249,9 @@ class _ContactsPickerSheetState extends ConsumerState<ContactsPickerSheet>
       _phoneResult = null;
     });
     try {
-      final result =
-          await ref.read(usersRepositoryProvider).lookupByPhone(digits);
+      final result = await ref
+          .read(usersRepositoryProvider)
+          .lookupByPhone(digits);
       if (!mounted || _phoneInput != digits) return;
       _phoneCache[digits] = result;
       setState(() {
@@ -262,8 +272,7 @@ class _ContactsPickerSheetState extends ConsumerState<ContactsPickerSheet>
       setState(() {
         _phoneLooking = false;
         _phoneResult = null;
-        _phoneError =
-            'Lookup failed. Check your connection and try again.';
+        _phoneError = 'Lookup failed. Check your connection and try again.';
       });
     }
   }
@@ -386,10 +395,7 @@ class _ContactsPickerSheetState extends ConsumerState<ContactsPickerSheet>
         radius: 16,
         child: Text(
           initial,
-          style: TextStyle(
-            color: AppColors.brand,
-            fontWeight: FontWeight.w700,
-          ),
+          style: TextStyle(color: AppColors.brand, fontWeight: FontWeight.w700),
         ),
       ),
       title: r.name,
@@ -427,10 +433,9 @@ class _ContactsPickerSheetState extends ConsumerState<ContactsPickerSheet>
                   title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.body2(isDark).copyWith(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13.5,
-                  ),
+                  style: AppTextStyles.body2(
+                    isDark,
+                  ).copyWith(fontWeight: FontWeight.w700, fontSize: 13.5),
                 ),
                 if (subtitle != null && subtitle.isNotEmpty) ...[
                   const SizedBox(height: 2),
@@ -482,16 +487,17 @@ class _ContactsPickerSheetState extends ConsumerState<ContactsPickerSheet>
     final access =
         ref.watch(contactsAccessProvider).value ?? ContactsAccess.unknown;
     Widget accessEmpty(ContactsAccess a) => ContactsAccessEmpty(
-          access: a,
-          onAddMore: _addMoreContacts,
-          onOpenSettings: ContactsAccessService.openSettings,
-          onPickContact: _pickSystemContact,
-        );
+      access: a,
+      onAddMore: _addMoreContacts,
+      onOpenSettings: ContactsAccessService.openSettings,
+      onPickContact: _pickSystemContact,
+    );
 
     asyncContacts.whenData((c) {
       if (!_registrationLookupStarted && c.isNotEmpty) {
-        WidgetsBinding.instance
-            .addPostFrameCallback((_) => _loadRegisteredPhones(c));
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _loadRegisteredPhones(c),
+        );
       }
     });
 
@@ -515,8 +521,7 @@ class _ContactsPickerSheetState extends ConsumerState<ContactsPickerSheet>
                   // with `phone:` so they never collide with device ids.
                   final selected = <Contact>[
                     ...allContacts.where((c) => _selectedIds.contains(c.id)),
-                    ..._extraContacts
-                        .where((c) => _selectedIds.contains(c.id)),
+                    ..._extraContacts.where((c) => _selectedIds.contains(c.id)),
                   ];
                   Navigator.of(context).pop(selected);
                 },
@@ -548,14 +553,16 @@ class _ContactsPickerSheetState extends ConsumerState<ContactsPickerSheet>
                 child: asyncContacts.when(
                   loading: () =>
                       _ContactsSkeleton(controller: scrollController),
-                  error: (err, _) => err is ContactsPermissionDenied &&
+                  error: (err, _) =>
+                      err is ContactsPermissionDenied &&
                           access != ContactsAccess.unknown
                       ? accessEmpty(ContactsAccess.denied)
                       : _ContactsError(
-                    error: err,
-                    onRetry: () =>
-                        ref.read(deviceContactsProvider.notifier).refresh(),
-                  ),
+                          error: err,
+                          onRetry: () => ref
+                              .read(deviceContactsProvider.notifier)
+                              .refresh(),
+                        ),
                   data: (contacts) {
                     final filtered = _filter(contacts);
                     // Empty because of the permission, not the phone book.
@@ -571,9 +578,9 @@ class _ContactsPickerSheetState extends ConsumerState<ContactsPickerSheet>
                           contacts.isEmpty
                               ? 'No contacts on this device'
                               : 'No matches for "$_query"',
-                          style: AppTextStyles.body2(isDark).copyWith(
-                            color: AppColors.textSecondary(isDark),
-                          ),
+                          style: AppTextStyles.body2(
+                            isDark,
+                          ).copyWith(color: AppColors.textSecondary(isDark)),
                         ),
                       );
                     }
@@ -631,10 +638,12 @@ class _ContactsPickerSheetState extends ConsumerState<ContactsPickerSheet>
     // surfaces registered users who aren't in the device book at all.
     if (RegExp(r'^\d+$').hasMatch(_query)) {
       return contacts
-          .where((c) => c.phones.any((p) {
-                final d = p.number.replaceAll(RegExp(r'\D'), '');
-                return d.isNotEmpty && d.contains(_query);
-              }))
+          .where(
+            (c) => c.phones.any((p) {
+              final d = p.number.replaceAll(RegExp(r'\D'), '');
+              return d.isNotEmpty && d.contains(_query);
+            }),
+          )
           .toList();
     }
     final q = _query.toLowerCase();
@@ -755,10 +764,7 @@ class _ContactsPickerSheetState extends ConsumerState<ContactsPickerSheet>
       return TextButton.icon(
         onPressed: onTap,
         icon: Icon(Icons.check_circle, color: AppColors.brand, size: 18),
-        label: Text(
-          'Added',
-          style: TextStyle(color: AppColors.brand),
-        ),
+        label: Text('Added', style: TextStyle(color: AppColors.brand)),
       );
     }
     if (isRegistered) {
@@ -870,13 +876,12 @@ class _SheetHeader extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: Text('Select Contacts',
-                style: AppTextStyles.headline3(isDark)),
+            child: Text(
+              'Select Contacts',
+              style: AppTextStyles.headline3(isDark),
+            ),
           ),
-          TextButton(
-            onPressed: onDone,
-            child: Text('$doneLabel ($count)'),
-          ),
+          TextButton(onPressed: onDone, child: Text('$doneLabel ($count)')),
         ],
       ),
     );
@@ -1021,8 +1026,9 @@ class _ContactsError extends StatelessWidget {
                   ? 'Allow Contacts access from Settings to invite friends from your phone book.'
                   : error.toString(),
               textAlign: TextAlign.center,
-              style: AppTextStyles.body2(isDark)
-                  .copyWith(color: AppColors.textSecondary(isDark)),
+              style: AppTextStyles.body2(
+                isDark,
+              ).copyWith(color: AppColors.textSecondary(isDark)),
             ),
             const SizedBox(height: 16),
             FilledButton.icon(
@@ -1036,7 +1042,6 @@ class _ContactsError extends StatelessWidget {
     );
   }
 }
-
 
 /// Small "Added" pill shown when the phone-search result has already been
 /// pushed into the picker's selection list during this session.
@@ -1054,8 +1059,7 @@ class _AddedTickChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.check_circle_rounded,
-              size: 14, color: AppColors.brand),
+          Icon(Icons.check_circle_rounded, size: 14, color: AppColors.brand),
           const SizedBox(width: 4),
           Text(
             'Added',

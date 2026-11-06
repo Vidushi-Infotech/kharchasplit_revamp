@@ -12,7 +12,11 @@ import 'export_statement_data.dart';
 /// Sans Devanagari as fallback for Hindi names. Loaded from assets on the
 /// UI isolate ([loadStatementFonts]) and passed to the render isolate.
 class StatementFonts {
-  const StatementFonts({required this.regular, required this.bold, this.devanagari});
+  const StatementFonts({
+    required this.regular,
+    required this.bold,
+    this.devanagari,
+  });
   final ByteData regular;
   final ByteData bold;
   final ByteData? devanagari;
@@ -38,7 +42,10 @@ Future<Uint8List> renderStatementJob(StatementPdfJob job) =>
 /// has none — so some conjuncts look simplified). Without fonts (tests) it
 /// falls back to the built-in Helvetica: Latin-1 only, currency codes
 /// instead of symbols, other characters replaced by [statementPdfSafe].
-Future<Uint8List> renderGroupStatementPdf(GroupStatement s, {StatementFonts? fonts}) {
+Future<Uint8List> renderGroupStatementPdf(
+  GroupStatement s, {
+  StatementFonts? fonts,
+}) {
   final money = NumberFormat.currency(
     locale: 'en_IN',
     symbol: fonts == null

@@ -31,47 +31,44 @@ class GroupDetail {
 /// Cached for a few minutes after the screen is closed, then released.
 /// A process-lifetime cache here retained every visited group's full
 /// expense list (receipts included) until the app died.
-final groupDetailProvider =
-    FutureProvider.autoDispose.family<GroupDetail, String>((
-  ref,
-  groupId,
-) async {
-  keepAliveFor(ref, const Duration(minutes: 5));
-  final groupsRepo = ref.read(groupsRepositoryProvider);
-  final expensesRepo = ref.read(expensesRepositoryProvider);
-  final settlementsRepo = ref.read(settlementsRepositoryProvider);
+final groupDetailProvider = FutureProvider.autoDispose
+    .family<GroupDetail, String>((ref, groupId) async {
+      keepAliveFor(ref, const Duration(minutes: 5));
+      final groupsRepo = ref.read(groupsRepositoryProvider);
+      final expensesRepo = ref.read(expensesRepositoryProvider);
+      final settlementsRepo = ref.read(settlementsRepositoryProvider);
 
-  // Fetch group + expenses + settlements in parallel. Pairwise balances are
-  // computed client-side (computePairwiseDebts), so we need EVERY expense
-  // and settlement — a single page would silently produce wrong totals.
-  final results = await Future.wait([
-    groupsRepo.getById(groupId),
-    expensesRepo.listAllForGroup(groupId),
-    settlementsRepo.listAllForGroup(groupId),
-  ]);
+      // Fetch group + expenses + settlements in parallel. Pairwise balances are
+      // computed client-side (computePairwiseDebts), so we need EVERY expense
+      // and settlement — a single page would silently produce wrong totals.
+      final results = await Future.wait([
+        groupsRepo.getById(groupId),
+        expensesRepo.listAllForGroup(groupId),
+        settlementsRepo.listAllForGroup(groupId),
+      ]);
 
-  final group = results[0] as GroupModel;
-  // With this user's unsent offline changes applied (marked pending); the
-  // outbox refreshes this provider whenever those change.
-  final withOutbox = applyOutbox(
-    groupId: groupId,
-    expenses: results[1] as List<ExpenseModel>,
-    settlements: results[2] as List<SettlementModel>,
-    items: OutboxStore.itemsFor(ref.read(authProvider).user?.id),
-  );
-  final expenses = withOutbox.expenses;
-  final settlements = withOutbox.settlements;
+      final group = results[0] as GroupModel;
+      // With this user's unsent offline changes applied (marked pending); the
+      // outbox refreshes this provider whenever those change.
+      final withOutbox = applyOutbox(
+        groupId: groupId,
+        expenses: results[1] as List<ExpenseModel>,
+        settlements: results[2] as List<SettlementModel>,
+        items: OutboxStore.itemsFor(ref.read(authProvider).user?.id),
+      );
+      final expenses = withOutbox.expenses;
+      final settlements = withOutbox.settlements;
 
-  final totalExpense = expenses.fold<double>(0, (s, e) => s + e.amount);
+      final totalExpense = expenses.fold<double>(0, (s, e) => s + e.amount);
 
-  return GroupDetail(
-    group: group,
-    members: group.members,
-    expenses: expenses,
-    settlements: settlements,
-    totalExpense: totalExpense,
-  );
-});
+      return GroupDetail(
+        group: group,
+        members: group.members,
+        expenses: expenses,
+        settlements: settlements,
+        totalExpense: totalExpense,
+      );
+    });
 
 /// Net pairwise balance between [myId] and every other person, from myId's
 /// perspective:
@@ -99,9 +96,11 @@ Map<String, double> computePairwiseDebts({
       for (final split in expense.splits) {
         if (split.userId == payer.userId) continue;
         if (payer.userId == myId) {
-          pair[split.userId] = (pair[split.userId] ?? 0) - split.owedShare * share;
+          pair[split.userId] =
+              (pair[split.userId] ?? 0) - split.owedShare * share;
         } else if (split.userId == myId) {
-          pair[payer.userId] = (pair[payer.userId] ?? 0) + split.owedShare * share;
+          pair[payer.userId] =
+              (pair[payer.userId] ?? 0) + split.owedShare * share;
         }
       }
     }

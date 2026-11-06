@@ -24,10 +24,10 @@ String totalsMemberLine(MemberTotal member, String currency) =>
 
 /// Trailing label for paid − share: "gets back" / "owes" / "settled up".
 String totalsMemberLabel(BalanceTone tone) => switch (tone) {
-      BalanceTone.owed => AppStrings.memberGetsBack,
-      BalanceTone.owe => AppStrings.memberOwes,
-      _ => AppStrings.settledUpLower,
-    };
+  BalanceTone.owed => AppStrings.memberGetsBack,
+  BalanceTone.owe => AppStrings.memberOwes,
+  _ => AppStrings.settledUpLower,
+};
 
 /// "Paid vs share" section title. The rows are [GroupTotalsMemberRow]s
 /// built lazily by the tab's ListView.
@@ -43,9 +43,9 @@ class GroupTotalsMembersHeader extends StatelessWidget {
       child: Text(
         AppStrings.totalsPaidVsShare,
         style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              color: AppColors.textSecondary(isDark),
-              fontWeight: FontWeight.w600,
-            ),
+          color: AppColors.textSecondary(isDark),
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
@@ -95,7 +95,8 @@ class GroupTotalsMemberRow extends StatelessWidget {
         currency: currency,
         label: label,
       ),
-      semanticsLabel: '$name, $line, $label'
+      semanticsLabel:
+          '$name, $line, $label'
           '${tone == BalanceTone.settled ? '' : ' $amount'}',
     );
   }
