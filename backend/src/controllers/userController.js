@@ -1,0 +1,1349 @@
+import { userPairNets, toPaise, fromPaise } from '../services/ledger.js';
+import { query } from '../config/database.js';
+import User from '../models/User.js';
+import Group from '../models/Group.js';
+import { NotificationService } from '../services/notificationService.js';
+import { cache } from '../services/cacheService.js';
+import EmailService from '../services/emailService.js';
+import { generateOTP, getOTPExpiry } from '../utils/otp.js';
+import { normalizeUpiId } from '../utils/upi.js';
+
+/** Ids of the live groups the user is currently a member of. */
+const activeGroupIds = async (userId) => (await query(
+  `SELECT g.id FROM groups g
+     JOIN group_members gm ON gm.group_id = g.id
+    WHERE gm.user_id = $1 AND gm.deleted_at IS NULL AND g.deleted_at IS NULL`,
+  [userId],
+)).rows.map((r) => r.id);
+
+/**
+ * Pair-level totals from userPairNets rows, as the dashboard and reports
+ * show them. Pair-level, not per-group net: if Akash owes me 2200 in the
+ * same group where I owe R Ansari 1633, I am owed 2200 AND owe 1633 (the
+ * per-group net of +566 would hide the debt). total = owed - owe.
+ */
+const pairTotals = (rows) => {
+  let owed = 0;
+  let owe = 0;
+  for (const r of rows) {
+    const p = toPaise(r.net);
+    if (p > 0) owed += p;
+    else owe -= p;
+  }
+  return {
+    you_are_owed: fromPaise(owed),
+    you_owe: fromPaise(owe),
+    total: fromPaise(owed - owe),
+  };
+};
+
+/**
+ * Get user by ID
+ * GET /api/v1/users/:id
+ */
+const getUser = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const user = await User.findById(id);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        id: user.id,
+        phoneNumber: user.phone_number,
+        name: user.name,
+        email: user.email,
+        profileImageBase64: user.profile_image_base64,
+        preferredCurrency: user.preferred_currency,
+        emailVerifiedAt: user.email_verified_at || null,
+        // Only to the user themself; payers get it via /payment-info.
+        ...(user.id === req.user.id ? { upiId: user.upi_id || null } : {}),
+        createdAt: user.created_at,
+        updatedAt: user.updated_at,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Update user profile
+ * PUT /api/v1/users/:id
+ */
+const updateUser = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { name, email, profileImageBase64, preferredCurrency } = req.body;
+
+    let upiId;
+    if (req.body.upiId !== undefined) {
+      try {
+        upiId = normalizeUpiId(req.body.upiId);
+      } catch (e) {
+        return res.status(400).json({ success: false, error: e.message });
+      }
+    }
+
+    // Verify user owns this account
+    if (req.user.id !== id) {
+      return res.status(403).json({
+        success: false,
+        error: 'You can only update your own profile',
+      });
+    }
+
+    // Enforce profile-setup completion: if the row is still missing a name
+    // or email, this PUT must supply both. Email is required so the user can
+    // receive password-reset OTPs.
+    const current = await User.findById(id);
+    let isCompletingSetup = false;
+    if (current) {
+      const currentNameEmpty = !current.name || current.name.trim().length === 0;
+      const currentEmailEmpty = !current.email;
+      isCompletingSetup = currentNameEmpty || currentEmailEmpty;
+
+      if (isCompletingSetup) {
+        const finalName = (name ?? current.name ?? '').toString().trim();
+        const finalEmail = (email ?? current.email ?? '').toString().trim();
+        if (finalName.length < 2) {
+          return res.status(400).json({
+            success: false,
+            error: 'Name is required to complete your profile',
+          });
+        }
+        if (!finalEmail) {
+          return res.status(400).json({
+            success: false,
+            error: 'Email is required to complete your profile (used for password reset)',
+          });
+        }
+      }
+    }
+
+    const user = await User.update(id, {
+      name,
+      email,
+      profileImageBase64,
+      preferredCurrency,
+      upiId,
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    // Invalidate group member caches so updated name/avatar propagates
+    // to all groups the user belongs to.
+    try {
+      const groups = await Group.findByUserId(id, 200, 0, { includeDirect: true });
+      for (const g of groups) {
+        Group.invalidateMembers(g.id, id);
+      }
+    } catch (_) { /* best-effort — don't fail the profile update */ }
+
+    // First time the profile is complete → welcome mail (de-duplicated per
+    // user, so finishing setup twice still sends one).
+    if (isCompletingSetup && user.email) {
+      NotificationService.notifyWelcome(id).catch((err) =>
+        console.error('[UserController] welcome notify failed:', err),
+      );
+    }
+
+    res.json({
+      success: true,
+      message: 'Profile updated successfully',
+      data: {
+        id: user.id,
+        phoneNumber: user.phone_number,
+        name: user.name,
+        email: user.email,
+        profileImageBase64: user.profile_image_base64,
+        preferredCurrency: user.preferred_currency,
+        emailVerifiedAt: user.email_verified_at || null,
+        upiId: user.upi_id || null,
+        updatedAt: user.updated_at,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Delete user account
+ * DELETE /api/v1/users/:id
+ */
+const deleteUser = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    // Verify user owns this account
+    if (req.user.id !== id) {
+      return res.status(403).json({
+        success: false,
+        error: 'You can only delete your own account',
+      });
+    }
+
+    // Tell them first: once deleted there is no email or device to reach.
+    await NotificationService.notifyAccountDeleted(id).catch((err) =>
+      console.error('[UserController] account-deleted notify failed:', err),
+    );
+
+    const deleted = await User.delete(id);
+
+    if (!deleted) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Account deleted successfully',
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get user by phone number
+ * GET /api/v1/users/by-phone/:phoneNumber
+ */
+const getUserByPhone = async (req, res, next) => {
+  try {
+    const { phoneNumber } = req.params;
+
+    const user = await User.findByPhoneNumber(phoneNumber);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        id: user.id,
+        phoneNumber: user.phone_number,
+        name: user.name,
+        email: user.email,
+        profileImageBase64: user.profile_image_base64,
+        preferredCurrency: user.preferred_currency,
+        emailVerifiedAt: user.email_verified_at || null,
+        createdAt: user.created_at,
+        updatedAt: user.updated_at,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Privacy-trimmed lookup used by the "Add member by phone number" flow
+ * in the group-members picker.
+ * GET /api/v1/users/lookup-by-phone?phone=XXXXXXXXXX
+ *
+ * Returns only the fields the picker needs to render a result card and
+ * decide whether to add the user to the group. Email, full phone, and
+ * timestamps are intentionally omitted so a logged-in client can't
+ * enumerate the user directory beyond "this number is registered, here
+ * is the display name and avatar."
+ */
+const lookupByPhone = async (req, res, next) => {
+  try {
+    const phone = (req.query?.phone || '').toString().trim();
+    if (!phone) {
+      return res.status(400).json({
+        success: false,
+        error: 'phone query parameter is required',
+      });
+    }
+
+    const user = await User.findByPhoneNumber(phone);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    // Block self-lookup so the picker doesn't accidentally let a user add
+    // themselves to a group via this path; the existing self-detection in
+    // the device-contacts list handles the device-contacts path.
+    if (user.id === req.user.id) {
+      return res.json({
+        success: true,
+        data: {
+          id: user.id,
+          name: user.name,
+          avatarUrl: user.profile_image_base64 || null,
+          phoneSuffix: (user.phone_number || '').replace(/\D/g, '').slice(-4),
+          isSelf: true,
+        },
+      });
+    }
+
+    // Placeholder users are server-side stubs created during invite flows
+    // before the invitee signs up. Treat them as "not registered" so the
+    // picker falls through to its invite-CTA branch.
+    if (user.is_placeholder) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        id: user.id,
+        name: user.name,
+        avatarUrl: user.profile_image_base64 || null,
+        phoneSuffix: (user.phone_number || '').replace(/\D/g, '').slice(-4),
+        isSelf: false,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Check if users are registered by phone numbers
+ * POST /api/v1/users/check-registration
+ *
+ * Optimized: Uses a single database query with WHERE IN clause
+ * instead of N sequential queries for better performance
+ */
+const checkRegisteredUsers = async (req, res, next) => {
+  try {
+    const { phoneNumbers } = req.body;
+
+    if (!phoneNumbers || !Array.isArray(phoneNumbers) || phoneNumbers.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Phone numbers array is required',
+      });
+    }
+
+    // Use a single bulk query instead of N queries
+    const users = await User.findByPhoneNumbers(phoneNumbers);
+
+    const registered = users.map(user => ({
+      phoneNumber: user.phone_number,
+      userId: user.id,
+      name: user.name,
+      email: user.email,
+      profileImageBase64: user.profile_image_base64 || null,
+    }));
+
+    // Find unregistered numbers
+    const registeredPhoneSet = new Set(users.map(u => u.phone_number));
+    const unregistered = phoneNumbers.filter(phone => !registeredPhoneSet.has(phone));
+
+    res.json({
+      success: true,
+      data: {
+        registered,
+        unregistered,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Deactivate user account
+ * DELETE /api/v1/users/:id/deactivate
+ */
+const deactivateUser = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    // Verify user owns this account
+    if (req.user.id !== id) {
+      return res.status(403).json({
+        success: false,
+        error: 'You can only deactivate your own account',
+      });
+    }
+
+    const user = await User.findById(id);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    // Deactivate user (soft delete with is_active flag)
+    const deactivated = await User.delete(id);
+
+    if (!deactivated) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    NotificationService.notifyAccountDeleted(id).catch((err) =>
+      console.error('[UserController] account-deleted notify failed:', err),
+    );
+
+    res.json({
+      success: true,
+      message: 'Account deactivated successfully',
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Update FCM token for push notifications
+ * PUT /api/v1/users/:id/fcm-token
+ */
+const updateFcmToken = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { fcmToken } = req.body;
+
+    // Verify user owns this account
+    if (req.user.id !== id) {
+      return res.status(403).json({
+        success: false,
+        error: 'You can only update your own FCM token',
+      });
+    }
+
+    if (!fcmToken) {
+      return res.status(400).json({
+        success: false,
+        error: 'FCM token is required',
+      });
+    }
+
+    // Update the token
+    const result = await NotificationService.updateUserToken(id, fcmToken);
+
+    if (!result.success) {
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to update FCM token',
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'FCM token updated successfully',
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Remove FCM token (logout/disable notifications)
+ * DELETE /api/v1/users/:id/fcm-token
+ */
+const removeFcmToken = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    // Verify user owns this account
+    if (req.user.id !== id) {
+      return res.status(403).json({
+        success: false,
+        error: 'You can only remove your own FCM token',
+      });
+    }
+
+    // Remove the token by setting it to null
+    const result = await NotificationService.updateUserToken(id, null);
+
+    if (!result.success) {
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to remove FCM token',
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'FCM token removed successfully',
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Aggregate dashboard data for a user across every group they belong to.
+ * GET /api/v1/users/:id/dashboard?recentLimit=10
+ *
+ * Returns:
+ *   {
+ *     youAreOwed:    sum of positive net balances (other people owe you)
+ *     youOwe:        sum of |negative net balances| (you owe other people)
+ *     totalBalance:  youAreOwed - youOwe
+ *     recentExpenses: latest N expenses across all the user's groups
+ *   }
+ */
+const getDashboard = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const recentLimit = Math.min(parseInt(req.query.recentLimit) || 10, 50);
+
+    if (id !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        error: 'You can only fetch your own dashboard',
+      });
+    }
+
+    // 60s cache covers the typical "open app → tab through screens"
+    // session. The cost of the WITH active_groups aggregation across
+    // every active group (and UNION-ed settlements) is non-trivial; on
+    // a cold dashboard hit the query alone walked >100ms in slow-log
+    // samples. Stale-ness is acceptable for a summary view, and every
+    // write path that affects balances has TTL ≤60s anyway so the lag
+    // is bounded.
+    const cacheKey = `user:${id}:dashboard:${recentLimit}`;
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      return res.json({ success: true, data: cached });
+    }
+
+    // Per-group net position for this user, in one query.
+    // Positive amount = others owe me, negative = I owe others.
+    // Combines expenses (someone paying for someone else) AND settlements
+    // (a payment that reduces the underlying debt).
+    // The user's "active" group set: membership row alive AND group itself
+    // not soft-deleted. Aligning this with Group.findByUserId so the
+    // dashboard summary cards match the sum of per-group myBalance values
+    // shown in the "You're owed" / "You owe" detail screens. (Without the
+    // groups.deleted_at filter, leftover expenses in soft-deleted groups
+    // still counted into the dashboard total but vanished from the
+    // breakdown — root cause of the ₹X mismatch.)
+    // Net debt with each (group, other-user) pair, NOT just per-group net.
+    //
+    // Why pair-level: per-group netting hides debts. If Akash owes me 2200 in
+    // the same group where I owe R Ansari 1633, per-group net = +566 which
+    // showed "you_owe = 0" — even though I genuinely owe R Ansari money.
+    // Splitwise-style behaviour aggregates positive pair balances into
+    // "you're owed" and negative pair balances into "you owe" separately.
+    //
+    // total = you_are_owed - you_owe (mathematically equal to the old per-group
+    // sum, so existing TOTAL invariants are preserved).
+    const balances = pairTotals(await userPairNets(id, await activeGroupIds(id)));
+
+
+    // Latest expenses across the user's groups, with the group name + paid-by user.
+    // One query, with all splits batch-fetched separately.
+    const expensesResult = await query(
+      `SELECT e.id, e.group_id, e.description, e.amount, e.currency, e.category,
+              e.paid_by, e.split_type, e.notes, e.expense_date, e.created_at,
+              g.name AS group_name,
+              u.name AS paid_by_name, u.phone_number AS paid_by_phone,
+              u.profile_image_base64 AS paid_by_image
+       FROM expenses e
+       JOIN groups g ON g.id = e.group_id
+       LEFT JOIN users u ON u.id = e.paid_by
+       WHERE e.deleted_at IS NULL
+         AND e.group_id IN (
+           SELECT group_id FROM group_members
+           WHERE user_id = $1 AND deleted_at IS NULL
+         )
+       ORDER BY e.created_at DESC
+       LIMIT $2`,
+      [id, recentLimit]
+    );
+
+    const expenseIds = expensesResult.rows.map(r => r.id);
+    let splitsByExpense = {};
+    if (expenseIds.length > 0) {
+      const splitsResult = await query(
+        `SELECT es.expense_id, es.user_id, es.amount, es.percentage, es.shares,
+                u.name AS user_name
+         FROM expense_splits es
+         LEFT JOIN users u ON u.id = es.user_id
+         WHERE es.expense_id = ANY($1::uuid[])
+           AND es.deleted_at IS NULL`,
+        [expenseIds]
+      );
+      for (const s of splitsResult.rows) {
+        if (!splitsByExpense[s.expense_id]) splitsByExpense[s.expense_id] = [];
+        splitsByExpense[s.expense_id].push({
+          userId: s.user_id,
+          userName: s.user_name,
+          owedShare: parseFloat(s.amount),
+          percentage: s.percentage != null ? parseFloat(s.percentage) : null,
+          shares: s.shares,
+        });
+      }
+    }
+
+    const recentExpenses = expensesResult.rows.map(e => ({
+      id: e.id,
+      groupId: e.group_id,
+      groupName: e.group_name,
+      description: e.description,
+      amount: parseFloat(e.amount),
+      currency: e.currency,
+      category: e.category,
+      paidBy: e.paid_by
+        ? {
+            id: e.paid_by,
+            name: e.paid_by_name,
+            phoneNumber: e.paid_by_phone,
+            profileImageBase64: e.paid_by_image,
+          }
+        : null,
+      splitType: e.split_type,
+      notes: e.notes,
+      expenseDate: e.expense_date,
+      createdAt: e.created_at,
+      splits: splitsByExpense[e.id] || [],
+    }));
+
+    const data = {
+      youAreOwed: parseFloat(balances.you_are_owed) || 0,
+      youOwe: parseFloat(balances.you_owe) || 0,
+      totalBalance: parseFloat(balances.total) || 0,
+      recentExpenses,
+    };
+    cache.set(cacheKey, data, 60);
+    res.json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GET /api/v1/users/:id/export
+ *
+ * Streams the user's data as JSON — profile, groups, expenses,
+ * personal expenses, and settlements.
+ *
+ * Why streamed instead of res.json(payload):
+ *   At the LIMIT 5000 ceilings below, the assembled payload is roughly
+ *   5–15 MB. A single JSON.stringify on that blob is fully synchronous
+ *   and pegs the event loop for 50–150 ms — every other in-flight
+ *   request waits behind it. By writing the JSON envelope manually and
+ *   stringifying each row independently, work splits into thousands of
+ *   ~10µs jobs that interleave naturally with other traffic, and the
+ *   client starts receiving bytes before the last query even runs.
+ *
+ * Error handling: once we've sent the first byte we can't switch to a
+ * JSON error envelope, so a mid-stream failure just severs the
+ * connection (logged for diagnosis). Pre-stream failures still go
+ * through next(err) the normal way.
+ */
+const exportUserData = async (req, res, next) => {
+  const { id } = req.params;
+  if (req.user.id !== id) {
+    return res.status(403).json({
+      success: false,
+      error: 'You can only export your own data',
+    });
+  }
+
+  // Tiny helper: write a chunk and respect backpressure. Without this the
+  // node socket buffer can balloon for the full export size on a slow client.
+  const write = (chunk) =>
+    new Promise((resolve) => {
+      if (res.write(chunk)) return resolve();
+      res.once('drain', resolve);
+    });
+
+  // Per-row streamer. arrayKey is the JSON key, rows is the pg result rows,
+  // mapper turns each row into the export-shape object. Writes the array as
+  // a JSON literal, one row at a time, with comma separators.
+  const streamArray = async (arrayKey, rows, mapper) => {
+    await write(`,"${arrayKey}":[`);
+    let first = true;
+    for (let i = 0; i < rows.length; i++) {
+      const piece = JSON.stringify(mapper(rows[i]));
+      await write(first ? piece : `,${piece}`);
+      first = false;
+    }
+    await write(']');
+  };
+
+  try {
+    // Run the profile lookup before sending any headers — this is the only
+    // place we can still bail out with a proper JSON error.
+    const profileRes = await query(
+      `SELECT id, phone_number, name, email, profile_image_base64,
+              preferred_currency, created_at, updated_at
+       FROM users WHERE id = $1 AND deleted_at IS NULL`,
+      [id]
+    );
+    if (profileRes.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+    const u = profileRes.rows[0];
+    const profile = {
+      id: u.id,
+      phoneNumber: u.phone_number,
+      name: u.name,
+      email: u.email,
+      preferredCurrency: u.preferred_currency,
+      hasProfilePhoto: !!u.profile_image_base64,
+      createdAt: u.created_at,
+      updatedAt: u.updated_at,
+    };
+
+    // Fetch the four collections. We still pull them all before streaming
+    // because the JSON header needs the counts up-front — but we never
+    // materialize the full payload as a single object, and we never call
+    // JSON.stringify on more than one row at a time.
+    const [groupsRes, expensesRes, personalRes] = await Promise.all([
+      query(
+        `SELECT g.id, g.name, g.description, g.currency, g.created_at,
+                gm.role, gm.joined_at
+         FROM groups g
+         JOIN group_members gm ON gm.group_id = g.id
+         WHERE gm.user_id = $1 AND g.deleted_at IS NULL
+         ORDER BY gm.joined_at DESC`,
+        [id]
+      ),
+      query(
+        `SELECT e.id, e.group_id, e.description, e.amount, e.currency, e.category,
+                e.paid_by, e.split_type, e.notes, e.expense_date, e.created_at,
+                es.amount AS my_share, es.percentage AS my_percentage,
+                es.shares AS my_shares
+         FROM expenses e
+         LEFT JOIN expense_splits es ON es.expense_id = e.id AND es.user_id = $1
+         JOIN group_members gm ON gm.group_id = e.group_id AND gm.user_id = $1
+         WHERE e.deleted_at IS NULL
+         ORDER BY e.expense_date DESC
+         LIMIT 5000`,
+        [id]
+      ),
+      query(
+        `SELECT id, description, amount, currency, category, expense_date,
+                notes, created_at
+         FROM personal_expenses
+         WHERE user_id = $1 AND is_deleted = FALSE
+         ORDER BY expense_date DESC
+         LIMIT 5000`,
+        [id]
+      ),
+    ]);
+
+    let settlementsRows = [];
+    try {
+      const settlementsRes = await query(
+        `SELECT id, group_id, amount, currency, payer_id, payee_id, notes,
+                created_at
+         FROM settlements
+         WHERE (payer_id = $1 OR payee_id = $1)
+         ORDER BY created_at DESC
+         LIMIT 5000`,
+        [id]
+      );
+      settlementsRows = settlementsRes.rows;
+    } catch (_) {
+      // settlements table may not exist in all environments — skip silently
+    }
+
+    // Begin the response. From here on, errors can't be recovered into JSON.
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="kharchasplit-export-${id}-${Date.now()}.json"`,
+    );
+
+    // Envelope header — fixed-shape JSON literal containing the small,
+    // pre-known parts (status + metadata + profile + counts).
+    const envelope = {
+      success: true,
+      data: {
+        exportVersion: 1,
+        exportedAt: new Date().toISOString(),
+        profile,
+        counts: {
+          groups: groupsRes.rows.length,
+          expenses: expensesRes.rows.length,
+          personalExpenses: personalRes.rows.length,
+          settlements: settlementsRows.length,
+        },
+      },
+    };
+    // Strip the trailing '}}' so we can append the streamed arrays inside.
+    const envelopeStr = JSON.stringify(envelope);
+    await write(envelopeStr.slice(0, -2));
+
+    // Stream the four arrays inside data{...}. Each streamArray prepends a
+    // comma + key, so the result is a syntactically valid JSON object.
+    await streamArray('groups', groupsRes.rows, (r) => ({
+      id: r.id,
+      name: r.name,
+      description: r.description,
+      currency: r.currency,
+      role: r.role,
+      joinedAt: r.joined_at,
+      groupCreatedAt: r.created_at,
+    }));
+    await streamArray('expenses', expensesRes.rows, (r) => ({
+      id: r.id,
+      groupId: r.group_id,
+      description: r.description,
+      amount: r.amount,
+      currency: r.currency,
+      category: r.category,
+      paidBy: r.paid_by,
+      paidByMe: r.paid_by === id,
+      splitType: r.split_type,
+      myShare: r.my_share,
+      myPercentage: r.my_percentage,
+      myShares: r.my_shares,
+      notes: r.notes,
+      expenseDate: r.expense_date,
+      createdAt: r.created_at,
+    }));
+    await streamArray('personalExpenses', personalRes.rows, (r) => ({
+      id: r.id,
+      title: r.description,
+      amount: r.amount,
+      currency: r.currency,
+      category: r.category,
+      expenseDate: r.expense_date,
+      notes: r.notes,
+      createdAt: r.created_at,
+    }));
+    await streamArray('settlements', settlementsRows, (r) => ({
+      id: r.id,
+      groupId: r.group_id,
+      amount: r.amount,
+      currency: r.currency,
+      payerId: r.payer_id,
+      payeeId: r.payee_id,
+      direction: r.payer_id === id ? 'paid' : 'received',
+      notes: r.notes,
+      createdAt: r.created_at,
+    }));
+
+    // Close data{...} and the outer envelope.
+    await write('}}');
+    res.end();
+  } catch (error) {
+    if (!res.headersSent) return next(error);
+    // Headers already flushed — can't switch to a JSON error envelope.
+    // Sever the connection so the client knows the export is incomplete,
+    // and surface it in logs for diagnosis.
+    console.error('[export] failed mid-stream:', error.message);
+    res.destroy(error);
+  }
+};
+
+/**
+ * GET /api/v1/users/:id/reports?period=month|quarter|year
+ *
+ * Aggregated spending breakdown for the Reports screen. All money figures
+ * are in the user's preferred currency (the dashboard already mixes
+ * currencies, this endpoint follows the same convention — sums are taken
+ * raw, no FX conversion).
+ *
+ * Window semantics (all relative to NOW):
+ *   month   → from start of the *current* calendar month
+ *   quarter → from start of (current month - 2)  (covers 3 months)
+ *   year    → from start of (current month - 11) (covers 12 months)
+ *
+ * Returns:
+ *   totalSpending    — Σ (es.amount) for splits belonging to the caller,
+ *                      within the window, across active groups.
+ *   youOwe / owedToYou — current pairwise *balances* (NOT period-windowed —
+ *                      these are point-in-time snapshots of what's outstanding
+ *                      right now, same definition the dashboard uses).
+ *   categorySpending — { categoryId: amount } for the caller's splits, window.
+ *   monthlySpending  — { 'YYYY-MM': amount } per calendar month in the window.
+ *   topCategories    — categorySpending sorted desc, top 5, with categoryId.
+ */
+/**
+ * Friends: everyone the user shares a group with, or still has a balance
+ * with (e.g. someone who has since left a shared group), with the net
+ * balance per friend across all groups and the per-group breakdown.
+ * GET /api/v1/users/:id/friends
+ *
+ * net > 0 = the friend owes the user; net < 0 = the user owes the friend.
+ * Balances come from the ledger (services/ledger.js), so they match the
+ * group Balances tab and the dashboard. Archived groups are included —
+ * their open balances are still real debts.
+ */
+const getFriends = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    if (id !== req.user.id) {
+      return res.status(403).json({ success: false, error: 'You can only fetch your own friends' });
+    }
+
+    const { rows: myGroups } = await query(
+      `SELECT g.id, g.name, g.currency, g.kind
+         FROM groups g
+         JOIN group_members gm ON gm.group_id = g.id
+        WHERE gm.user_id = $1 AND gm.deleted_at IS NULL AND g.deleted_at IS NULL`,
+      [id],
+    );
+    const groupById = new Map(myGroups.map((g) => [g.id, g]));
+    const netRows = (await userPairNets(id, myGroups.map((g) => g.id))).map((r) => ({
+      ...r,
+      group_name: groupById.get(r.group_id).name,
+      currency: groupById.get(r.group_id).currency,
+      kind: groupById.get(r.group_id).kind,
+    }));
+
+    const { rows: shared } = await query(
+      `SELECT other.user_id,
+              (COUNT(DISTINCT other.group_id) FILTER (WHERE g.kind = 'group'))::int AS shared_groups,
+              MAX(g.id::text) FILTER (WHERE g.kind = 'direct') AS direct_group_id
+         FROM group_members me
+         JOIN groups g ON g.id = me.group_id AND g.deleted_at IS NULL
+         JOIN group_members other ON other.group_id = me.group_id
+                                 AND other.deleted_at IS NULL
+                                 AND other.user_id <> me.user_id
+        WHERE me.user_id = $1 AND me.deleted_at IS NULL
+        GROUP BY other.user_id`,
+      [id],
+    );
+
+    const friends = new Map();
+    const friend = (userId) => {
+      if (!friends.has(userId)) {
+        friends.set(userId, { userId, netPaise: 0, sharedGroupCount: 0, directGroupId: null, groups: [] });
+      }
+      return friends.get(userId);
+    };
+    for (const r of shared) {
+      friend(r.user_id).sharedGroupCount = r.shared_groups;
+      friend(r.user_id).directGroupId = r.direct_group_id;
+    }
+    for (const r of netRows) {
+      const paise = toPaise(r.net);
+      if (paise === 0) continue;
+      const f = friend(r.other_user_id);
+      f.netPaise += paise;
+      f.groups.push({
+        groupId: r.group_id,
+        groupName: r.group_name,
+        currency: r.currency || 'INR',
+        isDirect: r.kind === 'direct',
+        net: Number(fromPaise(paise)),
+      });
+    }
+
+    const ids = [...friends.keys()];
+    const { rows: users } = ids.length === 0 ? { rows: [] } : await query(
+      `SELECT id, name, email, phone_number, profile_image_base64, is_placeholder
+         FROM users WHERE id = ANY($1::uuid[])`,
+      [ids],
+    );
+    const userById = new Map(users.map((u) => [u.id, u]));
+
+    const data = [...friends.values()]
+      .filter((f) => userById.has(f.userId))
+      .map((f) => {
+        const u = userById.get(f.userId);
+        f.groups.sort((a, b) => Math.abs(b.net) - Math.abs(a.net));
+        return {
+          userId: f.userId,
+          name: u.name || 'A member',
+          email: u.email || '',
+          phoneNumber: u.phone_number || '',
+          profileImageBase64: u.profile_image_base64 || null,
+          isPlaceholder: !!u.is_placeholder,
+          net: Number(fromPaise(f.netPaise)),
+          // Groups shared besides the hidden non-group one.
+          sharedGroupCount: f.sharedGroupCount,
+          // Hidden group holding non-group expenses with them (null until
+          // the first one; create via POST /groups/direct).
+          directGroupId: f.directGroupId,
+          groups: f.groups,
+        };
+      })
+      // Open balances first (largest first), then everyone else by name.
+      .sort((a, b) => (Math.abs(b.net) - Math.abs(a.net)) || a.name.localeCompare(b.name));
+
+    res.json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * What the caller owes `otherId`, in rupees, per group they currently
+ * share (visible debts — see services/ledger.js userPairNets).
+ * @returns {Promise<Array<{groupId, amount}>>} only groups where the caller owes
+ */
+const amountsOwedTo = async (callerId, otherId) => {
+  const { rows } = await query(
+    `SELECT a.group_id
+       FROM group_members a
+       JOIN group_members b ON b.group_id = a.group_id AND b.user_id = $2 AND b.deleted_at IS NULL
+       JOIN groups g ON g.id = a.group_id AND g.deleted_at IS NULL
+      WHERE a.user_id = $1 AND a.deleted_at IS NULL`,
+    [callerId, otherId],
+  );
+  return (await userPairNets(callerId, rows.map((r) => r.group_id)))
+    .filter((r) => r.other_user_id === otherId && r.net < 0)
+    .map((r) => ({ groupId: r.group_id, amount: -r.net }));
+};
+
+/**
+ * How to pay someone: their UPI ID — but only for a caller who currently
+ * owes them money in a shared group (a VPA often contains a phone number).
+ * GET /api/v1/users/:id/payment-info
+ * → { name, hasUpiId, upiId (null unless the caller owes them), owedAmount }
+ */
+const getPaymentInfo = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    if (id === req.user.id) {
+      return res.status(400).json({ success: false, error: 'You can\'t pay yourself' });
+    }
+    const user = await User.findById(id);
+    if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+
+    const owed = await amountsOwedTo(req.user.id, id);
+    const owedAmount = Number(fromPaise(owed.reduce((s, o) => s + toPaise(o.amount), 0)));
+    res.json({
+      success: true,
+      data: {
+        userId: id,
+        name: user.name,
+        hasUpiId: !!user.upi_id,
+        upiId: owedAmount > 0 ? user.upi_id || null : null,
+        owedAmount,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Ask someone you owe to add their UPI ID (push + inbox to them).
+ * POST /api/v1/users/:id/upi-request
+ * At most one request per (caller, target) per 24h.
+ */
+const requestUpiId = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    if (id === req.user.id) {
+      return res.status(400).json({ success: false, error: 'You can\'t ask yourself' });
+    }
+    const [target, caller] = await Promise.all([User.findById(id), User.findById(req.user.id)]);
+    if (!target) return res.status(404).json({ success: false, error: 'User not found' });
+    if (target.upi_id) {
+      return res.status(409).json({ success: false, code: 'UPI_ID_EXISTS', error: `${target.name || 'They'} already added a UPI ID` });
+    }
+    const owed = await amountsOwedTo(req.user.id, id);
+    if (owed.length === 0) {
+      return res.status(400).json({ success: false, error: 'You can only ask people you owe money to' });
+    }
+    const recent = await query(
+      `SELECT 1 FROM notifications
+        WHERE user_id = $1 AND type = 'UPI_ID_REQUESTED' AND data->>'requesterId' = $2
+          AND created_at > NOW() - INTERVAL '24 hours'
+        LIMIT 1`,
+      [id, req.user.id],
+    );
+    if (recent.rowCount > 0) {
+      return res.status(429).json({ success: false, error: 'You already asked in the last 24 hours' });
+    }
+
+    const amount = fromPaise(owed.reduce((s, o) => s + toPaise(o.amount), 0));
+    await NotificationService.sendToUser(id, 'UPI_ID_REQUESTED', {
+      requesterId: req.user.id,
+      requesterName: caller?.name || 'Someone',
+      amount,
+      currency: '₹',
+    });
+    res.json({ success: true, message: 'Request sent' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getReports = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    if (id !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        error: 'You can only fetch your own reports',
+      });
+    }
+
+    const period = (req.query.period || 'month').toString().toLowerCase();
+    let windowStartSql;
+    switch (period) {
+      case 'year':
+        windowStartSql = "date_trunc('month', NOW()) - INTERVAL '11 months'";
+        break;
+      case 'quarter':
+        windowStartSql = "date_trunc('month', NOW()) - INTERVAL '2 months'";
+        break;
+      case 'month':
+      default:
+        windowStartSql = "date_trunc('month', NOW())";
+        break;
+    }
+
+    // Snapshot of current outstanding balances — same shape as dashboard's
+    // you_owe / you_are_owed numbers. We intentionally do NOT period-window
+    // these (debts don't have a "this month" — they're either outstanding
+    // now or settled).
+    // Pair-level netting — same shape as the dashboard query so the Reports
+    // screen's you_are_owed / you_owe match the homescreen exactly. See the
+    // long comment in getDashboard for the why.
+    const balances = pairTotals(await userPairNets(id, await activeGroupIds(id)));
+
+
+    // Per-category spend = amount the caller *consumed* (their own split row)
+    // within the window. Counts the caller's portion of every expense in
+    // every group they're a member of.
+    const categoryResult = await query(
+      `SELECT COALESCE(NULLIF(e.category, ''), 'other') AS category,
+              COALESCE(SUM(es.amount), 0) AS amount
+         FROM expense_splits es
+         JOIN expenses e ON e.id = es.expense_id
+         JOIN group_members gm ON gm.group_id = e.group_id AND gm.user_id = $1 AND gm.deleted_at IS NULL
+         JOIN groups g ON g.id = e.group_id AND g.deleted_at IS NULL
+        WHERE es.user_id = $1
+          AND es.deleted_at IS NULL
+          AND e.deleted_at IS NULL
+          AND e.expense_date >= ${windowStartSql}
+        GROUP BY COALESCE(NULLIF(e.category, ''), 'other')
+        ORDER BY amount DESC`,
+      [id]
+    );
+
+    const categorySpending = {};
+    for (const row of categoryResult.rows) {
+      categorySpending[row.category] = parseFloat(row.amount);
+    }
+    const totalSpending = Object.values(categorySpending)
+      .reduce((sum, v) => sum + v, 0);
+    const topCategories = Object.entries(categorySpending)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([category, amount]) => ({ category, amount }));
+
+    // Monthly spend series — bucketed by calendar month so the bar chart's
+    // X axis has stable labels regardless of timezone. Months in the window
+    // with zero spend are filled in client-side.
+    const monthlyResult = await query(
+      `SELECT to_char(date_trunc('month', e.expense_date), 'YYYY-MM') AS month,
+              COALESCE(SUM(es.amount), 0) AS amount
+         FROM expense_splits es
+         JOIN expenses e ON e.id = es.expense_id
+         JOIN group_members gm ON gm.group_id = e.group_id AND gm.user_id = $1 AND gm.deleted_at IS NULL
+         JOIN groups g ON g.id = e.group_id AND g.deleted_at IS NULL
+        WHERE es.user_id = $1
+          AND es.deleted_at IS NULL
+          AND e.deleted_at IS NULL
+          AND e.expense_date >= ${windowStartSql}
+        GROUP BY date_trunc('month', e.expense_date)
+        ORDER BY date_trunc('month', e.expense_date)`,
+      [id]
+    );
+    const monthlySpending = {};
+    for (const row of monthlyResult.rows) {
+      monthlySpending[row.month] = parseFloat(row.amount);
+    }
+
+    res.json({
+      success: true,
+      data: {
+        period,
+        totalSpending,
+        youOwe: parseFloat(balances.you_owe || 0),
+        owedToYou: parseFloat(balances.you_are_owed || 0),
+        categorySpending,
+        monthlySpending,
+        topCategories,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const EMAIL_VERIFY_TTL_MIN = 10;
+const EMAIL_VERIFY_RESEND_COOLDOWN_SEC = 60;
+
+/**
+ * Send a verification code to the user's own email address.
+ * POST /api/v1/users/:id/email/verify/request
+ *
+ * Verification is optional — the app only *highlights* an unverified
+ * address — so this is user-initiated and idempotent-ish: a fresh code is
+ * issued each call, subject to a short resend cooldown.
+ */
+const requestEmailVerification = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    if (req.user.id !== id) {
+      return res.status(403).json({ success: false, error: 'You can only verify your own email' });
+    }
+    const user = await User.findById(id);
+    if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+    if (!user.email) {
+      return res.status(400).json({ success: false, error: 'Add an email to your profile first' });
+    }
+    if (user.email_verified_at) {
+      return res.json({ success: true, message: 'Email is already verified', data: { alreadyVerified: true } });
+    }
+
+    const recent = await query(
+      `SELECT created_at FROM otps
+        WHERE LOWER(email) = LOWER($1) AND purpose = 'email_verify' AND verified = FALSE
+        ORDER BY created_at DESC LIMIT 1`,
+      [user.email],
+    );
+    if (recent.rows[0]) {
+      const ageSec = (Date.now() - new Date(recent.rows[0].created_at).getTime()) / 1000;
+      if (ageSec < EMAIL_VERIFY_RESEND_COOLDOWN_SEC) {
+        const wait = Math.ceil(EMAIL_VERIFY_RESEND_COOLDOWN_SEC - ageSec);
+        return res.status(429).json({
+          success: false,
+          error: `Please wait ${wait}s before requesting another code`,
+          retryAfterSeconds: wait,
+        });
+      }
+    }
+
+    const otp = generateOTP();
+    const expiresAt = getOTPExpiry(EMAIL_VERIFY_TTL_MIN);
+    // A new code retires the earlier ones, so only one is ever guessable.
+    await query(
+      `UPDATE otps SET verified = TRUE
+        WHERE LOWER(email) = LOWER($1) AND purpose = 'email_verify' AND verified = FALSE`,
+      [user.email],
+    );
+    await query(
+      `INSERT INTO otps (email, phone_number, otp, expires_at, purpose, verified)
+       VALUES ($1, NULL, $2, $3, 'email_verify', FALSE)`,
+      [user.email.toLowerCase(), otp, expiresAt],
+    );
+
+    const sent = await EmailService.sendEmailVerificationEmail({
+      toEmail: user.email,
+      recipientName: user.name,
+      otp,
+      expiresInMinutes: EMAIL_VERIFY_TTL_MIN,
+    });
+    if (!sent.success) {
+      console.error('[Users] email verification send failed:', sent.error);
+      return res.status(502).json({
+        success: false,
+        error: 'Could not send the verification email right now. Please try again later.',
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Verification code sent',
+      data: { expiresInMinutes: EMAIL_VERIFY_TTL_MIN, resendAfterSeconds: EMAIL_VERIFY_RESEND_COOLDOWN_SEC },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Confirm the code and stamp email_verified_at.
+ * POST /api/v1/users/:id/email/verify/confirm   Body: { otp }
+ */
+const confirmEmailVerification = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { otp } = req.body;
+    if (req.user.id !== id) {
+      return res.status(403).json({ success: false, error: 'You can only verify your own email' });
+    }
+    const user = await User.findById(id);
+    if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+    if (!user.email) {
+      return res.status(400).json({ success: false, error: 'Add an email to your profile first' });
+    }
+
+    const otpRow = await query(
+      `SELECT id, expires_at, verified FROM otps
+        WHERE LOWER(email) = LOWER($1) AND otp = $2 AND purpose = 'email_verify'
+        ORDER BY created_at DESC LIMIT 1`,
+      [user.email, String(otp || '').trim()],
+    );
+    const row = otpRow.rows[0];
+    if (!row) return res.status(401).json({ success: false, error: 'Invalid verification code' });
+    if (row.verified) return res.status(401).json({ success: false, error: 'This code has already been used' });
+    if (new Date(row.expires_at) < new Date()) {
+      return res.status(401).json({ success: false, error: 'Code has expired. Please request a new one.' });
+    }
+
+    await query('UPDATE otps SET verified = TRUE WHERE id = $1', [row.id]);
+    const updated = await User.markEmailVerified(id);
+
+    res.json({
+      success: true,
+      message: 'Email verified',
+      data: {
+        id: updated.id,
+        phoneNumber: updated.phone_number,
+        name: updated.name,
+        email: updated.email,
+        profileImageBase64: updated.profile_image_base64,
+        preferredCurrency: updated.preferred_currency,
+        emailVerifiedAt: updated.email_verified_at,
+        updatedAt: updated.updated_at,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export default {
+  getUser,
+  requestEmailVerification,
+  confirmEmailVerification,
+  getUserByPhone,
+  lookupByPhone,
+  updateUser,
+  deleteUser,
+  checkRegisteredUsers,
+  deactivateUser,
+  updateFcmToken,
+  removeFcmToken,
+  getDashboard,
+  exportUserData,
+  getReports,
+  getFriends,
+  getPaymentInfo,
+  requestUpiId,
+};

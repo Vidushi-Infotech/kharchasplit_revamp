@@ -1,0 +1,88 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/state/connectivity_provider.dart';
+import '../../../data/groups/groups_repository.dart';
+import '../../../models/group_model.dart';
+import '../../auth/state/auth_provider.dart';
+
+/// Live list of the current user's groups (server-backed).
+final groupsProvider = AsyncNotifierProvider<GroupsNotifier, List<GroupModel>>(
+  GroupsNotifier.new,
+);
+
+class GroupsNotifier extends AsyncNotifier<List<GroupModel>> {
+  @override
+  Future<List<GroupModel>> build() async {
+    final user = ref.watch(authProvider).user;
+    // Auto-refresh when the device comes back online so the list reflects
+    // anything that changed server-side while we were disconnected.
+    ref.listen(onReconnectStreamProvider, (_, __) {
+      refresh();
+    });
+    if (user == null) return const <GroupModel>[];
+    // Every group, not just a first page: the "owed to me / I owe" totals
+    // are summed from this list.
+    return ref.read(groupsRepositoryProvider).listForUser(user.id, limit: 200);
+  }
+
+  /// Re-fetches while keeping the current data on screen. `invalidateSelf`
+  /// re-runs [build] with refresh semantics (previous value retained,
+  /// `isRefreshing == true`), so `.when()` keeps rendering the data branch
+  /// instead of dropping to a skeleton. It also disposes and re-registers the
+  /// listeners set up in [build], which calling `build()` by hand never did.
+  /// A failed fetch lands in [state] rather than being thrown, matching the
+  /// old `AsyncValue.guard` behaviour.
+  Future<void> refresh() async {
+    ref.invalidateSelf();
+    try {
+      await future;
+    } catch (_) {
+      // Already reflected in state.
+    }
+  }
+
+  /// Creates a group via the API and prepends it to local state.
+  /// Throws on failure so the caller can surface an inline error.
+  Future<GroupModel> addGroup({
+    required String name,
+    String? description,
+    String? coverImageBase64,
+    String currency = 'INR',
+    List<CreateGroupMember> members = const [],
+  }) async {
+    final repo = ref.read(groupsRepositoryProvider);
+    final created = await repo.create(
+      name: name,
+      description: description,
+      coverImageBase64: coverImageBase64,
+      currency: currency,
+      members: members,
+    );
+    // Re-fetch from server so the optimistic state matches what the
+    // detail/list endpoints will return (member_count, totals, etc.).
+    await refresh();
+    return created;
+  }
+
+  /// Edits an existing group. Only the admin/creator can call this
+  /// (backend enforces). Refetches the list so list cards reflect the
+  /// new name / photo right away.
+  Future<GroupModel> updateGroup(
+    String groupId, {
+    String? name,
+    String? description,
+    String? coverImageBase64,
+    String? currency,
+  }) async {
+    final repo = ref.read(groupsRepositoryProvider);
+    final updated = await repo.update(
+      groupId,
+      name: name,
+      description: description,
+      coverImageBase64: coverImageBase64,
+      currency: currency,
+    );
+    await refresh();
+    return updated;
+  }
+}

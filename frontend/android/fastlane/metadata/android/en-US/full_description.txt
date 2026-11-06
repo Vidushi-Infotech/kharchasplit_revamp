@@ -1,0 +1,43 @@
+KharchaSplit is the simple way to split bills with friends and keep track of your own money. Made for India: rupees, UPI and Hinglish, with groups for every trip, flat and dinner.
+
+SPLIT EXPENSES WITH FRIENDS
+Going on a trip, sharing a flat with roommates, or splitting a dinner bill? Create a group, add expenses as they happen, and KharchaSplit keeps the hisaab of who owes whom.
+
+• Split equally, by exact amounts, by percentage or by shares
+• More than one person paid? Add every payer
+• Snap the bill: scan a receipt and the total is filled in for you
+• Repeating expenses like rent, maid, Wi-Fi or a subscription are added automatically every month
+• Simplify debts: fewer payments to settle the whole group
+• Group in INR or another currency for trips abroad
+
+SETTLE UP WITH UPI
+• Pay what you owe straight from your UPI app: Google Pay, PhonePe, Paytm and more
+• Record cash or bank payments in one tap; balances update for everyone instantly
+• Settle all your dues in a group at once
+• Payment history for every friend and group
+
+INVITE ANYONE
+Add friends from your contacts. Not on KharchaSplit yet? Invite them on WhatsApp, and their share is waiting when they join.
+
+PERSONAL MODE: YOUR OWN KHARCHA
+Switch to Personal mode to manage your own money, separate from groups.
+• Track daily spending and income in seconds
+• Just say it: "200 for petrol yesterday from cash" and it is added for you
+• Insights: see where your money goes, by category and by month
+• Monthly budgets with a clear view of what is left
+• Accounts: cash, bank, cards and wallets, with transfers between them
+• Bills and subscriptions: reminders before they are due, mark them paid in a tap
+
+ALSO
+• Clear balances: green for money you get, red for money you owe
+• Notifications when friends add expenses or pay you
+• Reports and CSV export of your expenses
+• Dark mode
+• Works on phone, tablet and the web, synced across devices
+
+Who is KharchaSplit for?
+Friends on a Goa trip, roommates sharing rent and groceries, couples, office teams ordering lunch, families managing household expenses, students splitting hostel kharcha, and anyone who wants a simple expense tracker and budget planner.
+
+Stop arguing about the hisaab. Download KharchaSplit and split your next bill in seconds.
+
+Questions or ideas? Write to support@kharchasplit.com

@@ -1,0 +1,346 @@
+import 'package:equatable/equatable.dart';
+import '../core/utils/currency_formatter.dart';
+import '../core/utils/server_date.dart';
+import 'category_model.dart';
+import 'split_model.dart';
+import 'user_model.dart';
+
+/// Split type enum
+enum SplitType { equal, exact, percentage, shares }
+
+/// Expense model representing a single expense
+class ExpenseModel extends Equatable {
+  final String id;
+  final String title;
+  final double amount;
+  final String currency;
+  final CategoryModel category;
+  final UserModel paidBy;
+  final List<SplitModel> splits;
+  final String? groupId;
+  final DateTime date;
+  final String? notes;
+  final String? receiptBase64;
+  final SplitType splitType;
+  final bool isSettled;
+  final DateTime createdAt;
+
+  /// Who paid how much. Always at least the [paidBy] row for paid expenses
+  /// (older responses without `payers` get a single payer of [amount]).
+  final List<ExpensePayer> payers;
+
+  /// How a plain-amount split was entered, from `split_meta` — e.g.
+  /// `{mode: adjustment, adjustments: {userId: 150}}`. Null for the rest.
+  final Map<String, dynamic>? splitMeta;
+
+  /// The recurring rule this expense was created from (null = one-off).
+  final String? recurringRuleId;
+
+  /// Server `updated_at`, kept verbatim: sent back as `baseUpdatedAt` when
+  /// editing so a stale edit is refused rather than overwriting.
+  final String? updatedAtRaw;
+
+  /// Not from the server: 'pending' / 'failed' for a change still in the
+  /// offline outbox (shown with a badge), null otherwise.
+  final String? syncState;
+
+  /// Entered in another currency (`original_currency`, ISO code, e.g.
+  /// "USD"): [amount], [splits] and [payers] are the converted
+  /// group-currency amounts; [originalAmount] is what was typed, converted
+  /// at [fxRate] (1 original = fxRate group currency) for [fxDate].
+  /// All null for an expense entered in the group's currency.
+  final double? originalAmount;
+  final String? originalCurrency;
+  final double? fxRate;
+  final DateTime? fxDate;
+
+  /// Has a receipt photo. Lists don't carry the photo itself
+  /// (`has_receipt`); the detail does ([receiptBase64]).
+  final bool hasReceipt;
+
+  const ExpenseModel({
+    required this.id,
+    required this.title,
+    required this.amount,
+    this.currency = '₹',
+    required this.category,
+    required this.paidBy,
+    required this.splits,
+    this.groupId,
+    required this.date,
+    this.notes,
+    this.receiptBase64,
+    this.splitType = SplitType.equal,
+    this.isSettled = false,
+    required this.createdAt,
+    this.payers = const [],
+    this.splitMeta,
+    this.recurringRuleId,
+    this.updatedAtRaw,
+    this.syncState,
+    this.originalAmount,
+    this.originalCurrency,
+    this.fxRate,
+    this.fxDate,
+    this.hasReceipt = false,
+  });
+
+  bool get isPendingSync => syncState != null;
+
+  /// Entered in another currency and converted (see [originalCurrency]).
+  bool get isConverted =>
+      originalCurrency != null && originalAmount != null && fxRate != null;
+
+  bool get isRecurring => recurringRuleId != null;
+
+  bool get hasMultiplePayers => payers.length > 1;
+
+  /// Entered "By adjustment" (stored as exact amounts for older builds).
+  bool get isAdjustmentSplit => splitMeta?['mode'] == 'adjustment';
+
+  /// Amount [userId] paid towards this expense (0 if not a payer).
+  double paidByUser(String userId) =>
+      payers.where((p) => p.userId == userId).fold(0, (s, p) => s + p.amount);
+
+  bool isPayer(String userId) => payers.any((p) => p.userId == userId);
+
+  factory ExpenseModel.fromJson(Map<String, dynamic> json) {
+    // paidBy can arrive as a nested object (dashboard endpoint) or as flat
+    // `paid_by` UUID + `paid_by_name` (the per-group expenses endpoint).
+    UserModel paidBy;
+    final paidByJson = json['paidBy'];
+    if (paidByJson is Map<String, dynamic>) {
+      paidBy = UserModel.fromJson(paidByJson);
+    } else {
+      final id = (json['paid_by'] ?? json['paidById'] ?? '') as String;
+      final name = (json['paid_by_name'] ?? json['paidByName'] ?? '') as String;
+      paidBy = UserModel(
+        id: id,
+        name: name.isEmpty ? 'Unknown' : name,
+        email: '',
+        phone: '',
+        createdAt: DateTime.now(),
+      );
+    }
+
+    // Splits also live under `participants` in the per-group expenses response.
+    final splitsRaw = json['splits'] ?? json['participants'];
+    final splits = splitsRaw is List
+        ? splitsRaw
+              .whereType<Map<String, dynamic>>()
+              .map(SplitModel.fromJson)
+              .toList()
+        : <SplitModel>[];
+
+    final categoryId = (json['category'] as String?)?.toLowerCase() ?? 'other';
+    final category = CategoryModel.fromId(categoryId) ?? CategoryModel.other;
+
+    final dateRaw =
+        json['expenseDate'] ??
+        json['expense_date'] ??
+        json['date'] ??
+        json['created_at'];
+    final createdRaw = json['createdAt'] ?? json['created_at'];
+
+    final amount = _parseAmount(json['amount']);
+    final payersRaw = json['payers'];
+    final payers = payersRaw is List && payersRaw.isNotEmpty
+        ? payersRaw
+              .whereType<Map<String, dynamic>>()
+              .map(ExpensePayer.fromJson)
+              .toList()
+        : [
+            if (paidBy.id.isNotEmpty)
+              ExpensePayer(
+                userId: paidBy.id,
+                name: paidBy.name,
+                amount: amount,
+              ),
+          ];
+    final meta = json['split_meta'] ?? json['splitMeta'];
+    final receipt =
+        (json['receiptBase64'] ?? json['receipt_base64']) as String?;
+    final originalCurrency =
+        (json['original_currency'] ?? json['originalCurrency']) as String?;
+    final fxDateRaw = json['fx_date'] ?? json['fxDate'];
+
+    return ExpenseModel(
+      recurringRuleId:
+          (json['recurring_rule_id'] ?? json['recurringRuleId']) as String?,
+      updatedAtRaw: (json['updated_at'] ?? json['updatedAt'])?.toString(),
+      payers: payers,
+      splitMeta: meta is Map<String, dynamic> ? meta : null,
+      id: json['id'] as String,
+      title: (json['description'] ?? json['title'] ?? '') as String,
+      amount: amount,
+      currency: CurrencyFormatter.symbolFor(
+        (json['currency'] as String?) ?? 'INR',
+      ),
+      category: category,
+      paidBy: paidBy,
+      splits: splits,
+      groupId: (json['groupId'] ?? json['group_id']) as String?,
+      date:
+          (dateRaw is String ? parseServerCalendarDate(dateRaw) : null) ??
+          DateTime.now(),
+      notes: json['notes'] as String?,
+      receiptBase64: receipt,
+      hasReceipt:
+          json['has_receipt'] == true ||
+          json['hasReceipt'] == true ||
+          (receipt != null && receipt.isNotEmpty),
+      originalCurrency: (originalCurrency?.isEmpty ?? true)
+          ? null
+          : originalCurrency,
+      originalAmount: _parseOptionalAmount(
+        json['original_amount'] ?? json['originalAmount'],
+      ),
+      fxRate: _parseOptionalAmount(json['fx_rate'] ?? json['fxRate']),
+      fxDate: fxDateRaw is String ? DateTime.tryParse(fxDateRaw) : null,
+      splitType: _parseSplitType(
+        (json['splitType'] ?? json['split_type']) as String?,
+      ),
+      isSettled: (json['isSettled'] as bool?) ?? false,
+      createdAt: createdRaw is String
+          ? DateTime.parse(createdRaw)
+          : DateTime.now(),
+    );
+  }
+
+  static double _parseAmount(dynamic v) {
+    if (v == null) return 0;
+    if (v is num) return v.toDouble();
+    if (v is String) return double.tryParse(v) ?? 0;
+    return 0;
+  }
+
+  static double? _parseOptionalAmount(dynamic v) {
+    if (v == null) return null;
+    final parsed = v is num ? v.toDouble() : double.tryParse('$v');
+    return parsed != null && parsed > 0 ? parsed : null;
+  }
+
+  static SplitType _parseSplitType(String? raw) {
+    switch (raw) {
+      case 'unequal':
+      case 'exact':
+        return SplitType.exact;
+      case 'percentage':
+        return SplitType.percentage;
+      case 'shares':
+        return SplitType.shares;
+      default:
+        return SplitType.equal;
+    }
+  }
+
+  ExpenseModel copyWith({
+    String? id,
+    String? title,
+    double? amount,
+    String? currency,
+    CategoryModel? category,
+    UserModel? paidBy,
+    List<SplitModel>? splits,
+    String? groupId,
+    DateTime? date,
+    String? notes,
+    String? receiptBase64,
+    SplitType? splitType,
+    bool? isSettled,
+    DateTime? createdAt,
+    List<ExpensePayer>? payers,
+    Map<String, dynamic>? splitMeta,
+    String? recurringRuleId,
+    String? syncState,
+    double? originalAmount,
+    String? originalCurrency,
+    double? fxRate,
+    DateTime? fxDate,
+    bool? hasReceipt,
+  }) {
+    return ExpenseModel(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      amount: amount ?? this.amount,
+      currency: currency ?? this.currency,
+      category: category ?? this.category,
+      paidBy: paidBy ?? this.paidBy,
+      splits: splits ?? this.splits,
+      groupId: groupId ?? this.groupId,
+      date: date ?? this.date,
+      notes: notes ?? this.notes,
+      receiptBase64: receiptBase64 ?? this.receiptBase64,
+      splitType: splitType ?? this.splitType,
+      isSettled: isSettled ?? this.isSettled,
+      createdAt: createdAt ?? this.createdAt,
+      payers: payers ?? this.payers,
+      splitMeta: splitMeta ?? this.splitMeta,
+      recurringRuleId: recurringRuleId ?? this.recurringRuleId,
+      updatedAtRaw: updatedAtRaw,
+      syncState: syncState ?? this.syncState,
+      originalAmount: originalAmount ?? this.originalAmount,
+      originalCurrency: originalCurrency ?? this.originalCurrency,
+      fxRate: fxRate ?? this.fxRate,
+      fxDate: fxDate ?? this.fxDate,
+      hasReceipt: hasReceipt ?? this.hasReceipt,
+    );
+  }
+
+  /// Total amount across all splits (should equal amount)
+  double get totalSplitAmount =>
+      splits.fold(0, (sum, split) => sum + split.owedShare);
+
+  /// Check if splits are valid (sum equals expense amount)
+  bool get isValidSplit => (totalSplitAmount - amount).abs() < 0.01;
+
+  @override
+  List<Object?> get props => [
+    id,
+    title,
+    amount,
+    currency,
+    category,
+    paidBy,
+    splits,
+    groupId,
+    date,
+    notes,
+    receiptBase64,
+    splitType,
+    isSettled,
+    createdAt,
+    payers,
+    splitMeta,
+    recurringRuleId,
+    updatedAtRaw,
+    syncState,
+    originalAmount,
+    originalCurrency,
+    fxRate,
+    fxDate,
+    hasReceipt,
+  ];
+}
+
+/// One payer of an expense (`expense_payers`).
+class ExpensePayer extends Equatable {
+  const ExpensePayer({
+    required this.userId,
+    required this.name,
+    required this.amount,
+  });
+
+  final String userId;
+  final String name;
+  final double amount;
+
+  factory ExpensePayer.fromJson(Map<String, dynamic> json) => ExpensePayer(
+    userId: (json['user_id'] ?? json['userId'] ?? '') as String,
+    name: (json['name'] as String?) ?? 'Unknown',
+    amount: ExpenseModel._parseAmount(json['amount']),
+  );
+
+  @override
+  List<Object?> get props => [userId, name, amount];
+}

@@ -1,0 +1,859 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
+
+import '../../../components/buttons/glass_icon_button.dart';
+import '../../../components/inputs/app_text_field.dart';
+import '../../../core/constants/app_strings.dart';
+import '../../../core/state/feature_flags_provider.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_text_styles.dart';
+import '../../../core/utils/currency_formatter.dart';
+import '../../../models/category_model.dart';
+import '../../../models/personal_expense_model.dart';
+import '../../dashboard/state/dashboard_provider.dart';
+import '../state/budget_alerts.dart';
+import '../state/personal_expenses_provider.dart';
+import '../state/wallet_provider.dart';
+import '../widgets/account_style.dart';
+import '../widgets/entry_kind_toggle.dart';
+import '../widgets/voice_entry_sheet.dart';
+import '../widgets/wallet_setup_sheet.dart';
+
+/// Adds a personal expense or, with the `personalIncome` flag, an income
+/// ([income] opens it on the Income side). With [editing], changes that
+/// entry instead.
+class AddPersonalExpenseScreen extends ConsumerStatefulWidget {
+  const AddPersonalExpenseScreen({
+    super.key,
+    this.income = false,
+    this.editing,
+  });
+
+  final bool income;
+  final PersonalExpenseModel? editing;
+
+  @override
+  ConsumerState<AddPersonalExpenseScreen> createState() =>
+      _AddPersonalExpenseScreenState();
+}
+
+class _AddPersonalExpenseScreenState
+    extends ConsumerState<AddPersonalExpenseScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _titleController = TextEditingController();
+  final _amountController = TextEditingController();
+  final _notesController = TextEditingController();
+
+  late bool _isIncome = widget.editing?.isIncome ?? widget.income;
+  late CategoryModel _category = _isIncome
+      ? CategoryModel.otherIncome
+      : CategoryModel.other;
+  DateTime _date = DateTime.now();
+  TimeOfDay _time = TimeOfDay.now();
+  bool _submitting = false;
+  String? _selectedSourceId;
+
+  DateTime get _dateTime =>
+      DateTime(_date.year, _date.month, _date.day, _time.hour, _time.minute);
+
+  @override
+  void initState() {
+    super.initState();
+    final e = widget.editing;
+    if (e != null) {
+      _titleController.text = e.title;
+      _amountController.text = e.amount == e.amount.roundToDouble()
+          ? e.amount.toStringAsFixed(0)
+          : e.amount.toStringAsFixed(2);
+      _notesController.text = e.notes ?? '';
+      _category = e.category;
+      _date = DateTime(
+        e.expenseDate.year,
+        e.expenseDate.month,
+        e.expenseDate.day,
+      );
+      _time = TimeOfDay.fromDateTime(e.expenseDate);
+      final wallet = ref.read(walletProvider).value;
+      _selectedSourceId = e.accountId ?? wallet?.expenseSourceMap[e.id];
+    }
+    // Load budgets now, so saving can tell which one this expense pushes
+    // past 80% / 100%.
+    ref.read(budgetAlertsProvider).before();
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _amountController.dispose();
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _date,
+      firstDate: DateTime.now().subtract(const Duration(days: 365 * 5)),
+      lastDate: DateTime.now().add(const Duration(days: 30)),
+    );
+    if (picked != null) setState(() => _date = picked);
+  }
+
+  Future<void> _pickTime() async {
+    final picked = await showTimePicker(context: context, initialTime: _time);
+    if (picked != null) setState(() => _time = picked);
+  }
+
+  void _setKind(bool income) => setState(() {
+    _isIncome = income;
+    _category = income ? CategoryModel.otherIncome : CategoryModel.other;
+  });
+
+  /// Voice entry (`personalVoice` flag) on phones: the recognizer is the
+  /// phone's own.
+  bool get _canUseVoice =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS) &&
+      watchFeature(ref, 'personalVoice');
+
+  Future<void> _voice() async {
+    final wallet = ref.read(walletProvider).value ?? WalletState.empty;
+    final draft = await VoiceEntrySheet.show(context, accounts: wallet.sources);
+    if (draft == null || !mounted) return;
+    final income =
+        draft.isIncome &&
+        (ref.read(featureFlagsProvider).value?.contains('personalIncome') ??
+            false);
+    final day = DateTime.now().subtract(Duration(days: draft.daysAgo));
+    setState(() {
+      _isIncome = income;
+      _category =
+          (income == draft.isIncome ? draft.category : null) ??
+          (income ? CategoryModel.otherIncome : CategoryModel.other);
+      final amount = draft.amount;
+      if (amount != null) {
+        _amountController.text = amount == amount.roundToDouble()
+            ? amount.toStringAsFixed(0)
+            : amount.toStringAsFixed(2);
+      }
+      if (draft.description.isNotEmpty) {
+        _titleController.text = draft.description;
+      }
+      _date = DateTime(day.year, day.month, day.day);
+      if (wallet.sources.any((s) => s.id == draft.accountId)) {
+        _selectedSourceId = draft.accountId;
+      }
+    });
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text(AppStrings.voiceFilled)));
+  }
+
+  Future<void> _handleSave() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    final wallet = ref.read(walletProvider).value ?? WalletState.empty;
+    if (wallet.sources.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Set up your wallet first.')),
+      );
+      return;
+    }
+    final sourceId =
+        _selectedSourceId ??
+        (wallet.sources.length == 1 ? wallet.sources.first.id : null);
+    if (sourceId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _isIncome ? AppStrings.pickReceiveSource : AppStrings.pickPaySource,
+          ),
+        ),
+      );
+      return;
+    }
+    final amount = double.parse(_amountController.text.trim());
+
+    setState(() => _submitting = true);
+    if (widget.editing != null) {
+      return _saveChanges(widget.editing!, wallet, sourceId, amount);
+    }
+    final alerts = ref.read(budgetAlertsProvider);
+    final budgetsBefore = _isIncome ? null : alerts.before();
+    try {
+      final created = await ref
+          .read(personalExpensesProvider.notifier)
+          .addExpense(
+            description: _titleController.text.trim(),
+            amount: amount,
+            currency: 'INR',
+            category: _category.id,
+            notes: _notesController.text.trim().isEmpty
+                ? null
+                : _notesController.text.trim(),
+            expenseDate: _dateTime,
+            isIncome: _isIncome,
+            // Server accounts take it into the balance themselves.
+            accountId: wallet.onServer ? sourceId : null,
+          );
+      // Move the chosen wallet source AFTER the backend save succeeds:
+      // down for an expense, up for an income.
+      await ref
+          .read(walletProvider.notifier)
+          .deductForExpense(
+            sourceId: sourceId,
+            expenseId: created.id,
+            amount: _isIncome ? -amount : amount,
+          );
+      ref.invalidate(dashboardProvider);
+      // An expense that took a budget past 80% / 100% says so instead.
+      final alert = _isIncome
+          ? null
+          : await alerts.after(budgetsBefore, _category.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            alert ??
+                '✓ ${_isIncome ? AppStrings.incomeAdded : AppStrings.personalExpenseAdded}',
+          ),
+        ),
+      );
+      context.pop();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not save: $e')));
+    }
+  }
+
+  /// Edit mode's save. The phone-only wallet puts the old amount back on
+  /// its old source and takes the new one from the chosen source; server
+  /// accounts recompute themselves.
+  Future<void> _saveChanges(
+    PersonalExpenseModel old,
+    WalletState wallet,
+    String sourceId,
+    double amount,
+  ) async {
+    try {
+      await ref
+          .read(personalExpensesProvider.notifier)
+          .updateExpense(
+            old.id,
+            description: _titleController.text.trim(),
+            amount: amount,
+            category: _category.id,
+            notes: _notesController.text.trim(),
+            expenseDate: _dateTime,
+            isIncome: _isIncome,
+            accountId: wallet.onServer ? sourceId : null,
+          );
+      final walletNotifier = ref.read(walletProvider.notifier);
+      if (!wallet.onServer) {
+        await walletNotifier.refundExpense(
+          expenseId: old.id,
+          amount: -old.signedAmount,
+        );
+      }
+      await walletNotifier.deductForExpense(
+        sourceId: sourceId,
+        expenseId: old.id,
+        amount: _isIncome ? -amount : amount,
+      );
+      ref.invalidate(dashboardProvider);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text(AppStrings.entrySaved)));
+      context.pop();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not save: $e')));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final canAddIncome = watchFeature(ref, 'personalIncome');
+    final maxFormWidth = screenWidth < 600
+        ? double.infinity
+        : screenWidth < 1100
+        ? 560.0
+        : 720.0;
+
+    return Scaffold(
+      backgroundColor: AppColors.background(isDark),
+      appBar: _TopBar(
+        isDark: isDark,
+        title: widget.editing != null
+            ? (_isIncome ? AppStrings.editIncome : AppStrings.editExpense)
+            : _isIncome
+            ? AppStrings.addIncome
+            : AppStrings.addPersonalExpense,
+        onBack: () => Navigator.of(context).pop(),
+        onVoice: _canUseVoice && widget.editing == null ? _voice : null,
+      ),
+      body: SafeArea(
+        bottom: false,
+        child: SingleChildScrollView(
+          padding: EdgeInsets.symmetric(
+            horizontal: screenWidth < 600 ? 20 : 32,
+            vertical: 24,
+          ),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: maxFormWidth),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (canAddIncome) ...[
+                      EntryKindToggle(isIncome: _isIncome, onChanged: _setKind),
+                      const SizedBox(height: 20),
+                    ],
+                    AppTextField(
+                      label: 'Amount',
+                      hint: '0.00',
+                      controller: _amountController,
+                      autofocus: true,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      prefixIcon: Icons.currency_rupee_rounded,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                      ],
+                      validator: (v) {
+                        final n = double.tryParse((v ?? '').trim());
+                        if (n == null || n <= 0) {
+                          return 'Enter an amount greater than 0';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    AppTextField(
+                      label: 'Description',
+                      hint: _isIncome
+                          ? AppStrings.incomeHint
+                          : 'e.g. Coffee, Fuel, Subscription',
+                      controller: _titleController,
+                      prefixIcon: Icons.edit_note_rounded,
+                      validator: (v) {
+                        final s = (v ?? '').trim();
+                        if (s.isEmpty) return 'Required';
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    _SourcePicker(
+                      label: _isIncome
+                          ? AppStrings.receivedIn
+                          : AppStrings.payFrom,
+                      selectedId: _selectedSourceId,
+                      onChanged: (id) => setState(() => _selectedSourceId = id),
+                    ),
+                    const SizedBox(height: 16),
+                    _CategoryPicker(
+                      options: _isIncome
+                          ? CategoryModel.income
+                          : CategoryModel.all,
+                      value: _category,
+                      onChanged: (c) => setState(() => _category = c),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _DatePickerTile(
+                            date: _date,
+                            onTap: _pickDate,
+                            isDark: isDark,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _TimePickerTile(time: _time, onTap: _pickTime),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    AppTextField(
+                      label: 'Notes (optional)',
+                      hint: 'Any extra context',
+                      controller: _notesController,
+                      maxLines: 3,
+                      minLines: 2,
+                    ),
+                    const SizedBox(height: 28),
+                    _GradientSaveButton(
+                      isDark: isDark,
+                      label: _isIncome ? AppStrings.saveIncome : 'Save expense',
+                      loading: _submitting,
+                      onTap: _submitting ? null : _handleSave,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CategoryPicker extends StatelessWidget {
+  const _CategoryPicker({
+    required this.options,
+    required this.value,
+    required this.onChanged,
+  });
+  final List<CategoryModel> options;
+  final CategoryModel value;
+  final ValueChanged<CategoryModel> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 2, bottom: 8),
+          child: Text(
+            'CATEGORY',
+            style: AppTextStyles.caption(isDark).copyWith(
+              color: AppColors.textSecondary(isDark),
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.3,
+              fontSize: 11,
+            ),
+          ),
+        ),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: options.map((c) {
+            final selected = c.id == value.id;
+            return ChoiceChip(
+              label: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    c.icon,
+                    size: 16,
+                    color: selected
+                        ? Colors.white
+                        : AppColors.textSecondary(isDark),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(c.name),
+                ],
+              ),
+              selected: selected,
+              onSelected: (_) => onChanged(c),
+              selectedColor: AppColors.brand,
+              labelStyle: TextStyle(
+                color: selected ? Colors.white : AppColors.textPrimary(isDark),
+                fontWeight: FontWeight.w500,
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+}
+
+class _SourcePicker extends ConsumerWidget {
+  const _SourcePicker({
+    required this.label,
+    required this.selectedId,
+    required this.onChanged,
+  });
+
+  final String label;
+  final String? selectedId;
+  final ValueChanged<String?> onChanged;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final wallet = ref.watch(walletProvider).value ?? WalletState.empty;
+
+    if (wallet.sources.isEmpty) {
+      return Card(
+        elevation: 0,
+        color: AppColors.cardBg(isDark),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: AppColors.brand.withValues(alpha: 0.5)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'No wallet sources yet',
+                style: AppTextStyles.body1(
+                  isDark,
+                ).copyWith(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Add a cash or bank source to track it against your balance.',
+                style: AppTextStyles.caption(isDark),
+              ),
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: FilledButton.icon(
+                  onPressed: () => WalletSetupSheet.show(context),
+                  icon: const Icon(Icons.add_rounded),
+                  label: const Text('Set up wallet'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Auto-pick the only source.
+    if (wallet.sources.length == 1 && selectedId == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        onChanged(wallet.sources.first.id);
+      });
+    }
+    final activeId = selectedId ?? wallet.sources.first.id;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Text(
+            label,
+            style: AppTextStyles.body2(
+              isDark,
+            ).copyWith(fontWeight: FontWeight.w600),
+          ),
+        ),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: wallet.sources.map((s) {
+            final selected = s.id == activeId;
+            final lowBalance = s.balance <= 0;
+            return ChoiceChip(
+              label: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    s.type.icon,
+                    size: 14,
+                    color: selected
+                        ? Colors.white
+                        : AppColors.textSecondary(isDark),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(s.name),
+                  const SizedBox(width: 6),
+                  Text(
+                    CurrencyFormatter.format(s.balance, currency: '₹'),
+                    style: TextStyle(
+                      color: selected
+                          ? Colors.white
+                          : (lowBalance
+                                ? AppColors.errorText(isDark)
+                                : AppColors.textSecondary(isDark)),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+              selected: selected,
+              onSelected: (_) => onChanged(s.id),
+              selectedColor: AppColors.brand,
+              labelStyle: TextStyle(
+                color: selected ? Colors.white : AppColors.textPrimary(isDark),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+}
+
+class _DatePickerTile extends StatelessWidget {
+  const _DatePickerTile({
+    required this.date,
+    required this.onTap,
+    required this.isDark,
+  });
+  final DateTime date;
+  final VoidCallback onTap;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: 'Date',
+          prefixIcon: const Icon(Icons.event_rounded),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+        child: Text(DateFormat('MMM d, yyyy').format(date)),
+      ),
+    );
+  }
+}
+
+class _TimePickerTile extends StatelessWidget {
+  const _TimePickerTile({required this.time, required this.onTap});
+  final TimeOfDay time;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: 'Time',
+          prefixIcon: const Icon(Icons.schedule_rounded),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+        child: Text(time.format(context)),
+      ),
+    );
+  }
+}
+
+/// Clean top bar matching the rest of the app — back arrow + bold title.
+class _TopBar extends StatelessWidget implements PreferredSizeWidget {
+  const _TopBar({
+    required this.isDark,
+    required this.title,
+    required this.onBack,
+    this.onVoice,
+  });
+
+  final bool isDark;
+  final String title;
+  final VoidCallback onBack;
+
+  /// Shows the mic (voice entry) when set.
+  final VoidCallback? onVoice;
+
+  @override
+  Size get preferredSize => const Size.fromHeight(56);
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.background(isDark),
+      elevation: 0,
+      child: SafeArea(
+        bottom: false,
+        child: SizedBox(
+          height: 56,
+          child: Row(
+            children: [
+              const SizedBox(width: 8),
+              if (GlassIconButton.isGlass)
+                GlassBackButton(onPressed: onBack)
+              else
+                Semantics(
+                  button: true,
+                  label: 'Back',
+                  child: Material(
+                    color: Colors.transparent,
+                    shape: const CircleBorder(),
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      onTap: onBack,
+                      customBorder: const CircleBorder(),
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: AppColors.cardBg(isDark),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: AppColors.divider(isDark)),
+                        ),
+                        child: Icon(
+                          Icons.arrow_back_rounded,
+                          size: 18,
+                          color: AppColors.textPrimary(isDark),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  title,
+                  style: AppTextStyles.body1(isDark).copyWith(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 17,
+                    letterSpacing: -0.2,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (onVoice != null) ...[
+                const SizedBox(width: 8),
+                GlassIconButton(
+                  icon: Icons.mic_rounded,
+                  sfSymbol: 'mic.fill',
+                  tooltip: AppStrings.voiceAdd,
+                  onPressed: onVoice!,
+                ),
+              ],
+              const SizedBox(width: 16),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GradientSaveButton extends StatelessWidget {
+  const _GradientSaveButton({
+    required this.isDark,
+    required this.label,
+    required this.loading,
+    required this.onTap,
+  });
+
+  final bool isDark;
+  final String label;
+  final bool loading;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onTap != null && !loading;
+    return Semantics(
+      button: true,
+      label: label,
+      enabled: enabled,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: enabled ? onTap : null,
+          borderRadius: BorderRadius.circular(14),
+          child: Ink(
+            height: 54,
+            decoration: BoxDecoration(
+              gradient: enabled
+                  ? const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [AppColors.tealLight, AppColors.tealDark],
+                    )
+                  : null,
+              color: enabled ? null : AppColors.cardBg(isDark),
+              border: enabled
+                  ? null
+                  : Border.all(color: AppColors.divider(isDark)),
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: enabled
+                  ? [
+                      BoxShadow(
+                        color: AppColors.tealDark.withValues(alpha: 0.35),
+                        blurRadius: 14,
+                        offset: const Offset(0, 6),
+                      ),
+                    ]
+                  : null,
+            ),
+            child: loading
+                ? const Center(
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation(Colors.white),
+                      ),
+                    ),
+                  )
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.check_rounded,
+                        size: 18,
+                        color: enabled
+                            ? Colors.white
+                            : AppColors.textSecondary(isDark),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        label,
+                        style: AppTextStyles.body1(isDark).copyWith(
+                          color: enabled
+                              ? Colors.white
+                              : AppColors.textSecondary(isDark),
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                          letterSpacing: -0.1,
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// /home/personal/:entryId/edit: opens [AddPersonalExpenseScreen] on the
+/// entry from the loaded list (an entry is only reachable from there).
+class EditPersonalEntryScreen extends ConsumerWidget {
+  const EditPersonalEntryScreen({super.key, required this.entryId});
+
+  final String entryId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final entry = ref
+        .watch(personalExpensesProvider)
+        .value
+        ?.where((e) => e.id == entryId)
+        .firstOrNull;
+    if (entry == null) {
+      return Scaffold(
+        appBar: AppBar(),
+        body: const Center(child: Text(AppStrings.entryNotFound)),
+      );
+    }
+    return AddPersonalExpenseScreen(editing: entry);
+  }
+}

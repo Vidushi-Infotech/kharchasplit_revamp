@@ -1,0 +1,159 @@
+import { query  } from '../config/database.js';
+
+class PersonalExpense {
+  /**
+   * Find personal expense by ID (detail view — includes receipt)
+   */
+  static async findById(id) {
+    const result = await query(
+      `SELECT id, user_id, kind, account_id, description, amount, currency, category,
+              receipt_base64, notes, expense_date, created_at, updated_at
+       FROM personal_expenses WHERE id = $1 AND deleted_at IS NULL`,
+      [id]
+    );
+    return result.rows[0] || null;
+  }
+
+  /**
+   * Find personal expenses by user ID (list view — no receipt blob).
+   * Income rows only when the app asks for them ([includeIncome]).
+   */
+  static async findByUserId(userId, limit = 50, offset = 0, includeIncome = false) {
+    const result = await query(
+      `SELECT id, user_id, kind, account_id, description, amount, currency, category,
+              notes, expense_date, created_at, updated_at
+       FROM personal_expenses
+       WHERE user_id = $1 AND deleted_at IS NULL
+         AND ($4::boolean OR kind = 'expense')
+       ORDER BY expense_date DESC, created_at DESC
+       LIMIT $2 OFFSET $3`,
+      [userId, limit, offset, includeIncome]
+    );
+    return result.rows;
+  }
+
+  /**
+   * Create new personal expense
+   */
+  static async create(expenseData) {
+    const result = await query(
+      `INSERT INTO personal_expenses (
+        user_id, description, amount, currency, category,
+        receipt_base64, notes, expense_date, kind, account_id
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      RETURNING id, user_id, kind, account_id, description, amount, currency, category,
+                notes, expense_date, created_at, updated_at`,
+      [
+        expenseData.userId,
+        expenseData.description,
+        expenseData.amount,
+        expenseData.currency || 'USD',
+        expenseData.category || null,
+        expenseData.receiptBase64 || null,
+        expenseData.notes || null,
+        expenseData.expenseDate || new Date(),
+        expenseData.kind === 'income' ? 'income' : 'expense',
+        expenseData.accountId || null
+      ]
+    );
+    return result.rows[0];
+  }
+
+  /**
+   * Update personal expense
+   */
+  static async update(id, expenseData) {
+    const result = await query(
+      `UPDATE personal_expenses
+       SET description = COALESCE($1, description),
+           amount = COALESCE($2, amount),
+           currency = COALESCE($3, currency),
+           category = COALESCE($4, category),
+           receipt_base64 = COALESCE($5, receipt_base64),
+           notes = COALESCE($6, notes),
+           expense_date = COALESCE($7, expense_date),
+           kind = COALESCE($9, kind),
+           account_id = COALESCE($10, account_id)
+       WHERE id = $8 AND deleted_at IS NULL
+       RETURNING id, user_id, kind, account_id, description, amount, currency, category,
+                 notes, expense_date, created_at, updated_at`,
+      [
+        expenseData.description,
+        expenseData.amount,
+        expenseData.currency,
+        expenseData.category,
+        expenseData.receiptBase64,
+        expenseData.notes,
+        expenseData.expenseDate,
+        id,
+        expenseData.kind ?? null,
+        expenseData.accountId || null
+      ]
+    );
+    return result.rows[0] || null;
+  }
+
+  /**
+   * Soft delete personal expense
+   */
+  static async delete(id) {
+    const result = await query(
+      'UPDATE personal_expenses SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL RETURNING id',
+      [id]
+    );
+    return result.rows.length > 0;
+  }
+
+  /**
+   * Per-day, per-category totals of income and spending from [fromMonth]
+   * through [toMonth] ('YYYY-MM'), with days in the user's local time
+   * ([tzOffsetMinutes] east of UTC). Feeds buildPersonalSummary.
+   */
+  static async dailyTotals(userId, fromMonth, toMonth, tzOffsetMinutes) {
+    const result = await query(
+      `WITH e AS (
+         SELECT kind, category, amount,
+                (expense_date::timestamptz AT TIME ZONE 'UTC')
+                  + make_interval(mins => $2) AS local_at
+           FROM personal_expenses
+          WHERE user_id = $1 AND deleted_at IS NULL
+       )
+       SELECT kind, category, to_char(local_at, 'YYYY-MM-DD') AS day,
+              SUM(amount) AS total
+         FROM e
+        WHERE local_at >= to_date($3, 'YYYY-MM')
+          AND local_at < to_date($4, 'YYYY-MM') + interval '1 month'
+        GROUP BY 1, 2, 3`,
+      [userId, tzOffsetMinutes, fromMonth, toMonth]
+    );
+    return result.rows;
+  }
+
+  /**
+   * Get total count for pagination
+   */
+  static async countByUserId(userId, includeIncome = false) {
+    const result = await query(
+      `SELECT COUNT(*) as count FROM personal_expenses
+        WHERE user_id = $1 AND deleted_at IS NULL
+          AND ($2::boolean OR kind = 'expense')`,
+      [userId, includeIncome]
+    );
+    return parseInt(result.rows[0].count);
+  }
+
+  /**
+   * Get total expenses for user
+   */
+  static async getTotalByUserId(userId) {
+    const result = await query(
+      `SELECT COALESCE(SUM(amount), 0) as total FROM personal_expenses
+        WHERE user_id = $1 AND deleted_at IS NULL AND kind = 'expense'`,
+      [userId]
+    );
+    return parseFloat(result.rows[0].total);
+  }
+}
+
+export default PersonalExpense;

@@ -1,0 +1,3 @@
+• Adding a receipt or photo is faster and no longer fails on big photos
+• Photos take much less data to upload
+• Small fixes and improvements

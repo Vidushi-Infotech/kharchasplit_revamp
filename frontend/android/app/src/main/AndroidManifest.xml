@@ -1,0 +1,97 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Permissions actually used:
+         READ_CONTACTS    : flutter_contacts (Add member from device contacts)
+         CAMERA           : image_picker (capture a receipt photo)
+         INTERNET         : Dio HTTP calls. Declared explicitly — it is NOT
+                            auto-added for release (only the debug/profile
+                            manifests carry it); release builds previously
+                            got it only via Firebase's merged manifest.
+         POST_NOTIFICATIONS: Android 13+ notification permission for FCM
+         VIBRATE          : HapticFeedback API used by HapticService for tap /
+                            selection / success / error cues. Without this,
+                            Flutter's HapticFeedback.*() calls silently no-op
+                            on Android and the user feels nothing. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.READ_CONTACTS"/>
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.VIBRATE"/>
+    <!-- Voice entry in Personal mode (speech_to_text). -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <uses-feature android:name="android.hardware.camera" android:required="false"/>
+    <!-- RECORD_AUDIO would otherwise make Play require a microphone and drop
+         devices without one; voice entry just says it is unavailable there. -->
+    <uses-feature android:name="android.hardware.microphone" android:required="false"/>
+    <application
+        android:label="KharchaSplit"
+        android:name="${applicationName}"
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="false"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:usesCleartextTraffic="false">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:taskAffinity=""
+            android:theme="@style/LaunchTheme"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize">
+            <!-- Specifies an Android theme to apply to this Activity as soon as
+                 the Android process has started. This theme is visible to the user
+                 while the Flutter UI initializes. After that, this theme continues
+                 to determine the Window background behind the Flutter UI. -->
+            <meta-data
+              android:name="io.flutter.embedding.android.NormalTheme"
+              android:resource="@style/NormalTheme"
+              />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
+        <!-- Receipt scan: Play services fetches the text-recognition model
+             when the app is installed (it isn't bundled in the app). -->
+        <meta-data
+            android:name="com.google.mlkit.vision.DEPENDENCIES"
+            android:value="ocr" />
+        <!-- Don't delete the meta-data below.
+             This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
+        <meta-data
+            android:name="flutterEmbedding"
+            android:value="2" />
+    </application>
+    <!-- Required to query activities that can process text, see:
+         https://developer.android.com/training/package-visibility and
+         https://developer.android.com/reference/android/content/Intent#ACTION_PROCESS_TEXT.
+
+         In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.PROCESS_TEXT"/>
+            <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- Voice entry: lets speech_to_text find the phone's speech
+             recognizer (Android 11+ package visibility). -->
+        <intent>
+            <action android:name="android.speech.RecognitionService"/>
+        </intent>
+        <!-- Package visibility (Android 11+): needed so url_launcher can
+             open the whatsapp:// scheme directly into a chat (member invite)
+             instead of bouncing through the wa.me web page. -->
+        <package android:name="com.whatsapp"/>
+        <package android:name="com.whatsapp.w4b"/>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="whatsapp"/>
+        </intent>
+        <!-- Pay with UPI: lets url_launcher hand upi://pay links to the
+             installed UPI apps (GPay, PhonePe, Paytm, BHIM...). -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="upi"/>
+        </intent>
+    </queries>
+</manifest>
